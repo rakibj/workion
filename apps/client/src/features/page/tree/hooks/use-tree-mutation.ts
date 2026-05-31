@@ -23,7 +23,7 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
-  handleCreate: (parentId: string | null) => Promise<void>;
+  handleCreate: (parentId: string | null, type?: "document" | "kanban") => Promise<void>;
   handleRename: (id: string, name: string) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
 };
@@ -131,9 +131,10 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
   );
 
   const handleCreate = useCallback(
-    async (parentId: string | null) => {
-      const payload: { spaceId: string; parentPageId?: string } = { spaceId };
+    async (parentId: string | null, type: "document" | "kanban" = "document") => {
+      const payload: { spaceId: string; parentPageId?: string; type?: string } = { spaceId };
       if (parentId) payload.parentPageId = parentId;
+      if (type !== "document") payload.type = type;
 
       let createdPage: IPage;
       try {

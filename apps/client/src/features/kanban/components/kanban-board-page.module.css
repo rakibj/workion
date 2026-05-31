@@ -1,0 +1,312 @@
+.root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+/* ── Board ── */
+
+.board {
+  display: flex;
+  gap: var(--mantine-spacing-sm);
+  align-items: flex-start;
+  padding: var(--mantine-spacing-md);
+  overflow-x: auto;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Column wrapper + drop indicators ── */
+
+.columnWrapper {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.column {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--mantine-color-default);
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--mantine-color-default-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+  transition: opacity 0.15s;
+  max-height: calc(100vh - 160px);
+  overflow: hidden;
+}
+
+.columnDragging {
+  opacity: 0.45;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-sm) 0;
+  cursor: grab;
+  min-height: 36px;
+}
+
+.columnHeader:active {
+  cursor: grabbing;
+}
+
+.colorBar {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.colorBar:hover {
+  transform: scale(1.25);
+}
+
+.colName {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.colNameInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.colNameInput input {
+  padding: 2px 6px;
+  height: auto;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+}
+
+.colCount {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Card list ── */
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  overflow-y: auto;
+  flex: 1;
+  gap: 0;
+  min-height: 8px;
+  border-radius: var(--mantine-radius-sm);
+  transition: background 0.1s;
+}
+
+.cardListOver {
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 30%, transparent)
+  );
+  outline: 2px dashed var(--mantine-color-blue-4);
+  outline-offset: -2px;
+}
+
+/* ── Card wrapper ── */
+
+.cardWrapper {
+  position: relative;
+  margin-bottom: var(--mantine-spacing-xs);
+}
+
+/* ── Card ── */
+
+.card {
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  transition: box-shadow 0.1s, opacity 0.15s;
+}
+
+.cardEditable {
+  cursor: pointer;
+}
+
+.cardEditable:hover {
+  box-shadow: var(--mantine-shadow-xs);
+}
+
+.cardDragging {
+  opacity: 0.4;
+}
+
+.cardTitle {
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.cardDesc {
+  margin-top: 3px;
+  word-break: break-word;
+}
+
+/* ── Drop indicators ── */
+
+.dropIndicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--mantine-color-blue-5);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.dropIndicatorTop {
+  top: -1px;
+}
+
+.dropIndicatorBottom {
+  bottom: -1px;
+}
+
+.columnDropIndicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--mantine-color-blue-5);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.columnDropLeft {
+  left: -1px;
+}
+
+.columnDropRight {
+  right: -1px;
+}
+
+/* ── Buttons ── */
+
+.addCardInput {
+  padding: 0 var(--mantine-spacing-xs) var(--mantine-spacing-xs);
+}
+
+.addCardBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px var(--mantine-spacing-sm);
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 0 0 var(--mantine-radius-md) var(--mantine-radius-md);
+  cursor: pointer;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  font-family: inherit;
+  transition: background 0.1s, color 0.1s;
+  text-align: left;
+}
+
+.addCardBtn:hover {
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-text);
+}
+
+.addColumnWrapper {
+  flex-shrink: 0;
+  width: 280px;
+}
+
+.addColumnInput {
+  padding: var(--mantine-spacing-sm);
+  background: var(--mantine-color-default);
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+.addColumnBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--mantine-spacing-sm);
+  width: 100%;
+  background: none;
+  border: 1px dashed var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  cursor: pointer;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  font-family: inherit;
+  transition: background 0.1s, color 0.1s;
+  text-align: left;
+}
+
+.addColumnBtn:hover {
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-text);
+}
+
+/* ── Color swatches ── */
+
+.colorSwatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: transform 0.1s;
+}
+
+.colorSwatch:hover {
+  transform: scale(1.15);
+}
+
+.colorSwatchActive {
+  outline: 2px solid var(--mantine-color-text);
+  outline-offset: 2px;
+}
+
+/* ── Member picker ── */
+
+.memberRow {
+  padding: 4px var(--mantine-spacing-xs);
+  border-radius: var(--mantine-radius-sm);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.memberRow:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.memberRowAssigned {
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 25%, transparent)
+  );
+}

@@ -7,15 +7,18 @@ import PageHeader from "@/features/page/components/header/page-header.tsx";
 import { extractPageSlugId } from "@/lib";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { useTranslation } from "react-i18next";
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
-import { Button } from "@mantine/core";
+import { Button, Loader } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
 const MemoizedHistoryModal = React.memo(HistoryModal);
+const KanbanBoardPage = lazy(
+  () => import("@/features/kanban/components/kanban-board-page"),
+);
 
 export default function Page() {
   const { t } = useTranslation();
@@ -92,26 +95,39 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
   return (
     page && (
-      <div>
+      <div style={page.type === "kanban" ? { height: "100%", display: "flex", flexDirection: "column" } : undefined}>
         <Helmet>
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
 
         <MemoizedPageHeader readOnly={!canEdit} />
 
-        <MemoizedFullEditor
-          key={page.id}
-          pageId={page.id}
-          title={page.title}
-          content={page.content}
-          slugId={page.slugId}
-          spaceSlug={page?.space?.slug}
-          editable={canEdit}
-          creator={page.creator}
-          contributors={page.contributors}
-          canComment={canComment}
-        />
-        <MemoizedHistoryModal pageId={page.id} />
+        {page.type === "kanban" ? (
+          <Suspense fallback={<Loader size="sm" m="md" />}>
+            <KanbanBoardPage
+              key={page.id}
+              pageId={page.id}
+              spaceId={space.id}
+              canEdit={canEdit}
+            />
+          </Suspense>
+        ) : (
+          <>
+            <MemoizedFullEditor
+              key={page.id}
+              pageId={page.id}
+              title={page.title}
+              content={page.content}
+              slugId={page.slugId}
+              spaceSlug={page?.space?.slug}
+              editable={canEdit}
+              creator={page.creator}
+              contributors={page.contributors}
+              canComment={canComment}
+            />
+            <MemoizedHistoryModal pageId={page.id} />
+          </>
+        )}
       </div>
     )
   );

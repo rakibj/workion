@@ -284,9 +284,35 @@ export interface Pages {
   textContent: string | null;
   title: string | null;
   tsv: string | null;
+  type: Generated<string>;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
   ydoc: Buffer | null;
+}
+
+export interface KanbanColumns {
+  id: Generated<string>;
+  pageId: string;
+  name: string;
+  color: Generated<string>;
+  position: number;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface KanbanCards {
+  id: Generated<string>;
+  columnId: string;
+  title: string;
+  description: Generated<string>;
+  position: number;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface KanbanCardAssignees {
+  cardId: string;
+  userId: string;
 }
 
 export interface Shares {
@@ -600,6 +626,9 @@ export interface DB {
   backlinks: Backlinks;
   billing: Billing;
   comments: Comments;
+  kanbanColumns: KanbanColumns;
+  kanbanCards: KanbanCards;
+  kanbanCardAssignees: KanbanCardAssignees;
   favorites: Favorites;
   fileTasks: FileTasks;
   groups: Groups;

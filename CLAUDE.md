@@ -66,7 +66,10 @@ docmost/
 ## Infrastructure (Dev)
 
 ```bash
-# Start everything
+# 1. Start DB + Redis (run once, keep running in background)
+docker compose up -d
+
+# 2. Start the app with hot reload
 pnpm run dev            # client + server concurrently
 
 # Individual
@@ -84,11 +87,17 @@ pnpm --filter server run test:cov           # with coverage
 pnpm --filter client run test               # Vitest (frontend)
 ```
 
-**Required env vars** (copy from `docker-compose.yml`):
+**Docker Compose files — do not confuse them:**
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | **Dev default.** Starts PostgreSQL + Redis only. App runs locally via `pnpm run dev`. |
+| `docker-compose.prod.yml` | Full production stack with a built image. Requires real `APP_SECRET`. Never use for local dev. |
+
+**Required env vars** (`.env` at repo root):
 ```
 APP_URL=http://localhost:3000
 APP_SECRET=<long-random-string>
-DATABASE_URL=postgresql://docmost:password@localhost:5432/docmost
+DATABASE_URL=postgresql://docmost:docmost_dev_pass@localhost:5432/docmost
 REDIS_URL=redis://localhost:6379
 ```
 

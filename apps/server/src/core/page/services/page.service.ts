@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreatePageDto, ContentFormat } from '../dto/create-page.dto';
+import { KanbanService } from '../../kanban/kanban.service';
 import { ContentOperation, UpdatePageDto } from '../dto/update-page.dto';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
@@ -73,6 +74,7 @@ export class PageService {
     private collaborationGateway: CollaborationGateway,
     private readonly watcherService: WatcherService,
     private readonly transclusionService: TransclusionService,
+    private readonly kanbanService: KanbanService,
   ) {}
 
   async findById(
@@ -127,6 +129,8 @@ export class PageService {
       ydoc = createYdocFromJson(prosemirrorJson);
     }
 
+    const pageType = createPageDto.type ?? 'document';
+
     const page = await this.pageRepo.insertPage({
       slugId: generateSlugId(),
       title: createPageDto.title,
@@ -140,10 +144,15 @@ export class PageService {
       creatorId: userId,
       workspaceId: workspaceId,
       lastUpdatedById: userId,
+      type: pageType,
       content,
       textContent,
       ydoc,
     });
+
+    if (pageType === 'kanban') {
+      await this.kanbanService.initDefaultColumns(page.id);
+    }
 
     this.generalQueue
       .add(QueueJob.ADD_PAGE_WATCHERS, {

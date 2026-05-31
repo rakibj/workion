@@ -1,9 +1,12 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 
+export type PageType = "document" | "kanban";
+
 export interface IPage {
   id: string;
   slugId: string;
   title: string;
+  type: PageType;
   content: string;
   icon: string;
   coverPhoto: string;

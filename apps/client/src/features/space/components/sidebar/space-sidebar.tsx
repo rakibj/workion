@@ -13,6 +13,7 @@ import {
   IconEyeOff,
   IconFileExport,
   IconHome,
+  IconLayoutKanban,
   IconPlus,
   IconSearch,
   IconSettings,
@@ -80,7 +81,11 @@ export function SpaceSidebar() {
   }
 
   function handleCreatePage() {
-    handleCreate(null);
+    handleCreate(null, "document");
+  }
+
+  function handleCreateKanban() {
+    handleCreate(null, "kanban");
   }
 
   return (
@@ -201,16 +206,27 @@ export function SpaceSidebar() {
                 SpaceCaslAction.Manage,
                 SpaceCaslSubject.Page,
               ) && (
-                <Tooltip label={t("Create page")} withArrow position="right">
-                  <ActionIcon
-                    variant="default"
-                    size={18}
-                    onClick={handleCreatePage}
-                    aria-label={t("Create page")}
-                  >
-                    <IconPlus />
-                  </ActionIcon>
-                </Tooltip>
+                <Menu shadow="md" width={180} position="bottom-end">
+                  <Tooltip label={t("Create page")} withArrow position="right">
+                    <Menu.Target>
+                      <ActionIcon
+                        variant="default"
+                        size={18}
+                        aria-label={t("Create page")}
+                      >
+                        <IconPlus />
+                      </ActionIcon>
+                    </Menu.Target>
+                  </Tooltip>
+                  <Menu.Dropdown>
+                    <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleCreatePage}>
+                      {t("Document")}
+                    </Menu.Item>
+                    <Menu.Item leftSection={<IconLayoutKanban size={14} />} onClick={handleCreateKanban}>
+                      {t("Kanban board")}
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
               )}
             </Group>
           </Group>

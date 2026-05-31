@@ -37,6 +37,9 @@ import {
   Watchers,
   Audit as _Audit,
   Templates,
+  KanbanColumns,
+  KanbanCards,
+  KanbanCardAssignees,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
@@ -98,6 +101,17 @@ export type UpdatableGroupUser = Updateable<Omit<GroupUsers, 'id'>>;
 export type Page = Selectable<Pages>;
 export type InsertablePage = Insertable<Pages>;
 export type UpdatablePage = Updateable<Omit<Pages, 'id'>>;
+
+// Kanban
+export type KanbanColumn = Selectable<KanbanColumns>;
+export type InsertableKanbanColumn = Insertable<KanbanColumns>;
+export type UpdatableKanbanColumn = Updateable<Omit<KanbanColumns, 'id'>>;
+
+export type KanbanCard = Selectable<KanbanCards>;
+export type InsertableKanbanCard = Insertable<KanbanCards>;
+export type UpdatableKanbanCard = Updateable<Omit<KanbanCards, 'id'>>;
+
+export type KanbanCardAssignee = Selectable<KanbanCardAssignees>;
 
 // PageHistory
 export type PageHistory = Selectable<History>;
