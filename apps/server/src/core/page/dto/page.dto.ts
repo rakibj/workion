@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsNotEmpty,
@@ -45,4 +46,58 @@ export class DeletePageDto extends PageIdDto {
   @IsOptional()
   @IsBoolean()
   permanentlyDelete?: boolean;
+}
+
+export class AddPagePermissionDto {
+  @IsString()
+  @IsNotEmpty()
+  pageId: string;
+
+  @IsString()
+  @IsIn(['reader', 'writer'])
+  role: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  userIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  groupIds?: string[];
+}
+
+export class RemovePagePermissionDto {
+  @IsString()
+  @IsNotEmpty()
+  pageId: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  userIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  groupIds?: string[];
+}
+
+export class UpdatePagePermissionRoleDto {
+  @IsString()
+  @IsNotEmpty()
+  pageId: string;
+
+  @IsString()
+  @IsIn(['reader', 'writer'])
+  role: string;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
+  groupId?: string;
 }

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -13,7 +12,6 @@ import { Space, User } from '@docmost/db/types/entity.types';
 import { UpdateSpaceDto } from '../dto/update-space.dto';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
-import { Feature } from '../../../common/features';
 import { SpaceMemberService } from './space-member.service';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 import { QueueJob, QueueName } from 'src/integrations/queue/constants';
@@ -21,8 +19,6 @@ import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
-import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
-import { LicenseCheckService } from '../../../integrations/environment/license-check.service';
 import { AuditEvent, AuditResource } from '../../../common/events/audit-events';
 import { diffAuditTrackedFields } from '../../../common/helpers';
 import {
@@ -36,8 +32,6 @@ export class SpaceService {
     private spaceRepo: SpaceRepo,
     private spaceMemberService: SpaceMemberService,
     private shareRepo: ShareRepo,
-    private workspaceRepo: WorkspaceRepo,
-    private licenseCheckService: LicenseCheckService,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
@@ -131,37 +125,6 @@ export class SpaceService {
         throw new BadRequestException(
           'Space slug exists. Please use a unique space slug',
         );
-      }
-    }
-
-    if (
-      typeof updateSpaceDto.disablePublicSharing !== 'undefined' ||
-      typeof updateSpaceDto.allowViewerComments !== 'undefined'
-    ) {
-      const workspace = await this.workspaceRepo.findById(workspaceId, {
-        withLicenseKey: true,
-      });
-
-      if (
-        typeof updateSpaceDto.disablePublicSharing !== 'undefined' &&
-        !this.licenseCheckService.hasFeature(
-          workspace.licenseKey,
-          Feature.SECURITY_SETTINGS,
-          workspace.plan,
-        )
-      ) {
-        throw new ForbiddenException('This feature requires a valid license');
-      }
-
-      if (
-        typeof updateSpaceDto.allowViewerComments !== 'undefined' &&
-        !this.licenseCheckService.hasFeature(
-          workspace.licenseKey,
-          Feature.VIEWER_COMMENTS,
-          workspace.plan,
-        )
-      ) {
-        throw new ForbiddenException('This feature requires a valid license');
       }
     }
 
