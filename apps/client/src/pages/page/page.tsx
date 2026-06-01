@@ -19,6 +19,9 @@ const MemoizedHistoryModal = React.memo(HistoryModal);
 const KanbanBoardPage = lazy(
   () => import("@/features/kanban/components/kanban-board-page"),
 );
+const BoardPage = lazy(
+  () => import("@/features/board/components/board-page"),
+);
 
 export default function Page() {
   const { t } = useTranslation();
@@ -93,9 +96,11 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     return <></>;
   }
 
+  const isFullHeight = page.type === "kanban" || page.type === "board";
+
   return (
     page && (
-      <div style={page.type === "kanban" ? { height: "100%", display: "flex", flexDirection: "column" } : undefined}>
+      <div style={isFullHeight ? { height: "100%", display: "flex", flexDirection: "column" } : undefined}>
         <Helmet>
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
@@ -113,6 +118,17 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               spaceSlug={page?.space?.slug ?? ""}
             />
           </Suspense>
+        ) : page.type === "board" ? (
+          <Suspense fallback={<Loader size="sm" m="md" />}>
+            <BoardPage
+              key={page.id}
+              pageId={page.id}
+              canEdit={canEdit}
+              title={page.title ?? ""}
+              spaceSlug={page?.space?.slug ?? ""}
+              initialContent={page.content as any}
+            />
+          </Suspense>
         ) : (
           <>
             <MemoizedFullEditor
@@ -120,7 +136,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               pageId={page.id}
               title={page.title}
               icon={page.icon}
-              content={page.content}
+              content={page.content as string}
               slugId={page.slugId}
               spaceSlug={page?.space?.slug}
               editable={canEdit}

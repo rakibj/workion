@@ -1,13 +1,13 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 
-export type PageType = "document" | "kanban";
+export type PageType = "document" | "kanban" | "board";
 
 export interface IPage {
   id: string;
   slugId: string;
   title: string;
   type: PageType;
-  content: string;
+  content: string | object;
   icon: string;
   coverPhoto: string;
   parentPageId: string;
@@ -89,6 +89,7 @@ export interface IPageInput {
   coverPhoto: string;
   position: string;
   isLocked: boolean;
+  content?: string | object;
 }
 
 export interface IExportPageParams {
