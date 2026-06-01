@@ -29,6 +29,8 @@ import { currentPageEditModeAtom } from "@/features/editor/atoms/editor-atoms.ts
 import EmojiPicker from "@/components/ui/emoji-picker.tsx";
 import { useUpdatePageMutation } from "@/features/page/queries/page-query.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import localEmitter from "@/lib/local-emitter.ts";
+import type { UpdateEvent } from "@/features/websocket/types";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -135,24 +137,58 @@ function PageIconPicker({ pageId, icon, editable }: PageIconPickerProps) {
 
   const handleEmojiSelect = (emoji: { native: string }) => {
     updatePageMutation.mutateAsync({ pageId, icon: emoji.native }).then((data) => {
+      const event: UpdateEvent = {
+        operation: "updateOne",
+        spaceId: data.spaceId,
+        entity: ["pages"],
+        id: pageId,
+        payload: {
+          icon: emoji.native,
+          slugId: data.slugId,
+          parentPageId: data.parentPageId,
+        },
+      };
+
+      localEmitter.emit("message", event);
       emit({
         operation: "updateOne",
         spaceId: data.spaceId,
         entity: ["pages"],
         id: pageId,
-        payload: { icon: emoji.native, parentPageId: data.parentPageId },
+        payload: {
+          icon: emoji.native,
+          slugId: data.slugId,
+          parentPageId: data.parentPageId,
+        },
       });
     });
   };
 
   const handleRemoveEmoji = () => {
     updatePageMutation.mutateAsync({ pageId, icon: null }).then((data) => {
+      const event: UpdateEvent = {
+        operation: "updateOne",
+        spaceId: data.spaceId,
+        entity: ["pages"],
+        id: pageId,
+        payload: {
+          icon: null,
+          slugId: data.slugId,
+          parentPageId: data.parentPageId,
+        },
+      };
+
+      localEmitter.emit("message", event);
       emit({
         operation: "updateOne",
         spaceId: data.spaceId,
         entity: ["pages"],
         id: pageId,
-        payload: { icon: null },
+        payload: {
+          icon: null,
+          slugId: data.slugId,
+          parentPageId: data.parentPageId,
+        },
       });
     });
   };

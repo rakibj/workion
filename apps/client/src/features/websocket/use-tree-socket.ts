@@ -14,21 +14,33 @@ export const useTreeSocket = () => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const updateNodeName = (event) => {
-      if (event.payload?.title === undefined) return;
+    const updateNode = (event) => {
+      const hasTitle = event.payload?.title !== undefined;
+      const hasIcon = event.payload?.icon !== undefined;
+      if (!hasTitle && !hasIcon) return;
+
       setTreeData((prev) => {
         if (!treeModel.find(prev, event?.id)) return prev;
-        return treeModel.update(prev, event.id, {
-          name: event.payload.title,
-        } as Partial<SpaceTreeNode>);
+        let next = prev;
+        if (hasTitle) {
+          next = treeModel.update(next, event.id, {
+            name: event.payload.title,
+          } as Partial<SpaceTreeNode>);
+        }
+        if (hasIcon) {
+          next = treeModel.update(next, event.id, {
+            icon: event.payload.icon,
+          } as Partial<SpaceTreeNode>);
+        }
+        return next;
       });
     };
 
-    localEmitter.on("message", updateNodeName);
+    localEmitter.on("message", updateNode);
     return () => {
-      localEmitter.off("message", updateNodeName);
+      localEmitter.off("message", updateNode);
     };
-  }, []);
+  }, [setTreeData]);
 
   useEffect(() => {
     socket?.on("message", (event: WebSocketEvent) => {

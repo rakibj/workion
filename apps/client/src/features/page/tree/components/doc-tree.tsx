@@ -306,6 +306,23 @@ function DocTreeInner<T extends object>(
 
       const target = e.target as HTMLElement;
       if (target.matches('input, textarea, [contenteditable="true"]')) return;
+
+      const path = e.nativeEvent.composedPath?.() ?? [];
+      const pathHasEditable = path.some((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        return (
+          el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.isContentEditable ||
+          el.getAttribute('role') === 'textbox'
+        );
+      });
+      if (pathHasEditable) return;
+
+      const pathHasEmojiPicker = path.some((el) => {
+        return el instanceof HTMLElement && el.tagName === 'EM-EMOJI-PICKER';
+      });
+      if (pathHasEmojiPicker) return;
       const rowEl = target.closest('[data-row-id]');
       if (!rowEl) return;
       const id = rowEl.getAttribute('data-row-id');

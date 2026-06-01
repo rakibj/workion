@@ -66,8 +66,13 @@ function EmojiPicker({
     const listener = (event: MouseEvent | TouchEvent) => {
       const target = (event as MouseEvent).target as Node | null;
       if (!target || !document.body.contains(target)) return;
-      const insideTarget = targetRef.current?.contains(target);
-      const insideDropdown = dropdownRef.current?.contains(target);
+
+      const path = (event as MouseEvent).composedPath?.() ?? [];
+      const insideTarget =
+        !!targetRef.current && path.includes(targetRef.current);
+      const insideDropdown =
+        !!dropdownRef.current && path.includes(dropdownRef.current);
+
       if (!insideTarget && !insideDropdown) {
         handlers.close();
       }
@@ -87,6 +92,11 @@ function EmojiPicker({
     if (!opened || !dropdownRef.current) return;
     let cancelled = false;
     let rafId = 0;
+    let boundInput: HTMLInputElement | null = null;
+    const stopTreeKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") return;
+      event.stopPropagation();
+    };
     const tryFocus = (attempts: number) => {
       if (cancelled) return;
       const pickerEl = dropdownRef.current?.querySelector("em-emoji-picker");
@@ -95,6 +105,13 @@ function EmojiPicker({
       );
       if (input) {
         input.focus({ preventScroll: true });
+        if (boundInput !== input) {
+          if (boundInput) {
+            boundInput.removeEventListener("keydown", stopTreeKeydown);
+          }
+          boundInput = input;
+          boundInput.addEventListener("keydown", stopTreeKeydown);
+        }
         return;
       }
       if (attempts < 60) {
@@ -104,6 +121,9 @@ function EmojiPicker({
     rafId = requestAnimationFrame(() => tryFocus(0));
     return () => {
       cancelled = true;
+      if (boundInput) {
+        boundInput.removeEventListener("keydown", stopTreeKeydown);
+      }
       cancelAnimationFrame(rafId);
     };
   }, [opened]);
@@ -155,7 +175,13 @@ function EmojiPicker({
           {icon}
         </ActionIcon>
       </Popover.Target>
-      <Popover.Dropdown ref={dropdownRef as any} style={{ border: "none", padding: 0 }}>
+      <Popover.Dropdown
+        ref={dropdownRef as any}
+        style={{ border: "none", padding: 0 }}
+        // Prevent the sidebar tree row drag handlers from stealing focus.
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <Suspense fallback={
           <Center w={332} h={435}>
             <Loader size="sm" />
