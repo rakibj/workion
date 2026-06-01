@@ -20,6 +20,8 @@ import {
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import type { UpdateEvent } from "@/features/websocket/types";
+import localEmitter from "@/lib/local-emitter.ts";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
@@ -197,12 +199,27 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         treeModel.update(prev, id, { name } as Partial<SpaceTreeNode>),
       );
       try {
-        await updatePageMutation.mutateAsync({ pageId: id, title: name });
+        const page = await updatePageMutation.mutateAsync({ pageId: id, title: name });
+        const event: UpdateEvent = {
+          operation: "updateOne",
+          spaceId: page.spaceId,
+          entity: ["pages"],
+          id: page.id,
+          payload: {
+            title: page.title,
+            slugId: page.slugId,
+            parentPageId: page.parentPageId,
+            icon: page.icon,
+          },
+        };
+
+        localEmitter.emit("message", event);
+        emit(event);
       } catch (error) {
         console.error("Error updating page title:", error);
       }
     },
-    [updatePageMutation, setData],
+    [updatePageMutation, setData, emit],
   );
 
   const handleDelete = useCallback(
