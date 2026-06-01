@@ -11,10 +11,9 @@ import "tldraw/tldraw.css";
 import { useCollabToken } from "@/features/auth/queries/auth-query";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 
-// Tags our own writes so the observer doesn't echo them back locally.
 const TX_ORIGIN = "board-tldraw";
 
-// Per-tab records (camera, instance state) must not be shared across clients.
+// Per-tab records must not be shared across clients.
 const isDocumentRecord = (id: string) =>
   !id.startsWith("instance") &&
   !id.startsWith("camera") &&
@@ -38,48 +37,32 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
     const yDoc = new Y.Doc();
     const yMap = yDoc.getMap<object>("tldraw");
 
-    // Local-first persistence: survives a quick refresh even when the
-    // Hocuspocus server hasn't flushed its 10-second debounce yet.
     const localPersistence = new IndexeddbPersistence(roomName, yDoc);
     const socket = new HocuspocusProviderWebsocket({ url: collaborationURL });
 
     let unlistenStore: (() => void) | null = null;
+    let initialized = false;
+    let indexeddbReady = false;
+    let providerSynced = false;
+    let offlineTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // ── Yjs → tldraw ──────────────────────────────────────────────────────
-    // Handles incremental remote changes after the initial load:
-    // shapes drawn by other users, reconnect deltas, etc.
-    const yMapObserver = (event: Y.YMapEvent<object>) => {
-      if (event.transaction.origin === TX_ORIGIN) return;
-      editor.store.mergeRemoteChanges(() => {
-        event.changes.keys.forEach((change, key) => {
-          if (change.action === "delete") {
-            editor.store.remove([key as any]);
-          } else {
-            const record = yMap.get(key);
-            if (record) editor.store.put([record as any]);
-          }
-        });
-      });
-    };
-    yMap.observe(yMapObserver);
+    // ── Initialization ────────────────────────────────────────────────────
+    // Called once, after both IndexedDB and Hocuspocus have reported ready.
+    // By waiting for the provider sync we ensure Account A's page UUID is in
+    // yMap before we bootstrap tldraw — avoiding a "wrong page" mismatch.
+    const initialize = () => {
+      if (initialized) return;
+      initialized = true;
 
-    // IndexedDB "synced" always fires (fast, local, works offline).
-    // We initialize from local state here instead of waiting for the
-    // WebSocket so the store listener is always registered regardless of
-    // network status. Server data arrives later via yMapObserver.
-    localPersistence.on("synced", () => {
-      if (yMap.size === 0) {
-        // Brand-new board: seed Yjs from tldraw's initial canvas state.
-        // store.serialize() defaults to scope:'document', so instance/camera
-        // records are excluded; the isDocumentRecord guard is belt-and-suspenders.
-        yDoc.transact(() => {
-          const records = editor.store.serialize();
-          Object.values(records).forEach((r: any) => {
-            if (isDocumentRecord(r.id)) yMap.set(r.id, r);
-          });
-        }, TX_ORIGIN);
-      } else {
-        // Has persisted local state: replace tldraw's defaults with it.
+      if (offlineTimer !== null) {
+        clearTimeout(offlineTimer);
+        offlineTimer = null;
+      }
+
+      if (yMap.size > 0) {
+        // Existing board: replace tldraw's freshly-created default records
+        // with the merged (IndexedDB + server) Yjs state so all accounts land
+        // on the correct page UUID.
         editor.store.mergeRemoteChanges(() => {
           const toRemove = editor.store
             .allRecords()
@@ -90,11 +73,18 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
             if (isDocumentRecord(key)) editor.store.put([val]);
           });
         });
+      } else {
+        // Truly new board: seed tldraw's defaults so the server gets a valid
+        // initial state on the first store flush.
+        yDoc.transact(() => {
+          const records = editor.store.serialize();
+          Object.values(records).forEach((r: any) => {
+            if (isDocumentRecord(r.id)) yMap.set(r.id, r);
+          });
+        }, TX_ORIGIN);
       }
 
-      // Register store listener AFTER the initial tldraw state is set so
-      // the default canvas records are never inadvertently written to Yjs
-      // before we know whether the board already has saved content.
+      // Store → Yjs: forward user edits to the shared doc.
       unlistenStore = editor.store.listen(
         ({ changes }) => {
           yDoc.transact(() => {
@@ -111,21 +101,65 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
         },
         { source: "user", scope: "document" },
       );
+    };
+
+    const tryInitialize = () => {
+      if (indexeddbReady && providerSynced) initialize();
+    };
+
+    // ── Yjs → tldraw ──────────────────────────────────────────────────────
+    // Handles incremental remote changes AFTER the initial bulk load.
+    // Skipped until initialized to prevent double-applying the initial state.
+    const yMapObserver = (event: Y.YMapEvent<object>) => {
+      if (!initialized) return;
+      if (event.transaction.origin === TX_ORIGIN) return;
+      editor.store.mergeRemoteChanges(() => {
+        event.changes.keys.forEach((change, key) => {
+          if (change.action === "delete") {
+            editor.store.remove([key as any]);
+          } else {
+            const record = yMap.get(key);
+            if (record) editor.store.put([record as any]);
+          }
+        });
+      });
+    };
+    yMap.observe(yMapObserver);
+
+    localPersistence.on("synced", () => {
+      indexeddbReady = true;
+      tryInitialize();
+      // Offline fallback: if the provider never connects, init from IndexedDB
+      // alone after a short grace period.
+      if (!providerSynced) {
+        offlineTimer = setTimeout(() => {
+          providerSynced = true;
+          tryInitialize();
+        }, 3000);
+      }
     });
 
-    // HocuspocusProvider merges server state into yDoc via the standard Yjs
-    // sync protocol. Subsequent changes from the server (and other clients)
-    // are delivered incrementally through yMapObserver above.
     const provider = new HocuspocusProvider({
       websocketProvider: socket,
       name: roomName,
       document: yDoc,
       token,
+      onSynced: () => {
+        providerSynced = true;
+        tryInitialize();
+      },
     });
+
+    // Required when passing an external websocketProvider: the constructor
+    // does not auto-attach in that case (manageSocket = false), so the
+    // provider never registers its open/close listeners and never sends
+    // SyncStep1. This is the same call page-editor.tsx makes on every render.
+    provider.attach();
 
     return () => {
       yMap.unobserve(yMapObserver);
       unlistenStore?.();
+      if (offlineTimer !== null) clearTimeout(offlineTimer);
       localPersistence.destroy();
       provider.destroy();
       socket.destroy();
