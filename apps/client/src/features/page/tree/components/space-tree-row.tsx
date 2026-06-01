@@ -84,7 +84,7 @@ export function SpaceTreeRow({
     );
   };
 
-  const handleEmojiIconClick = (e: React.MouseEvent) => {
+  const stopNavigation = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
@@ -157,7 +157,11 @@ export function SpaceTreeRow({
         onToggle={toggleOpen}
       />
 
-      <div onClick={handleEmojiIconClick} style={{ marginRight: "4px" }}>
+      <div
+        onClick={stopNavigation}
+        onMouseDown={stopNavigation}
+        style={{ marginRight: "4px" }}
+      >
         <EmojiPicker
           onEmojiSelect={handleEmojiSelect}
           icon={

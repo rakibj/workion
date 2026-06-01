@@ -13,7 +13,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
-import { IconInfoCircle } from "@tabler/icons-react";
+import { IconInfoCircle, IconMoodSmile } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -26,6 +26,9 @@ import { useAsideTriggerProps } from "@/hooks/use-toggle-aside.tsx";
 import { DeletedPageBanner } from "@/features/page/trash/components/deleted-page-banner.tsx";
 import clsx from "clsx";
 import { currentPageEditModeAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import EmojiPicker from "@/components/ui/emoji-picker.tsx";
+import { useUpdatePageMutation } from "@/features/page/queries/page-query.ts";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -46,6 +49,7 @@ export interface FullEditorProps {
   pageId: string;
   slugId: string;
   title: string;
+  icon?: string;
   content: string;
   spaceSlug: string;
   editable: boolean;
@@ -57,6 +61,7 @@ export interface FullEditorProps {
 export function FullEditor({
   pageId,
   title,
+  icon,
   slugId,
   content,
   spaceSlug,
@@ -95,6 +100,7 @@ export function FullEditor({
         <MemoizedFixedToolbar />
       )}
       <MemoizedDeletedPageBanner slugId={slugId} />
+      <PageIconPicker pageId={pageId} icon={icon} editable={editable && isEditMode} />
       <MemoizedTitleEditor
         pageId={pageId}
         slugId={slugId}
@@ -114,6 +120,61 @@ export function FullEditor({
         canComment={canComment}
       />
     </Container>
+  );
+}
+
+type PageIconPickerProps = {
+  pageId: string;
+  icon?: string;
+  editable: boolean;
+};
+
+function PageIconPicker({ pageId, icon, editable }: PageIconPickerProps) {
+  const updatePageMutation = useUpdatePageMutation();
+  const emit = useQueryEmit();
+
+  const handleEmojiSelect = (emoji: { native: string }) => {
+    updatePageMutation.mutateAsync({ pageId, icon: emoji.native }).then((data) => {
+      emit({
+        operation: "updateOne",
+        spaceId: data.spaceId,
+        entity: ["pages"],
+        id: pageId,
+        payload: { icon: emoji.native, parentPageId: data.parentPageId },
+      });
+    });
+  };
+
+  const handleRemoveEmoji = () => {
+    updatePageMutation.mutateAsync({ pageId, icon: null }).then((data) => {
+      emit({
+        operation: "updateOne",
+        spaceId: data.spaceId,
+        entity: ["pages"],
+        id: pageId,
+        payload: { icon: null },
+      });
+    });
+  };
+
+  if (!icon && !editable) return null;
+
+  return (
+    <div style={{ paddingLeft: "3rem", paddingBottom: "0.5rem" }}>
+      <EmojiPicker
+        onEmojiSelect={handleEmojiSelect}
+        icon={
+          icon ? (
+            <span style={{ fontSize: "2.5rem", lineHeight: 1 }}>{icon}</span>
+          ) : (
+            <IconMoodSmile size={28} stroke={1.5} />
+          )
+        }
+        readOnly={!editable}
+        removeEmojiAction={handleRemoveEmoji}
+        actionIconProps={{ size: "xl", variant: "subtle", c: "gray" }}
+      />
+    </div>
   );
 }
 

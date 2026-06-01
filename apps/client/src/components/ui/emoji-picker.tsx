@@ -1,18 +1,16 @@
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import {
   ActionIcon,
+  Center,
+  Loader,
   Popover,
   Button,
   useMantineColorScheme,
 } from "@mantine/core";
-import { useClickOutside, useDisclosure, useWindowEvent } from "@mantine/hooks";
+import { useDisclosure, useWindowEvent } from "@mantine/hooks";
 import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
-// Load the picker module AND the emoji data in parallel inside the lazy
-// resolution, then bind the data into the component. React.lazy only finishes
-// suspending once both are in memory, so the Suspense boundary hides the
-// Remove button until the Picker can render with real content.
 const Picker = React.lazy(async () => {
   const [pickerModule, dataModule] = await Promise.all([
     import("@slidoapp/emoji-mart-react"),
@@ -20,8 +18,13 @@ const Picker = React.lazy(async () => {
   ]);
   const PickerComp = pickerModule.default;
   const data = dataModule.default;
+  // Never re-render once mounted. The library calls instance.current.update()
+  // during render which throws if the web component isn't fully initialised yet.
   return {
-    default: (props: any) => <PickerComp {...props} data={data} />,
+    default: React.memo(
+      (props: any) => <PickerComp {...props} data={data} />,
+      () => true,
+    ),
   };
 });
 
@@ -48,38 +51,45 @@ function EmojiPicker({
   const { t } = useTranslation();
   const [opened, handlers] = useDisclosure(false);
   const { colorScheme } = useMantineColorScheme();
-  const [target, setTarget] = useState<HTMLElement | null>(null);
-  const [dropdown, setDropdown] = useState<HTMLDivElement | null>(null);
 
-  useClickOutside(
-    () => handlers.close(),
-    ["mousedown", "touchstart"],
-    [dropdown, target],
-  );
+  // Use plain refs (not state) so mounting the dropdown doesn't cause a
+  // re-render. A re-render while Picker is mounted would call
+  // instance.current.update(props) inside @slidoapp/emoji-mart-react's render
+  // function — a side-effectful call that can throw and crash the page.
+  const targetRef = useRef<HTMLElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  // We need this because the default Mantine popover closeOnEscape does not work
-  useWindowEvent("keydown", (event) => {
-    if (opened && event.key === "Escape") {
-      event.stopPropagation();
-      event.preventDefault();
-      handlers.close();
-    }
-  });
-
-  // emoji-mart's built-in autoFocus calls .focus() without preventScroll, which
-  // makes the browser scroll every scrollable ancestor of the search input to
-  // bring it on screen — including the page editor's scroll container, so the
-  // page jumps to the top whenever the picker is opened from a scrolled-down
-  // position. The search input lives inside the <em-emoji-picker> custom
-  // element's shadow root, so we poll for it after the dropdown mounts and
-  // focus it ourselves with preventScroll.
+  // Custom click-outside: reads refs directly in the effect so no state
+  // updates (and therefore no re-renders) are needed.
   useEffect(() => {
-    if (!opened || !dropdown) return;
+    if (!opened) return;
+    const listener = (event: MouseEvent | TouchEvent) => {
+      const target = (event as MouseEvent).target as Node | null;
+      if (!target || !document.body.contains(target)) return;
+      const insideTarget = targetRef.current?.contains(target);
+      const insideDropdown = dropdownRef.current?.contains(target);
+      if (!insideTarget && !insideDropdown) {
+        handlers.close();
+      }
+    };
+    document.addEventListener("mousedown", listener);
+    document.addEventListener("touchstart", listener as EventListener);
+    return () => {
+      document.removeEventListener("mousedown", listener);
+      document.removeEventListener("touchstart", listener as EventListener);
+    };
+  }, [opened, handlers]);
+
+  // emoji-mart's built-in autoFocus calls .focus() without preventScroll,
+  // scrolling every scrollable ancestor. Poll the shadow root and focus with
+  // preventScroll instead.
+  useEffect(() => {
+    if (!opened || !dropdownRef.current) return;
     let cancelled = false;
     let rafId = 0;
     const tryFocus = (attempts: number) => {
       if (cancelled) return;
-      const pickerEl = dropdown.querySelector("em-emoji-picker");
+      const pickerEl = dropdownRef.current?.querySelector("em-emoji-picker");
       const input = pickerEl?.shadowRoot?.querySelector<HTMLInputElement>(
         'input[type="search"]',
       );
@@ -96,12 +106,25 @@ function EmojiPicker({
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [opened, dropdown]);
+  }, [opened]);
 
-  const handleEmojiSelect = (emoji) => {
-    onEmojiSelect(emoji);
+  useWindowEvent("keydown", (event) => {
+    if (opened && event.key === "Escape") {
+      event.stopPropagation();
+      event.preventDefault();
+      handlers.close();
+    }
+  });
+
+  // Keep onEmojiSelect current in a ref so the memoized (never-re-rendering)
+  // Picker always invokes the latest callback without needing to re-render.
+  const onEmojiSelectRef = useRef(onEmojiSelect);
+  onEmojiSelectRef.current = onEmojiSelect;
+
+  const handleEmojiSelect = useCallback((emoji: any) => {
+    onEmojiSelectRef.current(emoji);
     handlers.close();
-  };
+  }, [handlers]);
 
   const handleRemoveEmoji = () => {
     removeEmojiAction();
@@ -115,15 +138,16 @@ function EmojiPicker({
       width={332}
       position="bottom"
       disabled={readOnly}
-      closeOnEscape={true}
+      closeOnEscape={false}
+      closeOnClickOutside={false}
     >
-      <Popover.Target ref={setTarget}>
+      <Popover.Target ref={targetRef as any}>
         <ActionIcon
           c={actionIconProps?.c || "gray"}
           variant={actionIconProps?.variant || "transparent"}
           size={actionIconProps?.size}
           tabIndex={actionIconProps?.tabIndex}
-          onClick={handlers.toggle}
+          onClick={readOnly ? undefined : handlers.toggle}
           aria-label={t("Pick emoji")}
           aria-haspopup="dialog"
           aria-expanded={opened}
@@ -131,8 +155,12 @@ function EmojiPicker({
           {icon}
         </ActionIcon>
       </Popover.Target>
-      <Suspense fallback={null}>
-        <Popover.Dropdown bg="000" style={{ border: "none" }} ref={setDropdown}>
+      <Popover.Dropdown ref={dropdownRef as any} style={{ border: "none", padding: 0 }}>
+        <Suspense fallback={
+          <Center w={332} h={435}>
+            <Loader size="sm" />
+          </Center>
+        }>
           <Picker
             onEmojiSelect={handleEmojiSelect}
             perLine={8}
@@ -153,8 +181,8 @@ function EmojiPicker({
           >
             {t("Remove")}
           </Button>
-        </Popover.Dropdown>
-      </Suspense>
+        </Suspense>
+      </Popover.Dropdown>
     </Popover>
   );
 }

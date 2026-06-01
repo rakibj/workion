@@ -119,6 +119,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               key={page.id}
               pageId={page.id}
               title={page.title}
+              icon={page.icon}
               content={page.content}
               slugId={page.slugId}
               spaceSlug={page?.space?.slug}
