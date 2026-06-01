@@ -10,6 +10,7 @@ export function getUserRoomName(userId: string): string {
 }
 
 export const TREE_EVENTS = new Set([
+  'invalidate',
   'updateOne',
   'addTreeNode',
   'moveTreeNode',

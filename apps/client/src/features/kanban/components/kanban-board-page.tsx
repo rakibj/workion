@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import {
   ActionIcon,
@@ -27,7 +26,6 @@ import {
   IconDotsVertical,
   IconPlus,
   IconTrash,
-  IconX,
 } from "@tabler/icons-react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -40,8 +38,9 @@ import {
   type Edge,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import clsx from "clsx";
-import { useDisclosure } from "@mantine/hooks";
+import { useDebouncedCallback } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import type { IKanbanCard, IKanbanColumn, KanbanColor } from "../types/kanban.types";
 import CardDescriptionEditor, { getDescriptionPlainText } from "./card-description-editor";
 import {
@@ -58,6 +57,14 @@ import {
   useUpdateColumnMutation,
 } from "../queries/kanban-query";
 import { useSpaceMembersInfiniteQuery } from "@/features/space/queries/space-query";
+import {
+  updatePageData,
+  useUpdateTitlePageMutation,
+} from "@/features/page/queries/page-query";
+import { useQueryEmit } from "@/features/websocket/use-query-emit";
+import type { UpdateEvent } from "@/features/websocket/types";
+import localEmitter from "@/lib/local-emitter";
+import { buildPageUrl } from "@/features/page/page.utils";
 import classes from "./kanban-board-page.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -710,15 +717,62 @@ interface KanbanBoardPageProps {
   pageId: string;
   spaceId: string;
   canEdit: boolean;
+  title: string;
+  spaceSlug: string;
 }
 
-export default function KanbanBoardPage({ pageId, spaceId, canEdit }: KanbanBoardPageProps) {
+export default function KanbanBoardPage({
+  pageId,
+  spaceId,
+  canEdit,
+  title,
+  spaceSlug,
+}: KanbanBoardPageProps) {
+  const { t } = useTranslation();
   const { data: columns, isLoading } = useKanbanBoardQuery(pageId);
   const [openCard, setOpenCard] = useState<IKanbanCard | null>(null);
 
   const moveCard = useMoveCardMutation(pageId);
   const moveColumn = useMoveColumnMutation(pageId);
   const createColumn = useCreateColumnMutation(pageId);
+
+  // ── Title editing ─────────────────────────────────────────────────────────
+  const [titleValue, setTitleValue] = useState(title);
+  const { mutateAsync: updateTitleMutate } = useUpdateTitlePageMutation();
+  const emit = useQueryEmit();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setTitleValue(title);
+  }, [pageId, title]);
+
+  const saveTitle = useCallback(
+    async (value: string) => {
+      if (value === title) return;
+      const page = await updateTitleMutate({ pageId, title: value });
+      updatePageData(page);
+      const event: UpdateEvent = {
+        operation: "updateOne",
+        spaceId: page.spaceId,
+        entity: ["pages"],
+        id: page.id,
+        payload: {
+          title: page.title,
+          slugId: page.slugId,
+          parentPageId: page.parentPageId,
+          icon: page.icon,
+        },
+      };
+      localEmitter.emit("message", event);
+      emit(event);
+      navigate(buildPageUrl(spaceSlug, page.slugId, page.title), {
+        replace: true,
+      });
+    },
+    [pageId, title, spaceSlug, emit, navigate, updateTitleMutate],
+  );
+
+  const debouncedSaveTitle = useDebouncedCallback(saveTitle, 500);
 
   const [newColName, setNewColName] = useState("");
   const [addingCol, setAddingCol] = useState(false);
@@ -800,9 +854,20 @@ export default function KanbanBoardPage({ pageId, spaceId, canEdit }: KanbanBoar
       });
       setLocalColumns(newCols);
 
-      moveCard.mutate({ cardId, columnId: toColumnId, position: newPosition });
+      moveCard.mutate(
+        { cardId, columnId: toColumnId, position: newPosition },
+        {
+          onSuccess: () =>
+            emit({
+              operation: "invalidate",
+              spaceId,
+              entity: ["kanban-board"],
+              id: pageId,
+            }),
+        },
+      );
     },
-    [displayColumns, moveCard],
+    [displayColumns, moveCard, emit, spaceId, pageId],
   );
 
   // ── Column drop ───────────────────────────────────────────────────────────
@@ -834,9 +899,20 @@ export default function KanbanBoardPage({ pageId, spaceId, canEdit }: KanbanBoar
       ).sort((a, b) => a.position - b.position);
       setLocalColumns(newCols);
 
-      moveColumn.mutate({ columnId: dragColumnId, position: newPosition });
+      moveColumn.mutate(
+        { columnId: dragColumnId, position: newPosition },
+        {
+          onSuccess: () =>
+            emit({
+              operation: "invalidate",
+              spaceId,
+              entity: ["kanban-board"],
+              id: pageId,
+            }),
+        },
+      );
     },
-    [displayColumns, moveColumn],
+    [displayColumns, moveColumn, emit, spaceId, pageId],
   );
 
   const commitAddColumn = () => {
@@ -863,6 +939,27 @@ export default function KanbanBoardPage({ pageId, spaceId, canEdit }: KanbanBoar
 
   return (
     <div className={classes.root}>
+      {/* ── Page title ──────────────────────────────────────────────────── */}
+      <div className={classes.titleRow}>
+        {canEdit ? (
+          <TextInput
+            value={titleValue}
+            onChange={(e) => {
+              setTitleValue(e.currentTarget.value);
+              debouncedSaveTitle(e.currentTarget.value);
+            }}
+            onBlur={() => saveTitle(titleValue)}
+            placeholder={t("Untitled")}
+            variant="unstyled"
+            className={classes.titleInput}
+          />
+        ) : (
+          <Text fw={700} className={classes.titleText}>
+            {titleValue || t("Untitled")}
+          </Text>
+        )}
+      </div>
+
       <div className={classes.board}>
         {displayColumns.map((col) => (
           <KanbanColumnItem

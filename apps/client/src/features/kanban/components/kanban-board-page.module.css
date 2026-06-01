@@ -12,6 +12,27 @@
   height: 200px;
 }
 
+/* ── Title ── */
+
+.titleRow {
+  flex-shrink: 0;
+  padding: var(--mantine-spacing-xl) var(--mantine-spacing-xl) 0;
+}
+
+.titleInput input {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  height: auto;
+  padding: 0;
+  color: var(--mantine-color-text);
+}
+
+.titleText {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
 /* ── Board ── */
 
 .board {

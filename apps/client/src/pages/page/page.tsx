@@ -109,6 +109,8 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               pageId={page.id}
               spaceId={space.id}
               canEdit={canEdit}
+              title={page.title ?? ""}
+              spaceSlug={page?.space?.slug ?? ""}
             />
           </Suspense>
         ) : (
