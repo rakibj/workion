@@ -1,5 +1,5 @@
 import api from "@/lib/api-client";
-import type { IKanbanCard, IKanbanColumn } from "../types/kanban.types";
+import type { IKanbanCard, IKanbanColumn, IKanbanMilestone } from "../types/kanban.types";
 
 export async function getBoard(pageId: string): Promise<IKanbanColumn[]> {
   const res = await api.post<IKanbanColumn[]>("/kanban/board", { pageId });
@@ -53,6 +53,7 @@ export async function updateCard(data: {
   title?: string;
   description?: string;
   priority?: string | null;
+  milestoneId?: string | null;
 }): Promise<IKanbanCard> {
   const res = await api.post<IKanbanCard>("/kanban/cards/update", data);
   return res.data;
@@ -85,4 +86,33 @@ export async function removeAssignee(data: {
   userId: string;
 }): Promise<void> {
   await api.post("/kanban/cards/assignees/remove", data);
+}
+
+// ─── Milestones ───────────────────────────────────────────────────────────────
+
+export async function listMilestones(pageId: string): Promise<IKanbanMilestone[]> {
+  const res = await api.post<IKanbanMilestone[]>("/kanban/milestones/list", { pageId });
+  return res.data;
+}
+
+export async function createMilestone(data: {
+  pageId: string;
+  name: string;
+  dueDate: string;
+}): Promise<IKanbanMilestone> {
+  const res = await api.post<IKanbanMilestone>("/kanban/milestones/create", data);
+  return res.data;
+}
+
+export async function updateMilestone(data: {
+  milestoneId: string;
+  name?: string;
+  dueDate?: string;
+}): Promise<IKanbanMilestone> {
+  const res = await api.post<IKanbanMilestone>("/kanban/milestones/update", data);
+  return res.data;
+}
+
+export async function deleteMilestone(milestoneId: string): Promise<void> {
+  await api.post("/kanban/milestones/delete", { milestoneId });
 }

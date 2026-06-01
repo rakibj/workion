@@ -14,11 +14,6 @@
 
 /* ── Title ── */
 
-.titleRow {
-  flex-shrink: 0;
-  padding: var(--mantine-spacing-xl) var(--mantine-spacing-xl) 0;
-}
-
 .titleInput input {
   font-size: 1.75rem;
   font-weight: 700;
@@ -330,6 +325,94 @@
     var(--mantine-color-blue-0),
     color-mix(in srgb, var(--mantine-color-blue-9) 25%, transparent)
   );
+}
+
+/* ── Board toolbar ── */
+
+.titleRow {
+  flex-shrink: 0;
+  padding: var(--mantine-spacing-xl) var(--mantine-spacing-xl) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+}
+
+.milestonesBtn {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Milestone badge (inline on card) ── */
+
+.milestoneBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--mantine-color-default-border);
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--mantine-color-dimmed);
+  line-height: 1.5;
+  transition: background 0.1s;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.milestoneBadge:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.milestoneBadgeActive {
+  color: var(--mantine-color-violet-6);
+  border-color: var(--mantine-color-violet-3);
+  background: light-dark(
+    var(--mantine-color-violet-0),
+    color-mix(in srgb, var(--mantine-color-violet-9) 20%, transparent)
+  );
+}
+
+/* ── Milestone management modal rows ── */
+
+.milestoneRow {
+  padding: 6px var(--mantine-spacing-xs);
+  border-radius: var(--mantine-radius-sm);
+  transition: background 0.1s;
+}
+
+.milestoneRow:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.milestoneIcon {
+  color: var(--mantine-color-violet-5);
+  flex-shrink: 0;
+}
+
+/* ── Native date input ── */
+
+.dateInput {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  font-size: var(--mantine-font-size-xs);
+  font-family: inherit;
+  width: 140px;
+  outline: none;
+  cursor: pointer;
+}
+
+.dateInput:focus {
+  border-color: var(--mantine-color-blue-5);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mantine-color-blue-5) 20%, transparent);
 }
 
 /* ── Priority badge (inline on card) ── */

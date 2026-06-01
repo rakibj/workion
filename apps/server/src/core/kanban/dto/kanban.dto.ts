@@ -1,10 +1,12 @@
 import {
+  IsDateString,
   IsIn,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class GetBoardDto {
@@ -74,6 +76,11 @@ export class UpdateCardDto {
   @IsOptional()
   @IsIn(['urgent', 'high', 'medium', 'low'])
   priority?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.milestoneId !== null && o.milestoneId !== undefined)
+  @IsUUID()
+  milestoneId?: string | null;
 }
 
 export class MoveCardDto {
@@ -99,4 +106,38 @@ export class CardAssigneeDto {
 
   @IsUUID()
   userId: string;
+}
+
+export class ListMilestonesDto {
+  @IsUUID()
+  pageId: string;
+}
+
+export class CreateMilestoneDto {
+  @IsUUID()
+  pageId: string;
+
+  @IsString()
+  name: string;
+
+  @IsDateString()
+  dueDate: string;
+}
+
+export class UpdateMilestoneDto {
+  @IsUUID()
+  milestoneId: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+}
+
+export class DeleteMilestoneDto {
+  @IsUUID()
+  milestoneId: string;
 }

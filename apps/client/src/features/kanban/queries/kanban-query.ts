@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as kanbanService from "../services/kanban-service";
-import type { IKanbanCard, IKanbanColumn } from "../types/kanban.types";
+import type { IKanbanCard, IKanbanColumn, IKanbanMilestone } from "../types/kanban.types";
 
 const boardKey = (pageId: string) => ["kanban-board", pageId];
+const milestonesKey = (pageId: string) => ["kanban-milestones", pageId];
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
@@ -90,11 +91,19 @@ export function useUpdateCardMutation(pageId: string) {
   return useMutation({
     mutationFn: kanbanService.updateCard,
     onSuccess: (updated) => {
+      // The server returns a raw KanbanCard row: it has milestoneId but no
+      // embedded milestone object. Derive it from the milestones cache so the
+      // card badge updates immediately without a board refetch.
+      const milestones = qc.getQueryData<IKanbanMilestone[]>(milestonesKey(pageId)) ?? [];
+      const milestone = updated.milestoneId
+        ? (milestones.find((m) => m.id === updated.milestoneId) ?? null)
+        : null;
+
       qc.setQueryData<IKanbanColumn[]>(boardKey(pageId), (prev = []) =>
         prev.map((col) => ({
           ...col,
           cards: col.cards.map((c) =>
-            c.id === updated.id ? { ...c, ...updated } : c,
+            c.id === updated.id ? { ...c, ...updated, milestone } : c,
           ),
         })),
       );
@@ -185,6 +194,57 @@ export function useRemoveAssigneeMutation(pageId: string) {
           ),
         })),
       );
+    },
+  });
+}
+
+// ─── Milestones ───────────────────────────────────────────────────────────────
+
+export function useMilestonesQuery(pageId: string) {
+  return useQuery({
+    queryKey: milestonesKey(pageId),
+    queryFn: () => kanbanService.listMilestones(pageId),
+    enabled: !!pageId,
+  });
+}
+
+export function useCreateMilestoneMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.createMilestone,
+    onSuccess: (ms) => {
+      qc.setQueryData<IKanbanMilestone[]>(milestonesKey(pageId), (prev = []) => [
+        ...prev,
+        ms,
+      ]);
+    },
+  });
+}
+
+export function useUpdateMilestoneMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.updateMilestone,
+    onSuccess: (updated) => {
+      qc.setQueryData<IKanbanMilestone[]>(milestonesKey(pageId), (prev = []) =>
+        prev.map((m) => (m.id === updated.id ? updated : m)),
+      );
+      // board cards embedding the milestone name also need refreshing
+      qc.invalidateQueries({ queryKey: boardKey(pageId) });
+    },
+  });
+}
+
+export function useDeleteMilestoneMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.deleteMilestone,
+    onSuccess: (_, milestoneId) => {
+      qc.setQueryData<IKanbanMilestone[]>(milestonesKey(pageId), (prev = []) =>
+        prev.filter((m) => m.id !== milestoneId),
+      );
+      // cards assigned to this milestone now have milestone=null
+      qc.invalidateQueries({ queryKey: boardKey(pageId) });
     },
   });
 }

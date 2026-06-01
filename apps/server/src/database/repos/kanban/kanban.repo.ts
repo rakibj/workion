@@ -9,10 +9,15 @@ import {
   KanbanColumn,
 } from '../../types/entity.types';
 import { dbOrTx } from '@docmost/db/utils';
-import { jsonArrayFrom } from 'kysely/helpers/postgres';
+import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
+import {
+  InsertableKanbanMilestone,
+  KanbanMilestone,
+} from '../../types/entity.types';
 
 export interface KanbanCardWithAssignees extends KanbanCard {
   assignees: { userId: string; name: string; avatarUrl: string | null }[];
+  milestone: { id: string; name: string; dueDate: string } | null;
 }
 
 export interface KanbanColumnWithCards extends KanbanColumn {
@@ -56,6 +61,12 @@ export class KanbanRepo {
               'kanbanCards.id',
             ),
         ).as('assignees'),
+        jsonObjectFrom(
+          eb
+            .selectFrom('kanbanMilestones')
+            .select(['id', 'name', 'dueDate'])
+            .whereRef('kanbanMilestones.id', '=', 'kanbanCards.milestoneId'),
+        ).as('milestone'),
       ])
       .where('columnId', 'in', columnIds)
       .orderBy('position', 'asc')
@@ -156,7 +167,7 @@ export class KanbanRepo {
 
   async updateCard(
     id: string,
-    data: Partial<Pick<KanbanCard, 'title' | 'description' | 'priority' | 'position' | 'columnId'>>,
+    data: Partial<Pick<KanbanCard, 'title' | 'description' | 'priority' | 'milestoneId' | 'position' | 'columnId'>>,
     trx?: KyselyTransaction,
   ): Promise<KanbanCard> {
     return dbOrTx(this.db, trx)
@@ -220,6 +231,54 @@ export class KanbanRepo {
       .innerJoin('users', 'users.id', 'kanbanCardAssignees.userId')
       .select(['kanbanCardAssignees.userId', 'users.name', 'users.avatarUrl'])
       .where('kanbanCardAssignees.cardId', '=', cardId)
+      .execute();
+  }
+
+  // ─── Milestones ───────────────────────────────────────────────────────────
+
+  async findMilestoneById(id: string): Promise<KanbanMilestone | undefined> {
+    return this.db
+      .selectFrom('kanbanMilestones')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+  }
+
+  async getMilestonesByPageId(pageId: string): Promise<KanbanMilestone[]> {
+    return this.db
+      .selectFrom('kanbanMilestones')
+      .selectAll()
+      .where('pageId', '=', pageId)
+      .orderBy('dueDate', 'asc')
+      .execute();
+  }
+
+  async createMilestone(
+    data: InsertableKanbanMilestone,
+  ): Promise<KanbanMilestone> {
+    return this.db
+      .insertInto('kanbanMilestones')
+      .values(data)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async updateMilestone(
+    id: string,
+    data: Partial<Pick<KanbanMilestone, 'name' | 'dueDate'>>,
+  ): Promise<KanbanMilestone> {
+    return this.db
+      .updateTable('kanbanMilestones')
+      .set({ ...data, updatedAt: new Date() })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async deleteMilestone(id: string): Promise<void> {
+    await this.db
+      .deleteFrom('kanbanMilestones')
+      .where('id', '=', id)
       .execute();
   }
 }

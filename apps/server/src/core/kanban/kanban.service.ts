@@ -12,6 +12,7 @@ import { executeTx } from '@docmost/db/utils';
 import {
   KanbanCard,
   KanbanColumn,
+  KanbanMilestone,
 } from '@docmost/db/types/entity.types';
 
 const POSITION_STEP = 1000;
@@ -111,7 +112,7 @@ export class KanbanService {
 
   async updateCard(
     cardId: string,
-    data: { title?: string; description?: string; priority?: string },
+    data: { title?: string; description?: string; priority?: string; milestoneId?: string | null },
     userId: string,
   ): Promise<KanbanCard> {
     const card = await this.kanbanRepo.findCardById(cardId);
@@ -159,6 +160,40 @@ export class KanbanService {
     const card = await this.kanbanRepo.findCardById(cardId);
     if (!card) throw new NotFoundException('Card not found');
     await this.kanbanRepo.removeAssignee(cardId, targetUserId);
+  }
+
+  // ─── Milestones ────────────────────────────────────────────────────────────
+
+  async getMilestones(pageId: string): Promise<KanbanMilestone[]> {
+    await this.assertKanbanPage(pageId);
+    return this.kanbanRepo.getMilestonesByPageId(pageId);
+  }
+
+  async createMilestone(
+    pageId: string,
+    name: string,
+    dueDate: string,
+  ): Promise<KanbanMilestone> {
+    await this.assertKanbanPage(pageId);
+    return this.kanbanRepo.createMilestone({ pageId, name, dueDate: new Date(dueDate) });
+  }
+
+  async updateMilestone(
+    milestoneId: string,
+    data: { name?: string; dueDate?: string },
+  ): Promise<KanbanMilestone> {
+    const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
+    if (!milestone) throw new NotFoundException('Milestone not found');
+    const updateData: Partial<Pick<KanbanMilestone, 'name' | 'dueDate'>> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.dueDate !== undefined) updateData.dueDate = new Date(data.dueDate);
+    return this.kanbanRepo.updateMilestone(milestoneId, updateData);
+  }
+
+  async deleteMilestone(milestoneId: string): Promise<void> {
+    const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
+    if (!milestone) throw new NotFoundException('Milestone not found');
+    await this.kanbanRepo.deleteMilestone(milestoneId);
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────

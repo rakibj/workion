@@ -306,6 +306,7 @@ export interface KanbanCards {
   title: string;
   description: Generated<string>;
   priority: string | null;
+  milestoneId: string | null;
   position: number;
   createdAt: Generated<Timestamp>;
   updatedAt: Generated<Timestamp>;
@@ -314,6 +315,15 @@ export interface KanbanCards {
 export interface KanbanCardAssignees {
   cardId: string;
   userId: string;
+}
+
+export interface KanbanMilestones {
+  id: Generated<string>;
+  pageId: string;
+  name: string;
+  dueDate: Timestamp;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface Shares {
@@ -630,6 +640,7 @@ export interface DB {
   kanbanColumns: KanbanColumns;
   kanbanCards: KanbanCards;
   kanbanCardAssignees: KanbanCardAssignees;
+  kanbanMilestones: KanbanMilestones;
   favorites: Favorites;
   fileTasks: FileTasks;
   groups: Groups;

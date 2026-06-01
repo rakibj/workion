@@ -8,12 +8,23 @@ export interface KanbanAssignee {
 
 export type KanbanPriority = 'urgent' | 'high' | 'medium' | 'low';
 
+export interface IKanbanMilestone {
+  id: string;
+  pageId: string;
+  name: string;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IKanbanCard {
   id: string;
   columnId: string;
   title: string;
   description: string;
   priority: KanbanPriority | null;
+  milestoneId: string | null;
+  milestone: { id: string; name: string; dueDate: string } | null;
   position: number;
   createdAt: string;
   updatedAt: string;

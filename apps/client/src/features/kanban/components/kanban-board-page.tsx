@@ -26,7 +26,9 @@ import {
   IconCheck,
   IconDotsVertical,
   IconFlag,
+  IconPencil,
   IconPlus,
+  IconTarget,
   IconTrash,
   IconUser,
 } from "@tabler/icons-react";
@@ -44,20 +46,30 @@ import clsx from "clsx";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import type { IKanbanCard, IKanbanColumn, KanbanColor, KanbanPriority } from "../types/kanban.types";
+import type {
+  IKanbanCard,
+  IKanbanColumn,
+  IKanbanMilestone,
+  KanbanColor,
+  KanbanPriority,
+} from "../types/kanban.types";
 import CardDescriptionEditor, { getDescriptionPlainText } from "./card-description-editor";
 import {
   useAddAssigneeMutation,
   useCreateCardMutation,
   useCreateColumnMutation,
+  useCreateMilestoneMutation,
   useDeleteCardMutation,
   useDeleteColumnMutation,
+  useDeleteMilestoneMutation,
   useKanbanBoardQuery,
+  useMilestonesQuery,
   useMoveCardMutation,
   useMoveColumnMutation,
   useRemoveAssigneeMutation,
   useUpdateCardMutation,
   useUpdateColumnMutation,
+  useUpdateMilestoneMutation,
 } from "../queries/kanban-query";
 import { useSpaceMembersInfiniteQuery } from "@/features/space/queries/space-query";
 import {
@@ -95,6 +107,14 @@ function priorityConfig(p: KanbanPriority | null) {
   return PRIORITIES.find((x) => x.value === p) ?? null;
 }
 
+function formatDueDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
 // ─── Position helpers ─────────────────────────────────────────────────────────
 
 const STEP = 1000;
@@ -123,7 +143,7 @@ function getAdjacentPositions(
   };
 }
 
-// ─── Drop indicator ───────────────────────────────────────────────────────────
+// ─── Drop indicators ──────────────────────────────────────────────────────────
 
 function CardDropIndicator({ edge }: { edge: Edge | null }) {
   if (!edge) return null;
@@ -151,6 +171,223 @@ function ColumnDropIndicator({ edge }: { edge: Edge | null }) {
   );
 }
 
+// ─── Milestone management modal ───────────────────────────────────────────────
+
+interface MilestoneManagementModalProps {
+  opened: boolean;
+  onClose: () => void;
+  pageId: string;
+  canEdit: boolean;
+}
+
+function MilestoneManagementModal({
+  opened,
+  onClose,
+  pageId,
+  canEdit,
+}: MilestoneManagementModalProps) {
+  const { data: milestones = [] } = useMilestonesQuery(pageId);
+  const createMs = useCreateMilestoneMutation(pageId);
+  const updateMs = useUpdateMilestoneMutation(pageId);
+  const deleteMs = useDeleteMilestoneMutation(pageId);
+
+  const [newName, setNewName] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState("");
+
+  const handleCreate = () => {
+    if (!newName.trim() || !newDate) return;
+    createMs.mutate(
+      { pageId, name: newName.trim(), dueDate: newDate },
+      {
+        onSuccess: () => {
+          setNewName("");
+          setNewDate("");
+        },
+      },
+    );
+  };
+
+  const startEdit = (ms: IKanbanMilestone) => {
+    setEditingId(ms.id);
+    setEditName(ms.name);
+    setEditDate(ms.dueDate.slice(0, 10));
+  };
+
+  const commitEdit = () => {
+    if (!editingId || !editName.trim() || !editDate) return;
+    updateMs.mutate({
+      milestoneId: editingId,
+      name: editName.trim(),
+      dueDate: editDate,
+    });
+    setEditingId(null);
+  };
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Milestones"
+      size="480px"
+    >
+      <Stack gap="xs">
+        {milestones.length === 0 && (
+          <Text size="sm" c="dimmed" ta="center" py="sm">No milestones yet.</Text>
+        )}
+        {milestones.map((ms) =>
+          editingId === ms.id ? (
+            <Group key={ms.id} gap="xs" align="flex-end">
+              <TextInput
+                value={editName}
+                onChange={(e) => setEditName(e.currentTarget.value)}
+                placeholder="Name"
+                size="xs"
+                style={{ flex: 1 }}
+                autoFocus
+              />
+              <input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.currentTarget.value)}
+                className={classes.dateInput}
+              />
+              <Button size="xs" onClick={commitEdit} loading={updateMs.isPending}>Save</Button>
+              <Button size="xs" variant="default" onClick={() => setEditingId(null)}>Cancel</Button>
+            </Group>
+          ) : (
+            <Group key={ms.id} gap="xs" className={classes.milestoneRow}>
+              <IconTarget size={14} className={classes.milestoneIcon} />
+              <Text size="sm" style={{ flex: 1 }}>{ms.name}</Text>
+              <Text size="xs" c="dimmed">{formatDueDate(ms.dueDate)}</Text>
+              {canEdit && (
+                <Group gap={4}>
+                  <ActionIcon size="xs" variant="subtle" onClick={() => startEdit(ms)}>
+                    <IconPencil size={12} />
+                  </ActionIcon>
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    color="red"
+                    onClick={() => deleteMs.mutate(ms.id)}
+                    loading={deleteMs.isPending}
+                  >
+                    <IconTrash size={12} />
+                  </ActionIcon>
+                </Group>
+              )}
+            </Group>
+          ),
+        )}
+
+        {canEdit && (
+          <>
+            <Divider />
+            <Group gap="xs" align="flex-end">
+              <TextInput
+                value={newName}
+                onChange={(e) => setNewName(e.currentTarget.value)}
+                placeholder="Milestone name"
+                size="xs"
+                style={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              />
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.currentTarget.value)}
+                className={classes.dateInput}
+              />
+              <Button
+                size="xs"
+                onClick={handleCreate}
+                loading={createMs.isPending}
+                disabled={!newName.trim() || !newDate}
+              >
+                Add
+              </Button>
+            </Group>
+          </>
+        )}
+      </Stack>
+    </Modal>
+  );
+}
+
+// ─── Inline milestone picker (on card) ───────────────────────────────────────
+
+interface MilestonePickerProps {
+  card: IKanbanCard;
+  pageId: string;
+  canEdit: boolean;
+  onManage: () => void;
+}
+
+function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerProps) {
+  const { data: milestones = [] } = useMilestonesQuery(pageId);
+  const updateCard = useUpdateCardMutation(pageId);
+
+  const current = card.milestone;
+
+  if (!canEdit && !current) return null;
+
+  const handleSelect = (id: string | null) => {
+    updateCard.mutate({ cardId: card.id, milestoneId: id });
+  };
+
+  return (
+    <Menu shadow="md" width={200} position="bottom-start" withinPortal>
+      <Menu.Target>
+        <button
+          className={clsx(classes.milestoneBadge, current && classes.milestoneBadgeActive)}
+          onClick={(e) => e.stopPropagation()}
+          title="Set milestone"
+        >
+          <IconTarget size={10} />
+          {current ? current.name : "Milestone"}
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+        {milestones.length === 0 && (
+          <Menu.Item disabled>No milestones</Menu.Item>
+        )}
+        {milestones.map((ms) => (
+          <Menu.Item
+            key={ms.id}
+            leftSection={<IconTarget size={13} />}
+            rightSection={
+              current?.id === ms.id ? <IconCheck size={12} /> : null
+            }
+            onClick={() => handleSelect(current?.id === ms.id ? null : ms.id)}
+          >
+            <Stack gap={0}>
+              <Text size="xs">{ms.name}</Text>
+              <Text size="xs" c="dimmed">{formatDueDate(ms.dueDate)}</Text>
+            </Stack>
+          </Menu.Item>
+        ))}
+        {milestones.length > 0 && current && (
+          <>
+            <Menu.Divider />
+            <Menu.Item color="dimmed" onClick={() => handleSelect(null)}>
+              Clear
+            </Menu.Item>
+          </>
+        )}
+        <Menu.Divider />
+        <Menu.Item
+          leftSection={<IconPlus size={12} />}
+          onClick={() => { onManage(); }}
+        >
+          Manage milestones
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 // ─── Inline priority picker ───────────────────────────────────────────────────
 
 interface PriorityPickerProps {
@@ -164,18 +401,18 @@ function PriorityPicker({ priority, cardId, pageId, canEdit }: PriorityPickerPro
   const updateCard = useUpdateCardMutation(pageId);
   const cfg = priorityConfig(priority);
 
+  if (!canEdit && !cfg) return null;
+
   const handleSelect = (value: KanbanPriority | null) => {
     updateCard.mutate({ cardId, priority: value });
   };
-
-  if (!canEdit && !cfg) return null;
 
   return (
     <Menu shadow="md" width={130} position="bottom-start" withinPortal>
       <Menu.Target>
         <button
           className={clsx(classes.priorityBadge, cfg && classes[`priority_${cfg.value}`])}
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => e.stopPropagation()}
           title="Set priority"
           style={cfg ? { color: cfg.color, borderColor: cfg.color } : undefined}
         >
@@ -313,6 +550,7 @@ interface KanbanCardProps {
   spaceId: string;
   canEdit: boolean;
   onOpenCard: (card: IKanbanCard) => void;
+  onOpenMilestones: () => void;
 }
 
 function KanbanCardItem({
@@ -322,6 +560,7 @@ function KanbanCardItem({
   spaceId,
   canEdit,
   onOpenCard,
+  onOpenMilestones,
 }: KanbanCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
@@ -373,7 +612,6 @@ function KanbanCardItem({
           }
         }}
       >
-        {/* Priority stripe */}
         {cfg && (
           <div
             className={classes.priorityStripe}
@@ -388,20 +626,28 @@ function KanbanCardItem({
           </Text>
         )}
 
-        {/* Bottom row: priority badge + assignees */}
-        <Group gap={6} mt={6} align="center" justify="space-between" wrap="nowrap">
+        {/* Bottom row: badges */}
+        <Group gap={4} mt={6} align="center" wrap="wrap">
           <PriorityPicker
             priority={card.priority}
             cardId={card.id}
             pageId={pageId}
             canEdit={canEdit}
           />
-          <InlineAssigneePicker
+          <MilestonePicker
             card={card}
             pageId={pageId}
-            spaceId={spaceId}
             canEdit={canEdit}
+            onManage={onOpenMilestones}
           />
+          <div style={{ marginLeft: "auto" }}>
+            <InlineAssigneePicker
+              card={card}
+              pageId={pageId}
+              spaceId={spaceId}
+              canEdit={canEdit}
+            />
+          </div>
         </Group>
       </div>
       <CardDropIndicator edge={closestEdge === "bottom" ? "bottom" : null} />
@@ -417,9 +663,10 @@ interface CardModalProps {
   spaceId: string;
   canEdit: boolean;
   onClose: () => void;
+  onOpenMilestones: () => void;
 }
 
-function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) {
+function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }: CardModalProps) {
   const [title, setTitle] = useState(card?.title ?? "");
   const [desc, setDesc] = useState(card?.description ?? "");
   const [memberSearch, setMemberSearch] = useState("");
@@ -429,6 +676,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
   const deleteCard = useDeleteCardMutation(pageId);
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
+  const { data: milestones = [] } = useMilestonesQuery(pageId);
 
   const { data: membersData } = useSpaceMembersInfiniteQuery(spaceId);
   const members = (membersData?.pages.flatMap((p) => p.items) ?? []).filter(
@@ -461,6 +709,10 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
     updateCard.mutate({ cardId: card.id, priority: value ?? null });
   };
 
+  const handleMilestoneChange = (value: string | null) => {
+    updateCard.mutate({ cardId: card.id, milestoneId: value });
+  };
+
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filteredMembers = members.filter(
     (m) =>
@@ -481,7 +733,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
       }}
     >
       <ScrollArea style={{ flex: 1 }} p="xl">
-        {/* Title */}
         {canEdit ? (
           <TextInput
             value={title}
@@ -518,8 +769,8 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
       </ScrollArea>
 
       <div className={classes.modalFooter}>
-        {/* Priority + Assignees row */}
-        <Group gap="xl" mb="sm" align="flex-start">
+        {/* Metadata row */}
+        <Group gap="xl" mb="sm" align="flex-start" wrap="wrap">
           {/* Priority */}
           <Stack gap={4}>
             <Text size="xs" c="dimmed" fw={500}>Priority</Text>
@@ -539,8 +790,44 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
                 }
               />
             ) : (
+              <Text size="sm">{priorityConfig(card.priority)?.label ?? "None"}</Text>
+            )}
+          </Stack>
+
+          {/* Milestone */}
+          <Stack gap={4}>
+            <Group gap={4}>
+              <Text size="xs" c="dimmed" fw={500}>Milestone</Text>
+              {canEdit && (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  title="Manage milestones"
+                  onClick={onOpenMilestones}
+                >
+                  <IconPencil size={10} />
+                </ActionIcon>
+              )}
+            </Group>
+            {canEdit ? (
+              <Select
+                size="xs"
+                placeholder="None"
+                clearable
+                value={card.milestone?.id ?? null}
+                onChange={handleMilestoneChange}
+                data={milestones.map((m) => ({
+                  value: m.id,
+                  label: `${m.name} · ${formatDueDate(m.dueDate)}`,
+                }))}
+                styles={{ input: { minWidth: 180 } }}
+                leftSection={<IconTarget size={12} />}
+              />
+            ) : (
               <Text size="sm">
-                {priorityConfig(card.priority)?.label ?? "None"}
+                {card.milestone
+                  ? `${card.milestone.name} · ${formatDueDate(card.milestone.dueDate)}`
+                  : "None"}
               </Text>
             )}
           </Stack>
@@ -571,7 +858,11 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
                         radius="xl"
                         name={a.name}
                         style={canEdit ? { cursor: "pointer" } : undefined}
-                        onClick={canEdit ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId }) : undefined}
+                        onClick={
+                          canEdit
+                            ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId })
+                            : undefined
+                        }
                       />
                     </Tooltip>
                   ))}
@@ -583,7 +874,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
           </Stack>
         </Group>
 
-        {/* Assignee search */}
         {canEdit && showAssigneeSearch && (
           <div className={classes.assigneeSearch}>
             <TextInput
@@ -658,6 +948,7 @@ interface KanbanColumnProps {
   spaceId: string;
   canEdit: boolean;
   onOpenCard: (card: IKanbanCard) => void;
+  onOpenMilestones: () => void;
   onCardDrop: (args: {
     cardId: string;
     fromColumnId: string;
@@ -679,6 +970,7 @@ function KanbanColumnItem({
   spaceId,
   canEdit,
   onOpenCard,
+  onOpenMilestones,
   onCardDrop,
   onColumnDrop,
 }: KanbanColumnProps) {
@@ -689,7 +981,6 @@ function KanbanColumnItem({
   const [colEdge, setColEdge] = useState<Edge | null>(null);
   const [isDraggingCol, setIsDraggingCol] = useState(false);
   const [isOver, setIsOver] = useState(false);
-
   const [renamingCol, setRenamingCol] = useState(false);
   const [colName, setColName] = useState(column.name);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
@@ -716,7 +1007,8 @@ function KanbanColumnItem({
       }),
       dropTargetForElements({
         element: colRef.current,
-        canDrop: ({ source }) => source.data.type === "kanban-column" && source.data.columnId !== column.id,
+        canDrop: ({ source }) =>
+          source.data.type === "kanban-column" && source.data.columnId !== column.id,
         getData: ({ input, element }) =>
           attachClosestEdge(
             { type: "kanban-column", columnId: column.id },
@@ -795,7 +1087,14 @@ function KanbanColumnItem({
         className={clsx(classes.column, isDraggingCol && classes.columnDragging)}
       >
         <div ref={headerRef} className={classes.columnHeader}>
-          <Popover opened={colorMenuOpen} onChange={setColorMenuOpen} width={158} position="bottom-start" withArrow shadow="sm">
+          <Popover
+            opened={colorMenuOpen}
+            onChange={setColorMenuOpen}
+            width={158}
+            position="bottom-start"
+            withArrow
+            shadow="sm"
+          >
             <Popover.Target>
               <div
                 className={classes.colorBar}
@@ -811,7 +1110,10 @@ function KanbanColumnItem({
                 {COLORS.map(({ name, css }) => (
                   <Box
                     key={name}
-                    className={clsx(classes.colorSwatch, column.color === name && classes.colorSwatchActive)}
+                    className={clsx(
+                      classes.colorSwatch,
+                      column.color === name && classes.colorSwatchActive,
+                    )}
                     style={{ backgroundColor: css }}
                     onClick={() => {
                       updateColumn.mutate({ columnId: column.id, color: name });
@@ -834,7 +1136,10 @@ function KanbanColumnItem({
               onBlur={commitRename}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitRename();
-                if (e.key === "Escape") { setColName(column.name); setRenamingCol(false); }
+                if (e.key === "Escape") {
+                  setColName(column.name);
+                  setRenamingCol(false);
+                }
               }}
               size="xs"
               autoFocus
@@ -851,7 +1156,9 @@ function KanbanColumnItem({
             </Text>
           )}
 
-          <Text size="xs" c="dimmed" className={classes.colCount}>{column.cards.length}</Text>
+          <Text size="xs" c="dimmed" className={classes.colCount}>
+            {column.cards.length}
+          </Text>
 
           {canEdit && (
             <Menu shadow="md" width={150} position="bottom-end">
@@ -875,7 +1182,10 @@ function KanbanColumnItem({
 
         <div
           ref={dropZoneRef}
-          className={clsx(classes.cardList, isOver && column.cards.length === 0 && classes.cardListOver)}
+          className={clsx(
+            classes.cardList,
+            isOver && column.cards.length === 0 && classes.cardListOver,
+          )}
         >
           {column.cards.map((card) => (
             <KanbanCardItem
@@ -886,6 +1196,7 @@ function KanbanColumnItem({
               spaceId={spaceId}
               canEdit={canEdit}
               onOpenCard={onOpenCard}
+              onOpenMilestones={onOpenMilestones}
             />
           ))}
 
@@ -897,7 +1208,10 @@ function KanbanColumnItem({
                 onBlur={commitAddCard}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") commitAddCard();
-                  if (e.key === "Escape") { setNewCardTitle(""); setAddingCard(false); }
+                  if (e.key === "Escape") {
+                    setNewCardTitle("");
+                    setAddingCard(false);
+                  }
                 }}
                 placeholder="Card title…"
                 size="xs"
@@ -940,6 +1254,7 @@ export default function KanbanBoardPage({
   const { t } = useTranslation();
   const { data: columns, isLoading } = useKanbanBoardQuery(pageId);
   const [openCard, setOpenCard] = useState<IKanbanCard | null>(null);
+  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
 
   const moveCard = useMoveCardMutation(pageId);
   const moveColumn = useMoveColumnMutation(pageId);
@@ -973,9 +1288,7 @@ export default function KanbanBoardPage({
       };
       localEmitter.emit("message", event);
       emit(event);
-      navigate(buildPageUrl(spaceSlug, page.slugId, page.title), {
-        replace: true,
-      });
+      navigate(buildPageUrl(spaceSlug, page.slugId, page.title), { replace: true });
     },
     [pageId, title, spaceSlug, emit, navigate, updateTitleMutate],
   );
@@ -1024,7 +1337,10 @@ export default function KanbanBoardPage({
         insertIdx = targetIdx + 1;
       }
 
-      const { before, after } = getAdjacentPositions(sortedCards.filter((c) => c.id !== cardId), insertIdx);
+      const { before, after } = getAdjacentPositions(
+        sortedCards.filter((c) => c.id !== cardId),
+        insertIdx,
+      );
       const newPosition = positionBetween(before, after);
 
       const newCols = cols.map((col) => {
@@ -1043,8 +1359,9 @@ export default function KanbanBoardPage({
         }
         if (col.id === toColumnId) {
           const fromCol = cols.find((c) => c.id === fromColumnId);
-          const card = fromCol?.cards.find((c) => c.id === cardId)
-            ?? col.cards.find((c) => c.id === cardId);
+          const card =
+            fromCol?.cards.find((c) => c.id === cardId) ??
+            col.cards.find((c) => c.id === cardId);
           if (!card) return col;
           const updatedCard = { ...card, columnId: toColumnId, position: newPosition };
           const others = col.cards.filter((c) => c.id !== cardId);
@@ -1096,9 +1413,9 @@ export default function KanbanBoardPage({
       const after = filteredSorted[clampedIdx]?.position ?? null;
       const newPosition = positionBetween(before, after);
 
-      const newCols = cols.map((c) =>
-        c.id === dragColumnId ? { ...c, position: newPosition } : c,
-      ).sort((a, b) => a.position - b.position);
+      const newCols = cols
+        .map((c) => (c.id === dragColumnId ? { ...c, position: newPosition } : c))
+        .sort((a, b) => a.position - b.position);
       setLocalColumns(newCols);
 
       moveColumn.mutate(
@@ -1140,6 +1457,7 @@ export default function KanbanBoardPage({
 
   return (
     <div className={classes.root}>
+      {/* ── Title + toolbar ─────────────────────────────────────────────── */}
       <div className={classes.titleRow}>
         {canEdit ? (
           <TextInput
@@ -1158,6 +1476,16 @@ export default function KanbanBoardPage({
             {titleValue || t("Untitled")}
           </Text>
         )}
+
+        <Button
+          variant="subtle"
+          size="xs"
+          leftSection={<IconTarget size={14} />}
+          onClick={() => setMilestoneModalOpen(true)}
+          className={classes.milestonesBtn}
+        >
+          Milestones
+        </Button>
       </div>
 
       <div className={classes.board}>
@@ -1170,6 +1498,7 @@ export default function KanbanBoardPage({
             spaceId={spaceId}
             canEdit={canEdit}
             onOpenCard={setOpenCard}
+            onOpenMilestones={() => setMilestoneModalOpen(true)}
             onCardDrop={handleCardDrop}
             onColumnDrop={handleColumnDrop}
           />
@@ -1185,7 +1514,10 @@ export default function KanbanBoardPage({
                   onBlur={commitAddColumn}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") commitAddColumn();
-                    if (e.key === "Escape") { setNewColName(""); setAddingCol(false); }
+                    if (e.key === "Escape") {
+                      setNewColName("");
+                      setAddingCol(false);
+                    }
                   }}
                   placeholder="Column name…"
                   size="sm"
@@ -1208,6 +1540,14 @@ export default function KanbanBoardPage({
         spaceId={spaceId}
         canEdit={canEdit}
         onClose={() => setOpenCard(null)}
+        onOpenMilestones={() => setMilestoneModalOpen(true)}
+      />
+
+      <MilestoneManagementModal
+        opened={milestoneModalOpen}
+        onClose={() => setMilestoneModalOpen(false)}
+        pageId={pageId}
+        canEdit={canEdit}
       />
     </div>
   );

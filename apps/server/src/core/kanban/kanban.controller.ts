@@ -14,13 +14,17 @@ import {
   CardAssigneeDto,
   CreateCardDto,
   CreateColumnDto,
+  CreateMilestoneDto,
   DeleteCardDto,
   DeleteColumnDto,
+  DeleteMilestoneDto,
   GetBoardDto,
+  ListMilestonesDto,
   MoveCardDto,
   MoveColumnDto,
   UpdateCardDto,
   UpdateColumnDto,
+  UpdateMilestoneDto,
 } from './dto/kanban.dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -129,7 +133,12 @@ export class KanbanController {
     await this.assertCanWriteByCardId(user, dto.cardId);
     return this.kanbanService.updateCard(
       dto.cardId,
-      { title: dto.title, description: dto.description, priority: dto.priority },
+      {
+        title: dto.title,
+        description: dto.description,
+        priority: dto.priority,
+        milestoneId: dto.milestoneId,
+      },
       user.id,
     );
   }
@@ -190,6 +199,51 @@ export class KanbanController {
     await this.kanbanService.removeAssignee(dto.cardId, dto.userId, user.id);
   }
 
+  // ─── Milestones ───────────────────────────────────────────────────────────
+
+  @HttpCode(HttpStatus.OK)
+  @Post('milestones/list')
+  async listMilestones(
+    @Body() dto: ListMilestonesDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanRead(user, dto.pageId);
+    return this.kanbanService.getMilestones(dto.pageId);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('milestones/create')
+  async createMilestone(
+    @Body() dto: CreateMilestoneDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWrite(user, dto.pageId);
+    return this.kanbanService.createMilestone(dto.pageId, dto.name, dto.dueDate);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('milestones/update')
+  async updateMilestone(
+    @Body() dto: UpdateMilestoneDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByMilestoneId(user, dto.milestoneId);
+    return this.kanbanService.updateMilestone(dto.milestoneId, {
+      name: dto.name,
+      dueDate: dto.dueDate,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('milestones/delete')
+  async deleteMilestone(
+    @Body() dto: DeleteMilestoneDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByMilestoneId(user, dto.milestoneId);
+    await this.kanbanService.deleteMilestone(dto.milestoneId);
+  }
+
   // ─── Permission helpers ───────────────────────────────────────────────────
 
   private async assertCanRead(user: User, pageId: string): Promise<void> {
@@ -228,5 +282,14 @@ export class KanbanController {
     const col = await this.kanbanRepo.findColumnById(card.columnId);
     if (!col) throw new NotFoundException('Column not found');
     await this.assertCanWrite(user, col.pageId);
+  }
+
+  private async assertCanWriteByMilestoneId(
+    user: User,
+    milestoneId: string,
+  ): Promise<void> {
+    const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
+    if (!milestone) throw new NotFoundException('Milestone not found');
+    await this.assertCanWrite(user, milestone.pageId);
   }
 }
