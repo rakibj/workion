@@ -136,7 +136,7 @@ export class PersistenceExtension implements Extension {
           } catch (_err) {}
 
           await this.pageRepo.updatePage(
-            { ydoc: ydocState, lastUpdatedById: context.user.id, contributorIds },
+            { ydoc: ydocState, lastUpdatedById: context?.user?.id, contributorIds },
             pageId,
             trx,
           );

@@ -100,7 +100,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
   return (
     page && (
-      <div style={isFullHeight ? { height: "100%", display: "flex", flexDirection: "column" } : undefined}>
+      <div style={isFullHeight ? { height: "calc(100vh - 45px - 2 * var(--mantine-spacing-md))", display: "flex", flexDirection: "column", overflow: "hidden" } : undefined}>
         <Helmet>
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
@@ -126,7 +126,6 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               canEdit={canEdit}
               title={page.title ?? ""}
               spaceSlug={page?.space?.slug ?? ""}
-              initialContent={page.content as any}
             />
           </Suspense>
         ) : (

@@ -19,7 +19,6 @@ interface BoardPageProps {
   canEdit: boolean;
   title: string;
   spaceSlug: string;
-  initialContent: object | string | null;
 }
 
 export default function BoardPage({
@@ -27,7 +26,6 @@ export default function BoardPage({
   canEdit,
   title,
   spaceSlug,
-  initialContent,
 }: BoardPageProps) {
   const { t } = useTranslation();
   const [titleValue, setTitleValue] = useState(title);
@@ -93,14 +91,9 @@ export default function BoardPage({
         )}
       </div>
 
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", minHeight: 0 }}>
         <Suspense fallback={<Loader size="sm" m="md" />}>
-          <BoardEditor
-            key={pageId}
-            pageId={pageId}
-            initialSnapshot={initialContent as any}
-            readOnly={!canEdit}
-          />
+          <BoardEditor key={pageId} pageId={pageId} readOnly={!canEdit} />
         </Suspense>
       </div>
     </div>

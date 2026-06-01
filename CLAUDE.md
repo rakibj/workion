@@ -285,11 +285,11 @@ const module = await Test.createTestingModule({
 
 ### SPEC: Board Page Type (tldraw whiteboard)
 
-**Status**: `Phase 1 COMPLETE — Phase 2 pending`
+**Status**: `Phase 2 COMPLETE — Phase 3 pending`
 
 **Phases**:
 - [x] Phase 1 — Page type plumbing + static tldraw (no real-time)
-- [ ] Phase 2 — Real-time sync via Hocuspocus + Yjs
+- [x] Phase 2 — Real-time sync via Hocuspocus + Yjs
 - [ ] Phase 3 — Polish (thumbnail, export, read-only enforcement)
 
 ---
