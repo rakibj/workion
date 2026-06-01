@@ -1,62 +1,134 @@
-<div align="center">
-    <h1><b>Docmost</b></h1>
-    <p>
-        Open-source collaborative wiki and documentation software.
-        <br />
-        <a href="https://docmost.com"><strong>Website</strong></a> | 
-        <a href="https://docmost.com/docs"><strong>Documentation</strong></a> |
-        <a href="https://twitter.com/DocmostHQ"><strong>Twitter / X</strong></a>
-    </p>
-</div>
-<br />
+# Workion
 
-## Getting started
+A client management platform built on top of [Docmost](https://github.com/docmost/docmost) — an open-source collaborative wiki and documentation engine. Workion layers client-centric features (client spaces, project tracking, kanban boards, per-client access control, and client portals) on top of the Docmost document backbone.
 
-To get started with Docmost, please refer to our [documentation](https://docmost.com/docs) or try our [cloud version](https://docmost.com/pricing) .
+---
 
 ## Features
 
-- Real-time collaboration
-- Diagrams (Draw.io, Excalidraw and Mermaid)
-- Spaces
-- Permissions management
-- Groups
-- Comments
-- Page history
-- Search
-- File attachments
-- Embeds (Airtable, Loom, Miro and more)
-- Translations (10+ languages)
+**Inherited from Docmost**
+- Real-time collaborative editing
+- Hierarchical pages and spaces
+- Comments, page history, and file attachments
+- Diagrams (Draw.io, Excalidraw, Mermaid)
+- Groups and role-based permissions
+- Search and embeds
 
-### Screenshots
+**Added in this fork**
+- Kanban board with milestones, priorities, and assignees
+- Per-client spaces with scoped access control
+- Project tracking per client
+- Client portal (planned)
+- Client user invitations (planned)
+- Activity feed per client (planned)
 
-<p align="center">
-<img alt="home" src="https://docmost.com/screenshots/home.png" width="70%">
-<img alt="editor" src="https://docmost.com/screenshots/editor.png" width="70%">
-</p>
+---
 
-### License
-Docmost core is licensed under the open-source AGPL 3.0 license.  
-Enterprise features are available under an enterprise license (Enterprise Edition).  
+## Tech Stack
 
-All files in the following directories are licensed under the Docmost Enterprise license defined in `packages/ee/License`.
-  - apps/server/src/ee
-  - apps/client/src/ee
-  - packages/ee
+| Layer | Technology |
+|---|---|
+| Backend | NestJS |
+| Database | PostgreSQL |
+| Query builder | Kysely |
+| Cache | Redis |
+| Job queue | BullMQ |
+| Real-time | Hocuspocus + Yjs |
+| Frontend | React 18 + Vite |
+| UI library | Mantine |
+| Editor | TipTap |
+| Auth | JWT + CASL |
 
-### Contributing
+---
 
-See the [development documentation](https://docmost.com/docs/self-hosting/development)
+## Getting Started
 
-## Thanks
-Special thanks to;
+### Prerequisites
 
-<img width="100" alt="Crowdin" src="https://github.com/user-attachments/assets/a6c3d352-e41b-448d-b6cd-3fbca3109f07" />
+- Node.js 20+
+- pnpm 10+
+- Docker (for PostgreSQL and Redis)
 
-[Crowdin](https://crowdin.com/) for providing access to their localization platform.
+### Setup
 
+```bash
+# 1. Clone the repo
+git clone https://github.com/rakibj/workion.git
+cd workion
 
-<img width="48" alt="Algolia-mark-square-white" src="https://github.com/user-attachments/assets/6ccad04a-9589-4965-b6a1-d5cb1f4f9e94" />
+# 2. Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your values
 
-[Algolia](https://www.algolia.com/) for providing full-text search to the docs.
+# 3. Install dependencies
+pnpm install
 
+# 4. Start PostgreSQL and Redis
+docker compose up -d
+
+# 5. Run database migrations
+pnpm --filter server run migration:latest
+
+# 6. Start the development server
+pnpm run dev
+```
+
+App runs at `http://localhost:3000`.
+
+### Environment Variables
+
+```env
+APP_URL=http://localhost:3000
+APP_SECRET=<long-random-string>
+DATABASE_URL=postgresql://docmost:docmost_dev_pass@localhost:5432/docmost
+REDIS_URL=redis://localhost:6379
+```
+
+---
+
+## Development
+
+```bash
+# Start backend only (with watch)
+pnpm run server:dev
+
+# Start frontend only
+pnpm run client:dev
+
+# Run backend tests
+pnpm --filter server run test
+
+# Run frontend tests
+pnpm --filter client run test
+
+# Create a new migration
+pnpm --filter server run migration:create
+
+# Roll back last migration
+pnpm --filter server run migration:down
+```
+
+---
+
+## Project Structure
+
+```
+docmost/
+├── apps/
+│   ├── server/          # NestJS backend
+│   ├── client/          # React + Vite frontend
+│   ├── editor-ext/      # TipTap extensions
+│   └── ee/              # Enterprise Edition modules
+├── packages/            # Shared packages
+├── docker-compose.yml   # Dev: starts PostgreSQL + Redis only
+└── docker-compose.prod.yml
+```
+
+---
+
+## License
+
+The Docmost core is licensed under [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).  
+Enterprise features in `apps/server/src/ee`, `apps/client/src/ee`, and `packages/ee` are licensed under the Docmost Enterprise license.
+
+This fork's additions are for private use.
