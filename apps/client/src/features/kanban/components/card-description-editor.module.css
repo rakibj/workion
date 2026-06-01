@@ -1,0 +1,33 @@
+/* Scoped overrides for the card description editor — keeps it flush with the
+   modal content area while preserving all the standard editor styles. */
+
+.root {
+  flex: 1;
+  min-height: 240px;
+}
+
+/* Remove the large left/right padding the page editor uses — the modal
+   already provides comfortable margins. */
+.root :global(.ProseMirror) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-top: 4px;
+  min-height: 240px;
+  outline: none;
+}
+
+/* Drag handle sits to the left of content; give it room */
+.root :global(.drag-handle) {
+  left: -1.5rem;
+}
+
+.bubbleMenu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  padding: 3px 4px;
+  box-shadow: var(--mantine-shadow-sm);
+}

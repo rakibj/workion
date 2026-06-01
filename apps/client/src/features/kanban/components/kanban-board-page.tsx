@@ -10,6 +10,7 @@ import {
   Avatar,
   Box,
   Button,
+  Divider,
   Group,
   Loader,
   Menu,
@@ -18,7 +19,6 @@ import {
   ScrollArea,
   Stack,
   Text,
-  Textarea,
   TextInput,
   Tooltip,
 } from "@mantine/core";
@@ -43,6 +43,7 @@ import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import type { IKanbanCard, IKanbanColumn, KanbanColor } from "../types/kanban.types";
+import CardDescriptionEditor, { getDescriptionPlainText } from "./card-description-editor";
 import {
   useAddAssigneeMutation,
   useCreateCardMutation,
@@ -199,7 +200,7 @@ function KanbanCardItem({
         <Text size="sm" className={classes.cardTitle}>{card.title || "Untitled"}</Text>
         {card.description && (
           <Text size="xs" c="dimmed" lineClamp={2} className={classes.cardDesc}>
-            {card.description}
+            {getDescriptionPlainText(card.description)}
           </Text>
         )}
         {card.assignees.length > 0 && (
@@ -231,6 +232,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
   const [title, setTitle] = useState(card?.title ?? "");
   const [desc, setDesc] = useState(card?.description ?? "");
   const [memberSearch, setMemberSearch] = useState("");
+  const [showAssigneeSearch, setShowAssigneeSearch] = useState(false);
 
   const updateCard = useUpdateCardMutation(pageId);
   const deleteCard = useDeleteCardMutation(pageId);
@@ -246,6 +248,8 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
     if (card) {
       setTitle(card.title);
       setDesc(card.description);
+      setMemberSearch("");
+      setShowAssigneeSearch(false);
     }
   }, [card?.id]);
 
@@ -274,101 +278,137 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
       opened={!!card}
       onClose={onClose}
       title={null}
-      size="lg"
-      padding="lg"
+      size="860px"
+      padding={0}
+      styles={{
+        content: { display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 80px)" },
+        body: { flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" },
+      }}
     >
-      <Stack gap="md">
+      {/* ── Scrollable body ─────────────────────────────────────────── */}
+      <ScrollArea style={{ flex: 1 }} p="xl">
+        {/* Title */}
         {canEdit ? (
           <TextInput
             value={title}
             onChange={(e) => setTitle(e.currentTarget.value)}
-            placeholder="Card title"
-            size="md"
-            styles={{ input: { fontWeight: 600, fontSize: 18, border: "none", padding: 0 } }}
+            placeholder="Untitled"
+            styles={{
+              input: {
+                fontWeight: 700,
+                fontSize: "1.75rem",
+                lineHeight: 1.2,
+                border: "none",
+                padding: 0,
+                height: "auto",
+                background: "transparent",
+              },
+            }}
             variant="unstyled"
             autoFocus
-            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            mb="md"
           />
         ) : (
-          <Text fw={600} size="lg">{card.title}</Text>
+          <Text fw={700} style={{ fontSize: "1.75rem", lineHeight: 1.2 }} mb="md">
+            {card.title || "Untitled"}
+          </Text>
         )}
 
-        {canEdit ? (
-          <Textarea
-            value={desc}
-            onChange={(e) => setDesc(e.currentTarget.value)}
-            placeholder="Add description…"
-            autosize
-            minRows={3}
-            maxRows={10}
-          />
-        ) : (
-          card.description && <Text size="sm">{card.description}</Text>
-        )}
+        {/* Rich-text description — full page-editor experience */}
+        <CardDescriptionEditor
+          key={card.id}
+          initialContent={card.description}
+          editable={canEdit}
+          pageId={pageId}
+          onChange={setDesc}
+        />
+      </ScrollArea>
 
-        <div>
-          <Text size="sm" fw={500} mb={6}>Assignees</Text>
-          {card.assignees.length > 0 && (
-            <Group gap="xs" mb="xs">
-              {card.assignees.map((a) => (
-                <Group key={a.userId} gap={4}>
-                  <Avatar src={a.avatarUrl} size={24} radius="xl" name={a.name} />
-                  <Text size="xs">{a.name}</Text>
-                  {canEdit && (
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      color="gray"
-                      onClick={() => removeAssignee.mutate({ cardId: card.id, userId: a.userId })}
-                    >
-                      <IconX size={10} />
-                    </ActionIcon>
-                  )}
-                </Group>
+      {/* ── Footer ──────────────────────────────────────────────────── */}
+      <div className={classes.modalFooter}>
+        {/* Assignees row */}
+        <Group gap="xs" mb={showAssigneeSearch ? "xs" : 0}>
+          <Text size="sm" c="dimmed">Assignees:</Text>
+          {card.assignees.length > 0 ? (
+            <Avatar.Group spacing="xs">
+              {card.assignees.slice(0, 6).map((a) => (
+                <Tooltip key={a.userId} label={a.name} withArrow>
+                  <Avatar
+                    src={a.avatarUrl}
+                    size={24}
+                    radius="xl"
+                    name={a.name}
+                    style={canEdit ? { cursor: "pointer" } : undefined}
+                    onClick={canEdit ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId }) : undefined}
+                  />
+                </Tooltip>
               ))}
-            </Group>
+            </Avatar.Group>
+          ) : (
+            <Text size="sm" c="dimmed">None</Text>
           )}
-
           {canEdit && (
-            <>
-              <TextInput
-                placeholder="Search members…"
-                value={memberSearch}
-                onChange={(e) => setMemberSearch(e.currentTarget.value)}
-                size="xs"
-                mb={4}
-              />
-              <ScrollArea h={160}>
-                <Stack gap={2}>
-                  {filteredMembers.map((m) => {
-                    const isAssigned = assignedIds.has(m.id);
-                    const avatarUrl = "avatarUrl" in m ? (m.avatarUrl as string | null) : null;
-                    return (
-                      <Group
-                        key={m.id}
-                        gap="xs"
-                        className={clsx(classes.memberRow, isAssigned && classes.memberRowAssigned)}
-                        onClick={() =>
-                          isAssigned
-                            ? removeAssignee.mutate({ cardId: card.id, userId: m.id })
-                            : addAssignee.mutate({ cardId: card.id, userId: m.id })
-                        }
-                      >
-                        <Avatar src={avatarUrl} size={24} radius="xl" name={m.name} />
-                        <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
-                        {isAssigned && <IconCheck size={14} />}
-                      </Group>
-                    );
-                  })}
-                </Stack>
-              </ScrollArea>
-            </>
+            <ActionIcon
+              size="xs"
+              variant="subtle"
+              onClick={() => setShowAssigneeSearch((v) => !v)}
+              title="Manage assignees"
+            >
+              <IconPlus size={12} />
+            </ActionIcon>
           )}
-        </div>
+        </Group>
 
-        {canEdit && (
-          <Group justify="space-between" mt="sm">
-            <Button variant="subtle" color="red" leftSection={<IconTrash size={14} />} onClick={handleDelete} size="xs">
+        {/* Assignee search — shown on demand */}
+        {canEdit && showAssigneeSearch && (
+          <div className={classes.assigneeSearch}>
+            <TextInput
+              placeholder="Search members…"
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.currentTarget.value)}
+              size="xs"
+              mb={4}
+              autoFocus
+            />
+            <ScrollArea h={140}>
+              <Stack gap={2}>
+                {filteredMembers.map((m) => {
+                  const isAssigned = assignedIds.has(m.id);
+                  const avatarUrl = "avatarUrl" in m ? (m.avatarUrl as string | null) : null;
+                  return (
+                    <Group
+                      key={m.id}
+                      gap="xs"
+                      className={clsx(classes.memberRow, isAssigned && classes.memberRowAssigned)}
+                      onClick={() =>
+                        isAssigned
+                          ? removeAssignee.mutate({ cardId: card.id, userId: m.id })
+                          : addAssignee.mutate({ cardId: card.id, userId: m.id })
+                      }
+                    >
+                      <Avatar src={avatarUrl} size={24} radius="xl" name={m.name} />
+                      <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
+                      {isAssigned && <IconCheck size={14} />}
+                    </Group>
+                  );
+                })}
+              </Stack>
+            </ScrollArea>
+          </div>
+        )}
+
+        <Divider my="sm" />
+
+        {/* Actions */}
+        {canEdit ? (
+          <Group justify="space-between">
+            <Button
+              variant="subtle"
+              color="red"
+              leftSection={<IconTrash size={14} />}
+              onClick={handleDelete}
+              size="xs"
+            >
               Delete card
             </Button>
             <Group gap="xs">
@@ -376,8 +416,12 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
               <Button size="xs" onClick={handleSave} loading={updateCard.isPending}>Save</Button>
             </Group>
           </Group>
+        ) : (
+          <Group justify="flex-end">
+            <Button variant="default" size="xs" onClick={onClose}>Close</Button>
+          </Group>
         )}
-      </Stack>
+      </div>
     </Modal>
   );
 }
@@ -477,16 +521,30 @@ function KanbanColumnItem({
         canDrop: ({ source }) => source.data.type === "kanban-card",
         onDragEnter: () => setIsOver(true),
         onDragLeave: () => setIsOver(false),
-        onDrop: ({ source }) => {
+        onDrop: ({ source, location }) => {
           setIsOver(false);
-          // dropped on empty column (not on a specific card)
-          onCardDrop({
-            cardId: source.data.cardId as string,
-            fromColumnId: source.data.columnId as string,
-            toColumnId: column.id,
-            edge: "bottom",
-            targetCardId: null,
-          });
+          // Check if the user dropped onto a specific card (innermost target)
+          const targets = location.current.dropTargets;
+          const cardTarget = targets.find((t) => t.data.type === "kanban-card");
+          if (cardTarget) {
+            const edge = extractClosestEdge(cardTarget.data) ?? "bottom";
+            onCardDrop({
+              cardId: source.data.cardId as string,
+              fromColumnId: source.data.columnId as string,
+              toColumnId: column.id,
+              edge,
+              targetCardId: cardTarget.data.cardId as string,
+            });
+          } else {
+            // Dropped on empty column area — append to end
+            onCardDrop({
+              cardId: source.data.cardId as string,
+              fromColumnId: source.data.columnId as string,
+              toColumnId: column.id,
+              edge: "bottom",
+              targetCardId: null,
+            });
+          }
         },
       }),
     );
@@ -712,6 +770,17 @@ export default function KanbanBoardPage({ pageId, spaceId, canEdit }: KanbanBoar
 
       // optimistic local update
       const newCols = cols.map((col) => {
+        if (col.id === fromColumnId && col.id === toColumnId) {
+          // Same-column reorder: update position without removing and re-adding
+          const card = col.cards.find((c) => c.id === cardId);
+          if (!card) return col;
+          const updatedCard = { ...card, position: newPosition };
+          const others = col.cards.filter((c) => c.id !== cardId);
+          return {
+            ...col,
+            cards: [...others, updatedCard].sort((a, b) => a.position - b.position),
+          };
+        }
         if (col.id === fromColumnId) {
           return { ...col, cards: col.cards.filter((c) => c.id !== cardId) };
         }

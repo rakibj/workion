@@ -106,21 +106,37 @@ export function useMoveCardMutation(pageId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: kanbanService.moveCard,
-    // optimistic update is handled in the board component before this fires
     onSuccess: (updated) => {
-      qc.setQueryData<IKanbanColumn[]>(boardKey(pageId), (prev = []) =>
-        prev.map((col) => ({
-          ...col,
-          cards: col.cards
-            .map((c) =>
-              c.id === updated.id
-                ? { ...c, columnId: updated.columnId, position: updated.position }
-                : c,
-            )
-            .filter((c) => c.columnId === col.id)
-            .sort((a, b) => a.position - b.position),
-        })),
-      );
+      qc.setQueryData<IKanbanColumn[]>(boardKey(pageId), (prev = []) => {
+        // Locate the full card object in whichever column currently holds it
+        let card: IKanbanCard | undefined;
+        for (const col of prev) {
+          card = col.cards.find((c) => c.id === updated.id);
+          if (card) break;
+        }
+        if (!card) return prev;
+
+        const movedCard: IKanbanCard = {
+          ...card,
+          columnId: updated.columnId,
+          position: updated.position,
+        };
+
+        return prev.map((col) => {
+          if (col.id === updated.columnId) {
+            // Add to target column (deduplicate in case it was already there)
+            return {
+              ...col,
+              cards: [
+                ...col.cards.filter((c) => c.id !== updated.id),
+                movedCard,
+              ].sort((a, b) => a.position - b.position),
+            };
+          }
+          // Strip from every other column
+          return { ...col, cards: col.cards.filter((c) => c.id !== updated.id) };
+        });
+      });
     },
   });
 }

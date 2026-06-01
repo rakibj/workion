@@ -310,3 +310,19 @@
     color-mix(in srgb, var(--mantine-color-blue-9) 25%, transparent)
   );
 }
+
+/* ── Card modal footer ── */
+
+.modalFooter {
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-xl);
+  border-top: 1px solid var(--mantine-color-default-border);
+  flex-shrink: 0;
+}
+
+.assigneeSearch {
+  margin-top: var(--mantine-spacing-xs);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-xs);
+  background: var(--mantine-color-body);
+}
