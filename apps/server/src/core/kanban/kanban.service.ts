@@ -111,7 +111,7 @@ export class KanbanService {
 
   async updateCard(
     cardId: string,
-    data: { title?: string; description?: string },
+    data: { title?: string; description?: string; priority?: string },
     userId: string,
   ): Promise<KanbanCard> {
     const card = await this.kanbanRepo.findCardById(cardId);

@@ -16,6 +16,7 @@ import {
   Modal,
   Popover,
   ScrollArea,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -24,8 +25,10 @@ import {
 import {
   IconCheck,
   IconDotsVertical,
+  IconFlag,
   IconPlus,
   IconTrash,
+  IconUser,
 } from "@tabler/icons-react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -41,7 +44,7 @@ import clsx from "clsx";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import type { IKanbanCard, IKanbanColumn, KanbanColor } from "../types/kanban.types";
+import type { IKanbanCard, IKanbanColumn, KanbanColor, KanbanPriority } from "../types/kanban.types";
 import CardDescriptionEditor, { getDescriptionPlainText } from "./card-description-editor";
 import {
   useAddAssigneeMutation,
@@ -81,6 +84,17 @@ const COLORS: { name: KanbanColor; css: string }[] = [
 const colorCss = (name: KanbanColor) =>
   COLORS.find((c) => c.name === name)?.css ?? COLORS[0].css;
 
+const PRIORITIES: { value: KanbanPriority; label: string; color: string }[] = [
+  { value: "urgent", label: "Urgent", color: "var(--mantine-color-red-6)" },
+  { value: "high",   label: "High",   color: "var(--mantine-color-orange-5)" },
+  { value: "medium", label: "Medium", color: "var(--mantine-color-yellow-5)" },
+  { value: "low",    label: "Low",    color: "var(--mantine-color-blue-4)" },
+];
+
+function priorityConfig(p: KanbanPriority | null) {
+  return PRIORITIES.find((x) => x.value === p) ?? null;
+}
+
 // ─── Position helpers ─────────────────────────────────────────────────────────
 
 const STEP = 1000;
@@ -94,7 +108,7 @@ function positionBetween(before: number | null, after: number | null): number {
 
 function getAdjacentPositions(
   items: { position: number }[],
-  insertBefore: number | null, // index of item to insert before; null = append
+  insertBefore: number | null,
 ): { before: number | null; after: number | null } {
   const sorted = [...items].sort((a, b) => a.position - b.position);
   if (insertBefore === null) {
@@ -134,6 +148,159 @@ function ColumnDropIndicator({ edge }: { edge: Edge | null }) {
         edge === "right" && classes.columnDropRight,
       )}
     />
+  );
+}
+
+// ─── Inline priority picker ───────────────────────────────────────────────────
+
+interface PriorityPickerProps {
+  priority: KanbanPriority | null;
+  cardId: string;
+  pageId: string;
+  canEdit: boolean;
+}
+
+function PriorityPicker({ priority, cardId, pageId, canEdit }: PriorityPickerProps) {
+  const updateCard = useUpdateCardMutation(pageId);
+  const cfg = priorityConfig(priority);
+
+  const handleSelect = (value: KanbanPriority | null) => {
+    updateCard.mutate({ cardId, priority: value });
+  };
+
+  if (!canEdit && !cfg) return null;
+
+  return (
+    <Menu shadow="md" width={130} position="bottom-start" withinPortal>
+      <Menu.Target>
+        <button
+          className={clsx(classes.priorityBadge, cfg && classes[`priority_${cfg.value}`])}
+          onClick={(e) => { e.stopPropagation(); }}
+          title="Set priority"
+          style={cfg ? { color: cfg.color, borderColor: cfg.color } : undefined}
+        >
+          <IconFlag size={10} />
+          {cfg ? cfg.label : "Priority"}
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+        {PRIORITIES.map((p) => (
+          <Menu.Item
+            key={p.value}
+            leftSection={<IconFlag size={13} style={{ color: p.color }} />}
+            rightSection={priority === p.value ? <IconCheck size={12} /> : null}
+            onClick={() => handleSelect(p.value)}
+          >
+            {p.label}
+          </Menu.Item>
+        ))}
+        {priority && (
+          <>
+            <Menu.Divider />
+            <Menu.Item color="dimmed" onClick={() => handleSelect(null)}>
+              Clear
+            </Menu.Item>
+          </>
+        )}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
+// ─── Inline assignee picker (on card) ────────────────────────────────────────
+
+interface InlineAssigneePickerProps {
+  card: IKanbanCard;
+  pageId: string;
+  spaceId: string;
+  canEdit: boolean;
+}
+
+function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssigneePickerProps) {
+  const [opened, setOpened] = useState(false);
+  const [search, setSearch] = useState("");
+  const addAssignee = useAddAssigneeMutation(pageId);
+  const removeAssignee = useRemoveAssigneeMutation(pageId);
+
+  const { data: membersData } = useSpaceMembersInfiniteQuery(spaceId);
+  const members = (membersData?.pages.flatMap((p) => p.items) ?? []).filter(
+    (m) => m.type === "user",
+  );
+
+  const assignedIds = new Set(card.assignees.map((a) => a.userId));
+  const filtered = members.filter(
+    (m) =>
+      m.name?.toLowerCase().includes(search.toLowerCase()) ||
+      ("email" in m && (m.email as string)?.toLowerCase().includes(search.toLowerCase())),
+  );
+
+  return (
+    <Group gap={2} align="center" wrap="nowrap">
+      {card.assignees.slice(0, 3).map((a) => (
+        <Tooltip key={a.userId} label={a.name} withArrow>
+          <Avatar src={a.avatarUrl} size={20} radius="xl" name={a.name} />
+        </Tooltip>
+      ))}
+      {card.assignees.length > 3 && (
+        <Text size="xs" c="dimmed">+{card.assignees.length - 3}</Text>
+      )}
+      {canEdit && (
+        <Popover
+          opened={opened}
+          onChange={setOpened}
+          width={200}
+          position="bottom-start"
+          withinPortal
+          shadow="md"
+        >
+          <Popover.Target>
+            <ActionIcon
+              size={20}
+              variant="subtle"
+              radius="xl"
+              onClick={(e) => { e.stopPropagation(); setOpened((v) => !v); }}
+              title="Manage assignees"
+            >
+              <IconUser size={11} />
+            </ActionIcon>
+          </Popover.Target>
+          <Popover.Dropdown onClick={(e) => e.stopPropagation()}>
+            <TextInput
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.currentTarget.value)}
+              size="xs"
+              mb={4}
+              autoFocus
+            />
+            <ScrollArea h={120}>
+              <Stack gap={2}>
+                {filtered.map((m) => {
+                  const isAssigned = assignedIds.has(m.id);
+                  const avatarUrl = "avatarUrl" in m ? (m.avatarUrl as string | null) : null;
+                  return (
+                    <Group
+                      key={m.id}
+                      gap="xs"
+                      className={clsx(classes.memberRow, isAssigned && classes.memberRowAssigned)}
+                      onClick={() =>
+                        isAssigned
+                          ? removeAssignee.mutate({ cardId: card.id, userId: m.id })
+                          : addAssignee.mutate({ cardId: card.id, userId: m.id })
+                      }
+                    >
+                      <Avatar src={avatarUrl} size={20} radius="xl" name={m.name} />
+                      <Text size="xs" style={{ flex: 1 }} truncate>{m.name}</Text>
+                      {isAssigned && <IconCheck size={12} />}
+                    </Group>
+                  );
+                })}
+              </Stack>
+            </ScrollArea>
+          </Popover.Dropdown>
+        </Popover>
+      )}
+    </Group>
   );
 }
 
@@ -188,6 +355,8 @@ function KanbanCardItem({
     );
   }, [card.id, column.id, canEdit]);
 
+  const cfg = priorityConfig(card.priority);
+
   return (
     <div className={classes.cardWrapper}>
       <CardDropIndicator edge={closestEdge === "top" ? "top" : null} />
@@ -204,21 +373,36 @@ function KanbanCardItem({
           }
         }}
       >
+        {/* Priority stripe */}
+        {cfg && (
+          <div
+            className={classes.priorityStripe}
+            style={{ backgroundColor: cfg.color }}
+          />
+        )}
+
         <Text size="sm" className={classes.cardTitle}>{card.title || "Untitled"}</Text>
         {card.description && (
           <Text size="xs" c="dimmed" lineClamp={2} className={classes.cardDesc}>
             {getDescriptionPlainText(card.description)}
           </Text>
         )}
-        {card.assignees.length > 0 && (
-          <Avatar.Group mt={6} spacing="xs">
-            {card.assignees.slice(0, 4).map((a) => (
-              <Tooltip key={a.userId} label={a.name} withArrow>
-                <Avatar src={a.avatarUrl} size={20} radius="xl" name={a.name} />
-              </Tooltip>
-            ))}
-          </Avatar.Group>
-        )}
+
+        {/* Bottom row: priority badge + assignees */}
+        <Group gap={6} mt={6} align="center" justify="space-between" wrap="nowrap">
+          <PriorityPicker
+            priority={card.priority}
+            cardId={card.id}
+            pageId={pageId}
+            canEdit={canEdit}
+          />
+          <InlineAssigneePicker
+            card={card}
+            pageId={pageId}
+            spaceId={spaceId}
+            canEdit={canEdit}
+          />
+        </Group>
       </div>
       <CardDropIndicator edge={closestEdge === "bottom" ? "bottom" : null} />
     </div>
@@ -273,6 +457,10 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
     onClose();
   };
 
+  const handlePriorityChange = (value: string | null) => {
+    updateCard.mutate({ cardId: card.id, priority: value ?? null });
+  };
+
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filteredMembers = members.filter(
     (m) =>
@@ -292,7 +480,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
         body: { flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" },
       }}
     >
-      {/* ── Scrollable body ─────────────────────────────────────────── */}
       <ScrollArea style={{ flex: 1 }} p="xl">
         {/* Title */}
         {canEdit ? (
@@ -321,7 +508,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
           </Text>
         )}
 
-        {/* Rich-text description — full page-editor experience */}
         <CardDescriptionEditor
           key={card.id}
           initialContent={card.description}
@@ -331,42 +517,73 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
         />
       </ScrollArea>
 
-      {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className={classes.modalFooter}>
-        {/* Assignees row */}
-        <Group gap="xs" mb={showAssigneeSearch ? "xs" : 0}>
-          <Text size="sm" c="dimmed">Assignees:</Text>
-          {card.assignees.length > 0 ? (
-            <Avatar.Group spacing="xs">
-              {card.assignees.slice(0, 6).map((a) => (
-                <Tooltip key={a.userId} label={a.name} withArrow>
-                  <Avatar
-                    src={a.avatarUrl}
-                    size={24}
-                    radius="xl"
-                    name={a.name}
-                    style={canEdit ? { cursor: "pointer" } : undefined}
-                    onClick={canEdit ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId }) : undefined}
-                  />
-                </Tooltip>
-              ))}
-            </Avatar.Group>
-          ) : (
-            <Text size="sm" c="dimmed">None</Text>
-          )}
-          {canEdit && (
-            <ActionIcon
-              size="xs"
-              variant="subtle"
-              onClick={() => setShowAssigneeSearch((v) => !v)}
-              title="Manage assignees"
-            >
-              <IconPlus size={12} />
-            </ActionIcon>
-          )}
+        {/* Priority + Assignees row */}
+        <Group gap="xl" mb="sm" align="flex-start">
+          {/* Priority */}
+          <Stack gap={4}>
+            <Text size="xs" c="dimmed" fw={500}>Priority</Text>
+            {canEdit ? (
+              <Select
+                size="xs"
+                placeholder="None"
+                clearable
+                value={card.priority ?? null}
+                onChange={handlePriorityChange}
+                data={PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
+                styles={{ input: { minWidth: 110 } }}
+                leftSection={
+                  card.priority
+                    ? <IconFlag size={12} style={{ color: priorityConfig(card.priority)?.color }} />
+                    : <IconFlag size={12} />
+                }
+              />
+            ) : (
+              <Text size="sm">
+                {priorityConfig(card.priority)?.label ?? "None"}
+              </Text>
+            )}
+          </Stack>
+
+          {/* Assignees */}
+          <Stack gap={4} style={{ flex: 1 }}>
+            <Group gap="xs">
+              <Text size="xs" c="dimmed" fw={500}>Assignees</Text>
+              {canEdit && (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  onClick={() => setShowAssigneeSearch((v) => !v)}
+                  title="Manage assignees"
+                >
+                  <IconPlus size={12} />
+                </ActionIcon>
+              )}
+            </Group>
+            <Group gap="xs">
+              {card.assignees.length > 0 ? (
+                <Avatar.Group spacing="xs">
+                  {card.assignees.slice(0, 6).map((a) => (
+                    <Tooltip key={a.userId} label={a.name} withArrow>
+                      <Avatar
+                        src={a.avatarUrl}
+                        size={24}
+                        radius="xl"
+                        name={a.name}
+                        style={canEdit ? { cursor: "pointer" } : undefined}
+                        onClick={canEdit ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId }) : undefined}
+                      />
+                    </Tooltip>
+                  ))}
+                </Avatar.Group>
+              ) : (
+                <Text size="sm" c="dimmed">None</Text>
+              )}
+            </Group>
+          </Stack>
         </Group>
 
-        {/* Assignee search — shown on demand */}
+        {/* Assignee search */}
         {canEdit && showAssigneeSearch && (
           <div className={classes.assigneeSearch}>
             <TextInput
@@ -406,7 +623,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose }: CardModalProps) 
 
         <Divider my="sm" />
 
-        {/* Actions */}
         {canEdit ? (
           <Group justify="space-between">
             <Button
@@ -492,14 +708,12 @@ function KanbanColumnItem({
     if (!colRef.current || !canEdit) return;
 
     return combine(
-      // column is draggable by its header
       draggable({
         element: headerRef.current!,
         getInitialData: () => ({ type: "kanban-column", columnId: column.id }),
         onDragStart: () => setIsDraggingCol(true),
         onDrop: () => setIsDraggingCol(false),
       }),
-      // column itself is a drop target for other columns
       dropTargetForElements({
         element: colRef.current,
         canDrop: ({ source }) => source.data.type === "kanban-column" && source.data.columnId !== column.id,
@@ -522,7 +736,6 @@ function KanbanColumnItem({
           setColEdge(null);
         },
       }),
-      // card list drop zone
       dropTargetForElements({
         element: dropZoneRef.current!,
         canDrop: ({ source }) => source.data.type === "kanban-card",
@@ -530,7 +743,6 @@ function KanbanColumnItem({
         onDragLeave: () => setIsOver(false),
         onDrop: ({ source, location }) => {
           setIsOver(false);
-          // Check if the user dropped onto a specific card (innermost target)
           const targets = location.current.dropTargets;
           const cardTarget = targets.find((t) => t.data.type === "kanban-card");
           if (cardTarget) {
@@ -543,7 +755,6 @@ function KanbanColumnItem({
               targetCardId: cardTarget.data.cardId as string,
             });
           } else {
-            // Dropped on empty column area — append to end
             onCardDrop({
               cardId: source.data.cardId as string,
               fromColumnId: source.data.columnId as string,
@@ -583,7 +794,6 @@ function KanbanColumnItem({
         ref={colRef}
         className={clsx(classes.column, isDraggingCol && classes.columnDragging)}
       >
-        {/* header — drag handle for columns */}
         <div ref={headerRef} className={classes.columnHeader}>
           <Popover opened={colorMenuOpen} onChange={setColorMenuOpen} width={158} position="bottom-start" withArrow shadow="sm">
             <Popover.Target>
@@ -663,7 +873,6 @@ function KanbanColumnItem({
           )}
         </div>
 
-        {/* card list */}
         <div
           ref={dropZoneRef}
           className={clsx(classes.cardList, isOver && column.cards.length === 0 && classes.cardListOver)}
@@ -736,7 +945,6 @@ export default function KanbanBoardPage({
   const moveColumn = useMoveColumnMutation(pageId);
   const createColumn = useCreateColumnMutation(pageId);
 
-  // ── Title editing ─────────────────────────────────────────────────────────
   const [titleValue, setTitleValue] = useState(title);
   const { mutateAsync: updateTitleMutate } = useUpdateTitlePageMutation();
   const emit = useQueryEmit();
@@ -777,16 +985,13 @@ export default function KanbanBoardPage({
   const [newColName, setNewColName] = useState("");
   const [addingCol, setAddingCol] = useState(false);
 
-  // ── optimistic column state (local ordering during drag) ──────────────────
   const [localColumns, setLocalColumns] = useState<IKanbanColumn[] | null>(null);
   const displayColumns = localColumns ?? columns ?? [];
 
   useEffect(() => {
-    // sync server data into local state when not dragging
     setLocalColumns(null);
   }, [columns]);
 
-  // ── Card drop ─────────────────────────────────────────────────────────────
   const handleCardDrop = useCallback(
     ({
       cardId,
@@ -812,7 +1017,7 @@ export default function KanbanBoardPage({
 
       let insertIdx: number | null;
       if (targetIdx === -1) {
-        insertIdx = null; // append
+        insertIdx = null;
       } else if (edge === "top") {
         insertIdx = targetIdx;
       } else {
@@ -822,10 +1027,8 @@ export default function KanbanBoardPage({
       const { before, after } = getAdjacentPositions(sortedCards.filter((c) => c.id !== cardId), insertIdx);
       const newPosition = positionBetween(before, after);
 
-      // optimistic local update
       const newCols = cols.map((col) => {
         if (col.id === fromColumnId && col.id === toColumnId) {
-          // Same-column reorder: update position without removing and re-adding
           const card = col.cards.find((c) => c.id === cardId);
           if (!card) return col;
           const updatedCard = { ...card, position: newPosition };
@@ -870,7 +1073,6 @@ export default function KanbanBoardPage({
     [displayColumns, moveCard, emit, spaceId, pageId],
   );
 
-  // ── Column drop ───────────────────────────────────────────────────────────
   const handleColumnDrop = useCallback(
     ({
       dragColumnId,
@@ -924,7 +1126,6 @@ export default function KanbanBoardPage({
     setAddingCol(false);
   };
 
-  // ── card open: find live version from query data ──────────────────────────
   const liveCard = openCard
     ? (columns ?? []).flatMap((c) => c.cards).find((c) => c.id === openCard.id)
     : null;
@@ -939,7 +1140,6 @@ export default function KanbanBoardPage({
 
   return (
     <div className={classes.root}>
-      {/* ── Page title ──────────────────────────────────────────────────── */}
       <div className={classes.titleRow}>
         {canEdit ? (
           <TextInput

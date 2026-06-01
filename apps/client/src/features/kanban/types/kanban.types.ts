@@ -6,11 +6,14 @@ export interface KanbanAssignee {
   avatarUrl: string | null;
 }
 
+export type KanbanPriority = 'urgent' | 'high' | 'medium' | 'low';
+
 export interface IKanbanCard {
   id: string;
   columnId: string;
   title: string;
   description: string;
+  priority: KanbanPriority | null;
   position: number;
   createdAt: string;
   updatedAt: string;

@@ -305,6 +305,7 @@ export interface KanbanCards {
   columnId: string;
   title: string;
   description: Generated<string>;
+  priority: string | null;
   position: number;
   createdAt: Generated<Timestamp>;
   updatedAt: Generated<Timestamp>;

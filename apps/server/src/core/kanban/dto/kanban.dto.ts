@@ -70,6 +70,10 @@ export class UpdateCardDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsIn(['urgent', 'high', 'medium', 'low'])
+  priority?: string;
 }
 
 export class MoveCardDto {

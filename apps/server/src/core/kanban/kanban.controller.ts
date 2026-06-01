@@ -129,7 +129,7 @@ export class KanbanController {
     await this.assertCanWriteByCardId(user, dto.cardId);
     return this.kanbanService.updateCard(
       dto.cardId,
-      { title: dto.title, description: dto.description },
+      { title: dto.title, description: dto.description, priority: dto.priority },
       user.id,
     );
   }

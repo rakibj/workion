@@ -52,6 +52,7 @@ export async function updateCard(data: {
   cardId: string;
   title?: string;
   description?: string;
+  priority?: string | null;
 }): Promise<IKanbanCard> {
   const res = await api.post<IKanbanCard>("/kanban/cards/update", data);
   return res.data;
