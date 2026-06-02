@@ -420,9 +420,9 @@ No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) —
 #### Implementation Order (TDD)
 
 - [x] 1. `ai-key.service.ts` — encrypt/decrypt + save/load from `workspace.settings.ai` — 12 unit tests, all passing
-- [ ] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — write tests
-- [ ] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — write tests
-- [ ] 4. `ai-chat.service.ts` — chat + message persistence — write tests
+- [x] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — 9 unit tests, all passing
+- [x] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — covered by step 4 service mocks (no repo has unit tests in this codebase)
+- [x] 4. `ai-chat.service.ts` — chat + message persistence — 13 unit tests, all passing
 - [ ] 5. `ai-stream.service.ts` — OpenRouter streaming via OpenAI SDK — integration test with mocked HTTP
 - [ ] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes
 - [ ] 7. Register `AiChatModule` in `CoreModule`
