@@ -287,7 +287,7 @@ const module = await Test.createTestingModule({
 
 ### SPEC: AI Chat — OpenRouter BYOK
 
-**Status**: `Not started`
+**Status**: `In progress` — step 1 complete (2026-06-03)
 
 **Goal**: Implement the AI chat backend (the `/api/ai/chats/*` routes the client already calls) using OpenRouter as the provider. Each workspace funds its own AI usage by supplying its own OpenRouter API key — no platform-level billing involved.
 
@@ -419,7 +419,7 @@ No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) —
 
 #### Implementation Order (TDD)
 
-- [ ] 1. `ai-key.service.ts` — encrypt/decrypt + save/load from `workspace.settings.ai` — write unit tests first
+- [x] 1. `ai-key.service.ts` — encrypt/decrypt + save/load from `workspace.settings.ai` — 12 unit tests, all passing
 - [ ] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — write tests
 - [ ] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — write tests
 - [ ] 4. `ai-chat.service.ts` — chat + message persistence — write tests
