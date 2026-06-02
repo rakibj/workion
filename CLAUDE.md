@@ -423,9 +423,9 @@ No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) —
 - [x] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — 9 unit tests, all passing
 - [x] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — covered by step 4 service mocks (no repo has unit tests in this codebase)
 - [x] 4. `ai-chat.service.ts` — chat + message persistence — 13 unit tests, all passing
-- [ ] 5. `ai-stream.service.ts` — OpenRouter streaming via OpenAI SDK — integration test with mocked HTTP
-- [ ] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes
-- [ ] 7. Register `AiChatModule` in `CoreModule`
+- [x] 5. `ai-stream.service.ts` — OpenRouter streaming via `@ai-sdk/openai-compatible` + Vercel AI SDK `streamText` — 4 unit tests, all passing
+- [x] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes — 11 unit tests, all passing
+- [x] 7. Register `AiChatModule` in `CoreModule`
 - [ ] 8. Frontend: AI settings panel in workspace settings
 - [ ] 9. Smoke test: configure key → open AI chat → send message → verify stream → remove key → verify disabled
 
