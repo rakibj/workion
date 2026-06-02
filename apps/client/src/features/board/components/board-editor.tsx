@@ -8,6 +8,7 @@ import {
 import { Tldraw } from "tldraw";
 import type { Editor } from "tldraw";
 import "tldraw/tldraw.css";
+import "./board-editor.css";
 import { createTLStore, createTLCurrentUser } from "@tldraw/editor";
 import type { TLUserPreferences } from "@tldraw/editor";
 import { atom } from "@tldraw/state";

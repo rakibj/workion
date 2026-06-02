@@ -118,7 +118,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
         </Tooltip>
       )}
 
-      {page?.type !== "board" && (
+      {page?.type !== "board" && page?.type !== "kanban" && (
         <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
           <ActionIcon
             variant="subtle"
