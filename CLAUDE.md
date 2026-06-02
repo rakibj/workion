@@ -281,145 +281,127 @@ const module = await Test.createTestingModule({
 
 ## Feature Specs
 
----
-
-### SPEC: Board Page Type (tldraw whiteboard)
-
-**Status**: `Phase 2 COMPLETE — Phase 3 in progress`
-
-**Phases**:
-- [x] Phase 1 — Page type plumbing + static tldraw (no real-time)
-- [x] Phase 2 — Real-time sync via Hocuspocus + Yjs (working: same-account and cross-account sync confirmed)
-- [ ] Phase 3 — Polish (thumbnail, export, cursor presence)
-
-**Known implementation detail (critical):** When passing an external `HocuspocusProviderWebsocket` to `HocuspocusProvider`, you must call `provider.attach()` manually after construction — the provider does not self-attach (`manageSocket = false`), so it never registers open/close listeners or sends SyncStep1. This was the root cause of cross-account sync failure. See `board-editor.tsx`.
-
-**Known implementation detail (read-only):** tldraw v5 enforces read-only via a `Signal<'readonly' | 'readwrite'>` passed to `createTLStore({ collaboration: { mode, status } })`. The mode is backed by an `Atom` from `@tldraw/state` so it can be updated reactively. Both `@tldraw/editor` (for `createTLStore`) and `@tldraw/state` (for `atom`) are accessible via pnpm workspace hoisting without being listed in the client's `package.json`. The `<Tldraw store={store}>` prop accepts the pre-created store; `store.listen` / `store.mergeRemoteChanges` work identically to `editor.store.*`.
-
-**Known implementation detail (cursor sync):** Cursors are transported via Yjs awareness (`provider.awareness`), which Hocuspocus creates automatically on each provider. Local presence is derived via `getDefaultUserPresence(store, tlUser)` from `@tldraw/tlschema` and broadcast via `awareness.setLocalStateField('presence', record)`. Remote presences are injected as `TLInstancePresence` records into the tldraw store via `store.mergeRemoteChanges(() => store.put(presences))`. tldraw renders them automatically via its built-in `CollaboratorCursorOverlayUtil`. Presence is throttled to one `requestAnimationFrame` per burst. `awareness.setLocalState(null)` clears our cursor on disconnect. `<Tldraw user={createTLCurrentUser({...})}>` is required so tldraw knows which presence record is local and filters it from `getCollaborators()`. All relevant packages (`@tldraw/editor`, `@tldraw/state`, `@tldraw/tlschema`) are accessible via pnpm workspace hoisting.
-
-**Phase 3 — Completed:**
-- [x] Remove Table of Contents button for board pages — `page-header-menu.tsx` gates on `page?.type !== 'board'`
-- [x] Remove Comments button, Edit mode toggle, Copy as Markdown, Full width, Export, Print PDF, Word count for board pages — same gating in `page-header-menu.tsx`
-- [x] Read-only enforcement — `board-editor.tsx` uses `atom`-backed `collaboration.mode` signal; `getIsReadonly()` returns correctly for reader-role users
-- [x] Cursor/presence sync — `board-editor.tsx` uses Yjs awareness for multi-user live cursors; `store.listen({ scope: 'session' })` triggers broadcasts; remote `TLInstancePresence` records injected for rendering
-
-**Phase 3 — Remaining TODOs (needs spec before implementation):**
-- [ ] PNG/SVG export button in board toolbar (tldraw already has built-in export in its main menu; a spec is needed to decide if a separate button is warranted)
-- [ ] Thumbnail generation for space page list
+> Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
 ---
 
-#### Problem
+### SPEC: AI Chat — OpenRouter BYOK
 
-Pages can currently be `document` (TipTap editor) or `kanban` (custom REST-backed board). A third type — `board` — is needed: a freeform whiteboard with shapes, arrows, sticky notes, images, and real-time multi-user cursors, powered by [tldraw](https://github.com/tldraw/tldraw).
+**Status**: `Not started`
+
+**Goal**: Implement the AI chat backend (the `/api/ai/chats/*` routes the client already calls) using OpenRouter as the provider. Each workspace funds its own AI usage by supplying its own OpenRouter API key — no platform-level billing involved.
+
+---
+
+#### Decision
+
+Pure BYOK — no global fallback key. If a workspace has no key configured, AI chat is disabled for that workspace. This keeps billing 100% between the workspace and OpenRouter.
 
 ---
 
 #### Data Model Delta
 
-**No new table required.** The `pages.type` column already exists as a `varchar DEFAULT 'document'`. `'board'` is added as a third valid value.
+No new table. Add `openrouterKey` (encrypted string) and `openrouterModel` (string) to the existing `workspace.settings.ai` JSONB field.
 
-The existing `pages.ydoc` binary column (used by the collaboration layer to store Yjs state) will store the tldraw Yjs snapshot. The `pages.content` and `pages.text_content` columns are left `null` for board pages.
+```jsonc
+// workspace.settings.ai (extended)
+{
+  "chat": true,
+  "generative": true,
+  "search": false,
+  "openrouterKey": "<AES-256 encrypted>",   // null if not configured
+  "openrouterModel": "openai/gpt-4o-mini"   // default if not set
+}
+```
 
-Changes needed:
-- `apps/server/src/core/page/dto/create-page.dto.ts` — add `'board'` to `@IsIn([...])`
-- `apps/server/src/core/page/dto/update-page.dto.ts` — same
-- `apps/client/src/features/page/types/page.types.ts` — add `| "board"` to `PageType`
-
-No migration file needed (no schema change; the column exists and has no DB-level check constraint).
+Key is encrypted before write and decrypted on read using `APP_SECRET` (AES-256-GCM). Never returned to the client — only used server-side when making OpenRouter requests.
 
 ---
 
-#### API Contract
+#### API Contract (new endpoints — all require `JwtAuthGuard`)
 
-No new endpoints. Board state is synced entirely over the existing WebSocket (`/collab`). All existing page REST endpoints (`GET /pages/:id`, `POST /pages`, `PATCH /pages/:id`, `DELETE /pages/:id`) apply unchanged.
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/ai/chats/create` | Create new chat, return `AiChat` |
+| `POST` | `/ai/chats` | List chats (paginated cursor) |
+| `POST` | `/ai/chats/info` | Get chat + messages by `chatId` |
+| `POST` | `/ai/chats/delete` | Soft-delete a chat |
+| `POST` | `/ai/chats/update` | Update chat title |
+| `POST` | `/ai/chats/search` | Full-text search across messages |
+| `POST` | `/ai/chats/upload` | Upload file attachment for a chat |
+| `POST` | `/ai/chats/send` | **Streaming SSE** — send message, stream response |
 
-**Room naming** — board rooms use the prefix `board.` instead of `page.`:
+`/ai/chats/send` streams `text/event-stream`. Event types match what the client already handles: `chat_created`, `content`, `tool_call`, `tool_result`, `done`, `error`.
 
-```
-Document room:  page.{pageId}
-Board room:     board.{pageId}
-```
+New workspace-settings endpoints (admin only):
 
-The existing `getPageId(documentName)` utility in `collaboration.util.ts` splits on `.` and takes index `[1]`. Because page IDs are UUIDs (no dots), this works unchanged for `board.{uuid}`. No change needed.
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/workspace/ai/key` | Save (or update) OpenRouter key + model |
+| `DELETE` | `/workspace/ai/key` | Remove the key (disables AI chat) |
+| `GET` | `/workspace/ai/key/status` | Returns `{ configured: boolean, model: string }` — never the key itself |
 
 ---
 
-#### Black Box Touches (collaboration/)
+#### Backend Module
 
-These are **additive only** — no existing logic is removed or altered.
+New module: `apps/server/src/core/ai-chat/`
 
-**`persistence.extension.ts`** (2 targeted additions):
+```
+ai-chat/
+├── ai-chat.module.ts
+├── controllers/
+│   ├── ai-chat.controller.ts       # /ai/chats/* routes
+│   └── workspace-ai.controller.ts  # /workspace/ai/key routes
+├── services/
+│   ├── ai-chat.service.ts          # chat CRUD + message persistence
+│   ├── ai-stream.service.ts        # OpenRouter streaming logic
+│   └── ai-key.service.ts           # encrypt/decrypt key, save to settings
+├── dto/
+│   └── *.dto.ts
+└── repos/
+    └── ai-chat.repo.ts             # queries against ai_chats + ai_chat_messages
+```
+
+`ai-stream.service.ts` uses the OpenAI SDK pointed at `https://openrouter.ai/api/v1` with the workspace's decrypted key. All requests include `HTTP-Referer` and `X-Title` headers per OpenRouter's requirements.
+
+---
+
+#### Key Encryption
 
 ```ts
-// onLoadDocument — add after binary ydoc check:
-if (page.type === 'board') {
-  // board uses raw ydoc binary only; skip TipTap JSON→Ydoc conversion
-  return document;
-}
+// Encrypt before storing
+const iv = crypto.randomBytes(12);
+const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
+// Store: base64(iv + authTag + ciphertext)
 
-// onStoreDocument — guard before TipTap serialization:
-if (page.type !== 'board') {
-  // existing TipTap JSON + textContent extraction (unchanged)
-}
-// both paths save the ydoc binary (unchanged)
+// Decrypt on read
+// Split stored value → iv, authTag, ciphertext → decipher
 ```
 
-**`authentication.extension.ts`** — no change. The `getPageId` split already extracts the UUID correctly from `board.{pageId}`.
-
-**`collaboration.module.ts`** — no change. Hocuspocus accepts any room name; board rooms are handled by the same extension chain.
+`derivedKey` = `scrypt(APP_SECRET, workspaceId, 32)` — workspace-scoped so a key from one workspace cannot decrypt another.
 
 ---
 
-#### Frontend Architecture
+#### Frontend
 
-New feature directory: `apps/client/src/features/board/`
+**Workspace settings — new "AI" panel** (`apps/client/src/features/workspace/components/ai-settings.tsx`):
+- Text input for OpenRouter API key (masked, write-only — never shown after save)
+- Model selector dropdown (curated list of OpenRouter model IDs)
+- Save / Remove key button
+- Status indicator: "AI chat active" / "No key configured"
 
-```
-features/board/
-├── components/
-│   ├── board-page.tsx       # full-page wrapper (mirrors kanban-board-page.tsx)
-│   └── board-editor.tsx     # <Tldraw> + Yjs sync setup
-└── hooks/
-    └── use-board-sync.ts    # HocuspocusProvider + Y.Doc → tldraw store wiring
-```
+The existing `enable-ai-chat.tsx` toggle remains but is gated: only meaningful once a key is configured.
 
-**`use-board-sync.ts`** pattern:
-1. Create `HocuspocusProvider` to `/collab`, room = `board.{pageId}`, token = auth JWT
-2. From the provider's `Y.Doc`, get a `Y.Map` keyed `'tldraw'`
-3. Create a tldraw store backed by that `Y.Map` (using tldraw's Yjs binding)
-4. Return the store + connection status to `board-editor.tsx`
-
-**`board-editor.tsx`**:
-- Renders `<Tldraw store={store} />` from the `tldraw` package
-- Shows a connection indicator (connecting / connected / offline)
-- Read-only mode when user has `reader` role (pass `readOnly` prop to `<Tldraw>`)
-
-**`apps/client/src/pages/page/page.tsx`** changes:
-- Add lazy import: `const BoardPage = lazy(() => import("@/features/board/components/board-page"))`
-- Add condition: `if (page.type === 'board') return <BoardPage />`
-
-**New page menu** (wherever document/kanban options live): add "Board" entry with a whiteboard icon.
-
----
-
-#### Packages to Add
-
-```bash
-# client only
-pnpm --filter client add tldraw
-```
-
-`tldraw` includes the React component, store primitives, and the Yjs binding. No additional server packages needed.
+No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) — it already handles all the stream events correctly.
 
 ---
 
 #### Permission / Access Control
 
-Board pages are gated by the **same** space + page access rules as documents. The existing `AuthenticationExtension` sets `readOnly: true` for reader-role users before the WebSocket session is established. tldraw's `readOnly` prop is driven by the page's effective permission (already returned by `GET /pages/:id` as part of the page object).
-
-No CASL changes needed.
+- Saving/removing the key: `owner` or `admin` role only (enforced in `workspace-ai.controller.ts`)
+- Using AI chat: any workspace member (existing `ai.chat` setting gates visibility)
+- Key status endpoint: `owner` or `admin` only
 
 ---
 
@@ -427,36 +409,25 @@ No CASL changes needed.
 
 | Case | Handling |
 |---|---|
-| User opens board with no content | tldraw renders empty canvas; Yjs doc is empty |
-| Two users open simultaneously | Hocuspocus syncs Y.Doc updates; tldraw merges via CRDT |
-| Reader opens board | `readOnly` passed to `<Tldraw>`; WebSocket still opens for live cursor visibility |
-| Board page exported | Phase 3 — tldraw's built-in SVG/PNG export (no server involvement) |
-| Page history | Ydoc binary snapshots stored as normal; no TipTap content to diff, history UI shows "board updated" entries only |
-| tldraw WebSocket drops | HocuspocusProvider auto-reconnects; tldraw store survives locally and re-syncs on reconnect |
+| No key configured | `ai-stream.service` throws `ServiceUnavailableException("AI not configured for this workspace")` → client shows "AI not set up" error |
+| Invalid / expired key | OpenRouter returns 401 → surface as `error` SSE event with `code: "invalid_key"` |
+| Model not available | OpenRouter returns 404/400 → surface as `error` SSE event |
+| User aborts stream | Client calls `AbortController.abort()` → server catches and closes stream cleanly |
+| Attachment upload | Stored via existing `StorageService`; `ai_chat_id` column on `attachments` already exists (from existing migration) |
 
 ---
 
 #### Implementation Order (TDD)
 
-**Phase 1 — Type plumbing + static tldraw**
-1. Update DTO validators (`@IsIn` in create + update DTOs) — write unit test first (red → green)
-2. Update `PageType` in client types
-3. Add `board` to new-page menu
-4. Create `BoardPage` + `BoardEditor` with a basic `<Tldraw>` (no Yjs, persistence via `onBlur` save to `pages.content` as JSON snapshot)
-5. Update `page.tsx` to route `board` type to `BoardPage`
-6. Smoke test: create board page, draw something, reload, verify save
-
-**Phase 2 — Real-time sync**
-1. Add targeted guards in `persistence.extension.ts` (additive, as above)
-2. Write `use-board-sync.ts` hook
-3. Replace Phase 1 save-on-blur with Yjs-backed store
-4. Test with two browser tabs: verify cursors and shapes sync
-5. Verify existing document pages are unaffected
-
-**Phase 3 — Polish**
-1. Read-only enforcement via tldraw `readOnly` prop
-2. PNG/SVG export button in board toolbar
-3. Thumbnail generation for space page list (tldraw `exportToBlob`, store as attachment)
+- [ ] 1. `ai-key.service.ts` — encrypt/decrypt + save/load from `workspace.settings.ai` — write unit tests first
+- [ ] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — write tests
+- [ ] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — write tests
+- [ ] 4. `ai-chat.service.ts` — chat + message persistence — write tests
+- [ ] 5. `ai-stream.service.ts` — OpenRouter streaming via OpenAI SDK — integration test with mocked HTTP
+- [ ] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes
+- [ ] 7. Register `AiChatModule` in `CoreModule`
+- [ ] 8. Frontend: AI settings panel in workspace settings
+- [ ] 9. Smoke test: configure key → open AI chat → send message → verify stream → remove key → verify disabled
 
 ---
 
