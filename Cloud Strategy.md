@@ -237,3 +237,221 @@ Each app lives in its own directory with its own `docker-compose.yml`. Restartin
 | R2 storage exceeds ~50GB | Migrate to B2 + Cloudflare CDN (half-day, no code changes) |
 | Deploy downtime becomes unacceptable | Set up GitHub Actions → build image → push to registry → server pulls prebuilt |
 | Hetzner verification resolves | Migrate VPS (trivial — stateless app, data on managed services) |
+
+---
+
+## Transition to Cloud — Step-by-Step
+
+> Run these steps in order. Steps 1–3 can be done before the VPS arrives. Steps 4–9 require server access.
+
+---
+
+### Step 1 — Provision managed Postgres (Neon)
+
+1. Sign up at [neon.tech](https://neon.tech)
+2. Create a new project (region: closest to your VPS datacenter)
+3. Create a database named `docmost`
+4. Copy the connection string — it looks like:
+   ```
+   postgresql://docmost:<pass>@<host>.neon.tech/docmost?sslmode=require
+   ```
+5. **Rule:** Never point local dev or tests at Neon. Only production uses this URL.
+
+---
+
+### Step 2 — Provision managed Redis (Upstash)
+
+1. Sign up at [upstash.com](https://upstash.com)
+2. Create a Redis database (region: match Neon region)
+3. Enable TLS (default on Upstash)
+4. Copy the connection string — it looks like:
+   ```
+   rediss://:<pass>@<host>.upstash.io:6379
+   ```
+   Note `rediss://` (double-s) — TLS required.
+5. Monitor daily command usage from day one via the Upstash dashboard. Whiteboard/live cursor features burn the 10K/day free limit fast.
+
+---
+
+### Step 3 — Provision file storage (Cloudflare R2)
+
+1. Sign up / log in at [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Go to **R2** → Create bucket (name e.g. `docmost-prod`)
+3. Go to **R2** → Manage R2 API tokens → Create token with **Object Read & Write** on your bucket
+4. Note your **Account ID** (shown on the R2 overview page)
+5. Collect these values:
+   ```
+   S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   S3_BUCKET=docmost-prod
+   S3_ACCESS_KEY_ID=<token-access-key>
+   S3_SECRET_ACCESS_KEY=<token-secret>
+   S3_REGION=auto
+   ```
+
+---
+
+### Step 4 — Order Contabo Cloud VPS 10
+
+1. Order at [contabo.com](https://contabo.com) — Cloud VPS 10 (4 vCPU / 8GB RAM / 150GB SSD)
+2. Choose Ubuntu 24.04 LTS
+3. Add your SSH public key during checkout
+4. Note the VPS IP once provisioned
+
+---
+
+### Step 5 — Bootstrap the server
+
+SSH in as root, then run:
+
+```bash
+apt update && apt upgrade -y
+apt install -y docker.io docker-compose-plugin git
+
+# Create app directories
+mkdir -p /home/apps/docmost
+mkdir -p /home/apps/caddy
+
+# Allow docker without sudo (optional, for non-root user)
+usermod -aG docker $USER
+```
+
+---
+
+### Step 6 — Update `docker-compose.prod.yml`
+
+The current file still bundles local Postgres + Redis with dev passwords. Replace it so the app service uses managed services and Caddy handles SSL.
+
+**New structure:**
+
+```yaml
+services:
+  app:
+    image: ghcr.io/<your-github-username>/docmost:latest  # or build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on: []   # no local db/redis
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
+```
+
+**Caddyfile:**
+
+```
+projects.gameloops.io {
+    reverse_proxy app:3000
+}
+```
+
+Caddy auto-provisions Let's Encrypt SSL. No certbot needed.
+
+---
+
+### Step 7 — Configure production `.env` on the server
+
+```bash
+cd /home/apps/docmost
+nano .env
+```
+
+```env
+APP_URL=https://projects.gameloops.io
+APP_SECRET=<run: openssl rand -hex 32>
+
+# Neon (from Step 1)
+DATABASE_URL=postgresql://docmost:<pass>@<host>.neon.tech/docmost?sslmode=require
+
+# Upstash (from Step 2)
+REDIS_URL=rediss://:<pass>@<host>.upstash.io:6379
+
+# Cloudflare R2 (from Step 3)
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+S3_BUCKET=docmost-prod
+S3_ACCESS_KEY_ID=<r2-access-key>
+S3_SECRET_ACCESS_KEY=<r2-secret>
+S3_REGION=auto
+
+# Mail (configure when ready)
+# MAIL_DRIVER=smtp
+# SMTP_HOST=...
+```
+
+**Never commit `.env` to git.**
+
+---
+
+### Step 8 — Deploy the app
+
+```bash
+cd /home/apps/docmost
+
+# Clone the repo
+git clone https://github.com/<your-username>/<repo>.git .
+
+# Start everything
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Run migrations (required on first deploy and after schema changes)
+docker compose -f docker-compose.prod.yml exec app pnpm --filter server run migration:latest
+```
+
+---
+
+### Step 9 — DNS
+
+In your domain registrar / Cloudflare DNS:
+
+```
+A    projects.gameloops.io    <Contabo VPS IP>    TTL: 300
+```
+
+Wait for propagation (usually under 5 minutes). Caddy picks up the domain and provisions SSL automatically on first request.
+
+---
+
+### Step 10 — Verify
+
+- [ ] `https://projects.gameloops.io` loads the app
+- [ ] Can register / log in
+- [ ] Can create a space and page
+- [ ] File upload works (attached image appears)
+- [ ] Real-time collab works (open same page in two tabs)
+- [ ] Check Upstash dashboard — commands are incrementing (confirms Redis is connected)
+- [ ] Check Neon dashboard — connection count shows active connections
+
+---
+
+### Schema change deploy sequence (ongoing)
+
+Every time you add a migration:
+
+```bash
+# Local
+pnpm --filter server run migration:latest   # run locally
+pnpm --filter server run migration:codegen  # regenerate DB types
+
+# Commit and push
+git add apps/server/src/database/migrations/
+git commit -m "migration: <description>"
+git push
+
+# On server
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec app pnpm --filter server run migration:latest
+```
