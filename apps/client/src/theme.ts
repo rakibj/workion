@@ -32,6 +32,9 @@ const red: MantineColorsTuple = [
 ];
 
 export const theme = createTheme({
+  fontFamily: "Figtree, sans-serif",
+  fontFamilyMonospace: "JetBrainsMono, monospace",
+  headings: { fontFamily: "Figtree, sans-serif" },
   colors: {
     blue,
     red,
