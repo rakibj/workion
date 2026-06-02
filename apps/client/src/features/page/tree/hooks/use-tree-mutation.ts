@@ -25,7 +25,7 @@ import localEmitter from "@/lib/local-emitter.ts";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
-  handleCreate: (parentId: string | null, type?: "document" | "kanban") => Promise<void>;
+  handleCreate: (parentId: string | null, type?: "document" | "kanban" | "board") => Promise<void>;
   handleRename: (id: string, name: string) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
 };
@@ -133,7 +133,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
   );
 
   const handleCreate = useCallback(
-    async (parentId: string | null, type: "document" | "kanban" = "document") => {
+    async (parentId: string | null, type: "document" | "kanban" | "board" = "document") => {
       const payload: { spaceId: string; parentPageId?: string; type?: string } = { spaceId };
       if (parentId) payload.parentPageId = parentId;
       if (type !== "document") payload.type = type;

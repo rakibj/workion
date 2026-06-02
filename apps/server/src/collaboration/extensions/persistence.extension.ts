@@ -77,6 +77,12 @@ export class PersistenceExtension implements Extension {
       return doc;
     }
 
+    // board pages use raw ydoc only — skip TipTap JSON→Ydoc conversion
+    if (page.type === 'board') {
+      this.logger.debug(`creating fresh ydoc for board page: ${pageId}`);
+      return new Y.Doc();
+    }
+
     // if no ydoc state in db convert json in page.content to Ydoc.
     if (page.content) {
       this.logger.debug(`converting json to ydoc: ${pageId}`);
@@ -100,18 +106,10 @@ export class PersistenceExtension implements Extension {
 
     const pageId = getPageId(documentName);
 
-    const tiptapJson = TiptapTransformer.fromYdoc(document, 'default');
     const ydocState = Buffer.from(Y.encodeStateAsUpdate(document));
 
-    let textContent = null;
-
-    try {
-      textContent = jsonToText(tiptapJson);
-    } catch (err) {
-      this.logger.warn('jsonToText' + err?.['message']);
-    }
-
     let page: Page = null;
+    let tiptapJson: any = null;
     const editingUserIds = this.consumeContributors(documentName);
 
     try {
@@ -125,6 +123,34 @@ export class PersistenceExtension implements Extension {
         if (!page) {
           this.logger.error(`Page with id ${pageId} not found`);
           return;
+        }
+
+        // board pages: only store the ydoc binary, skip TipTap serialization
+        if (page.type === 'board') {
+          let contributorIds = undefined;
+          try {
+            const existingContributors = page.contributorIds || [];
+            contributorIds = Array.from(
+              new Set([...existingContributors, ...editingUserIds, page.creatorId]),
+            );
+          } catch (_err) {}
+
+          await this.pageRepo.updatePage(
+            { ydoc: ydocState, lastUpdatedById: context?.user?.id, contributorIds },
+            pageId,
+            trx,
+          );
+          page = null; // suppress post-tx TipTap processing
+          return;
+        }
+
+        tiptapJson = TiptapTransformer.fromYdoc(document, 'default');
+        let textContent = null;
+
+        try {
+          textContent = jsonToText(tiptapJson);
+        } catch (err) {
+          this.logger.warn('jsonToText' + err?.['message']);
         }
 
         if (isDeepStrictEqual(tiptapJson, page.content)) {

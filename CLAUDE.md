@@ -193,7 +193,7 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 
 | Path | Why hands-off |
 |---|---|
-| `collaboration/` | Hocuspocus real-time engine. Complex, stateful, not needed for client mgmt features |
+| `collaboration/` | Hocuspocus real-time engine. Treat as black box — only additive touches allowed (new guards/conditions inside existing extensions, never restructuring). See Board spec for the approved pattern. |
 | `apps/editor-ext/` | TipTap editor extensions |
 | `apps/ee/` | Enterprise Edition — conditionally loaded, treat as plugin |
 | `integrations/storage/` | S3/local abstraction — use `StorageService`, don't re-implement |
@@ -276,6 +276,187 @@ const module = await Test.createTestingModule({
 - Happy path + at least two failure/edge cases per unit.
 - Permission boundaries: ensure forbidden paths throw `ForbiddenException`.
 - New DB queries: test with mocked repo, not real DB.
+
+---
+
+## Feature Specs
+
+---
+
+### SPEC: Board Page Type (tldraw whiteboard)
+
+**Status**: `Phase 2 COMPLETE — Phase 3 in progress`
+
+**Phases**:
+- [x] Phase 1 — Page type plumbing + static tldraw (no real-time)
+- [x] Phase 2 — Real-time sync via Hocuspocus + Yjs (working: same-account and cross-account sync confirmed)
+- [ ] Phase 3 — Polish (thumbnail, export, cursor presence)
+
+**Known implementation detail (critical):** When passing an external `HocuspocusProviderWebsocket` to `HocuspocusProvider`, you must call `provider.attach()` manually after construction — the provider does not self-attach (`manageSocket = false`), so it never registers open/close listeners or sends SyncStep1. This was the root cause of cross-account sync failure. See `board-editor.tsx`.
+
+**Known implementation detail (read-only):** tldraw v5 enforces read-only via a `Signal<'readonly' | 'readwrite'>` passed to `createTLStore({ collaboration: { mode, status } })`. The mode is backed by an `Atom` from `@tldraw/state` so it can be updated reactively. Both `@tldraw/editor` (for `createTLStore`) and `@tldraw/state` (for `atom`) are accessible via pnpm workspace hoisting without being listed in the client's `package.json`. The `<Tldraw store={store}>` prop accepts the pre-created store; `store.listen` / `store.mergeRemoteChanges` work identically to `editor.store.*`.
+
+**Known implementation detail (cursor sync):** Cursors are transported via Yjs awareness (`provider.awareness`), which Hocuspocus creates automatically on each provider. Local presence is derived via `getDefaultUserPresence(store, tlUser)` from `@tldraw/tlschema` and broadcast via `awareness.setLocalStateField('presence', record)`. Remote presences are injected as `TLInstancePresence` records into the tldraw store via `store.mergeRemoteChanges(() => store.put(presences))`. tldraw renders them automatically via its built-in `CollaboratorCursorOverlayUtil`. Presence is throttled to one `requestAnimationFrame` per burst. `awareness.setLocalState(null)` clears our cursor on disconnect. `<Tldraw user={createTLCurrentUser({...})}>` is required so tldraw knows which presence record is local and filters it from `getCollaborators()`. All relevant packages (`@tldraw/editor`, `@tldraw/state`, `@tldraw/tlschema`) are accessible via pnpm workspace hoisting.
+
+**Phase 3 — Completed:**
+- [x] Remove Table of Contents button for board pages — `page-header-menu.tsx` gates on `page?.type !== 'board'`
+- [x] Remove Comments button, Edit mode toggle, Copy as Markdown, Full width, Export, Print PDF, Word count for board pages — same gating in `page-header-menu.tsx`
+- [x] Read-only enforcement — `board-editor.tsx` uses `atom`-backed `collaboration.mode` signal; `getIsReadonly()` returns correctly for reader-role users
+- [x] Cursor/presence sync — `board-editor.tsx` uses Yjs awareness for multi-user live cursors; `store.listen({ scope: 'session' })` triggers broadcasts; remote `TLInstancePresence` records injected for rendering
+
+**Phase 3 — Remaining TODOs (needs spec before implementation):**
+- [ ] PNG/SVG export button in board toolbar (tldraw already has built-in export in its main menu; a spec is needed to decide if a separate button is warranted)
+- [ ] Thumbnail generation for space page list
+
+---
+
+#### Problem
+
+Pages can currently be `document` (TipTap editor) or `kanban` (custom REST-backed board). A third type — `board` — is needed: a freeform whiteboard with shapes, arrows, sticky notes, images, and real-time multi-user cursors, powered by [tldraw](https://github.com/tldraw/tldraw).
+
+---
+
+#### Data Model Delta
+
+**No new table required.** The `pages.type` column already exists as a `varchar DEFAULT 'document'`. `'board'` is added as a third valid value.
+
+The existing `pages.ydoc` binary column (used by the collaboration layer to store Yjs state) will store the tldraw Yjs snapshot. The `pages.content` and `pages.text_content` columns are left `null` for board pages.
+
+Changes needed:
+- `apps/server/src/core/page/dto/create-page.dto.ts` — add `'board'` to `@IsIn([...])`
+- `apps/server/src/core/page/dto/update-page.dto.ts` — same
+- `apps/client/src/features/page/types/page.types.ts` — add `| "board"` to `PageType`
+
+No migration file needed (no schema change; the column exists and has no DB-level check constraint).
+
+---
+
+#### API Contract
+
+No new endpoints. Board state is synced entirely over the existing WebSocket (`/collab`). All existing page REST endpoints (`GET /pages/:id`, `POST /pages`, `PATCH /pages/:id`, `DELETE /pages/:id`) apply unchanged.
+
+**Room naming** — board rooms use the prefix `board.` instead of `page.`:
+
+```
+Document room:  page.{pageId}
+Board room:     board.{pageId}
+```
+
+The existing `getPageId(documentName)` utility in `collaboration.util.ts` splits on `.` and takes index `[1]`. Because page IDs are UUIDs (no dots), this works unchanged for `board.{uuid}`. No change needed.
+
+---
+
+#### Black Box Touches (collaboration/)
+
+These are **additive only** — no existing logic is removed or altered.
+
+**`persistence.extension.ts`** (2 targeted additions):
+
+```ts
+// onLoadDocument — add after binary ydoc check:
+if (page.type === 'board') {
+  // board uses raw ydoc binary only; skip TipTap JSON→Ydoc conversion
+  return document;
+}
+
+// onStoreDocument — guard before TipTap serialization:
+if (page.type !== 'board') {
+  // existing TipTap JSON + textContent extraction (unchanged)
+}
+// both paths save the ydoc binary (unchanged)
+```
+
+**`authentication.extension.ts`** — no change. The `getPageId` split already extracts the UUID correctly from `board.{pageId}`.
+
+**`collaboration.module.ts`** — no change. Hocuspocus accepts any room name; board rooms are handled by the same extension chain.
+
+---
+
+#### Frontend Architecture
+
+New feature directory: `apps/client/src/features/board/`
+
+```
+features/board/
+├── components/
+│   ├── board-page.tsx       # full-page wrapper (mirrors kanban-board-page.tsx)
+│   └── board-editor.tsx     # <Tldraw> + Yjs sync setup
+└── hooks/
+    └── use-board-sync.ts    # HocuspocusProvider + Y.Doc → tldraw store wiring
+```
+
+**`use-board-sync.ts`** pattern:
+1. Create `HocuspocusProvider` to `/collab`, room = `board.{pageId}`, token = auth JWT
+2. From the provider's `Y.Doc`, get a `Y.Map` keyed `'tldraw'`
+3. Create a tldraw store backed by that `Y.Map` (using tldraw's Yjs binding)
+4. Return the store + connection status to `board-editor.tsx`
+
+**`board-editor.tsx`**:
+- Renders `<Tldraw store={store} />` from the `tldraw` package
+- Shows a connection indicator (connecting / connected / offline)
+- Read-only mode when user has `reader` role (pass `readOnly` prop to `<Tldraw>`)
+
+**`apps/client/src/pages/page/page.tsx`** changes:
+- Add lazy import: `const BoardPage = lazy(() => import("@/features/board/components/board-page"))`
+- Add condition: `if (page.type === 'board') return <BoardPage />`
+
+**New page menu** (wherever document/kanban options live): add "Board" entry with a whiteboard icon.
+
+---
+
+#### Packages to Add
+
+```bash
+# client only
+pnpm --filter client add tldraw
+```
+
+`tldraw` includes the React component, store primitives, and the Yjs binding. No additional server packages needed.
+
+---
+
+#### Permission / Access Control
+
+Board pages are gated by the **same** space + page access rules as documents. The existing `AuthenticationExtension` sets `readOnly: true` for reader-role users before the WebSocket session is established. tldraw's `readOnly` prop is driven by the page's effective permission (already returned by `GET /pages/:id` as part of the page object).
+
+No CASL changes needed.
+
+---
+
+#### Edge Cases
+
+| Case | Handling |
+|---|---|
+| User opens board with no content | tldraw renders empty canvas; Yjs doc is empty |
+| Two users open simultaneously | Hocuspocus syncs Y.Doc updates; tldraw merges via CRDT |
+| Reader opens board | `readOnly` passed to `<Tldraw>`; WebSocket still opens for live cursor visibility |
+| Board page exported | Phase 3 — tldraw's built-in SVG/PNG export (no server involvement) |
+| Page history | Ydoc binary snapshots stored as normal; no TipTap content to diff, history UI shows "board updated" entries only |
+| tldraw WebSocket drops | HocuspocusProvider auto-reconnects; tldraw store survives locally and re-syncs on reconnect |
+
+---
+
+#### Implementation Order (TDD)
+
+**Phase 1 — Type plumbing + static tldraw**
+1. Update DTO validators (`@IsIn` in create + update DTOs) — write unit test first (red → green)
+2. Update `PageType` in client types
+3. Add `board` to new-page menu
+4. Create `BoardPage` + `BoardEditor` with a basic `<Tldraw>` (no Yjs, persistence via `onBlur` save to `pages.content` as JSON snapshot)
+5. Update `page.tsx` to route `board` type to `BoardPage`
+6. Smoke test: create board page, draw something, reload, verify save
+
+**Phase 2 — Real-time sync**
+1. Add targeted guards in `persistence.extension.ts` (additive, as above)
+2. Write `use-board-sync.ts` hook
+3. Replace Phase 1 save-on-blur with Yjs-backed store
+4. Test with two browser tabs: verify cursors and shapes sync
+5. Verify existing document pages are unaffected
+
+**Phase 3 — Polish**
+1. Read-only enforcement via tldraw `readOnly` prop
+2. PNG/SVG export button in board toolbar
+3. Thumbnail generation for space page list (tldraw `exportToBlob`, store as attachment)
 
 ---
 
