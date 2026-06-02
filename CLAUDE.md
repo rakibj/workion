@@ -287,7 +287,7 @@ const module = await Test.createTestingModule({
 
 ### SPEC: AI Chat — OpenRouter BYOK
 
-**Status**: `In progress` — step 1 complete (2026-06-03)
+**Status**: `In progress` — steps 1–8 complete (2026-06-03)
 
 **Goal**: Implement the AI chat backend (the `/api/ai/chats/*` routes the client already calls) using OpenRouter as the provider. Each workspace funds its own AI usage by supplying its own OpenRouter API key — no platform-level billing involved.
 
@@ -426,8 +426,18 @@ No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) —
 - [x] 5. `ai-stream.service.ts` — OpenRouter streaming via `@ai-sdk/openai-compatible` + Vercel AI SDK `streamText` — 4 unit tests, all passing
 - [x] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes — 11 unit tests, all passing
 - [x] 7. Register `AiChatModule` in `CoreModule`
-- [ ] 8. Frontend: AI settings panel in workspace settings
-- [ ] 9. Smoke test: configure key → open AI chat → send message → verify stream → remove key → verify disabled
+- [x] 8. Frontend: `OpenRouterSettings` component in AI settings page (`/settings/ai`) — key input, model selector, configured/not-configured badge, remove key button
+- [ ] 9. **Smoke test (next to do)** — manual end-to-end validation:
+  1. `docker compose up -d && pnpm run dev`
+  2. Log in as admin → go to **Settings → AI → AI tab**
+  3. Verify "OpenRouter API Key" panel shows **Not configured** (orange badge)
+  4. Enter a real OpenRouter key + pick a model → **Save key** → badge turns green
+  5. Toggle **AI Chat** on (if not already on)
+  6. Open AI chat from the sidebar → send a message → confirm streaming response arrives token by token
+  7. Test abort: send a long-running prompt → navigate away mid-stream → confirm no server errors
+  8. Return to Settings → AI → **Remove key** → badge turns orange
+  9. Try AI chat again → confirm error state ("AI not configured" or similar) renders correctly
+  10. On pass: mark this spec complete and remove it from CLAUDE.md
 
 ---
 
