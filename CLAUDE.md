@@ -285,12 +285,28 @@ const module = await Test.createTestingModule({
 
 ### SPEC: Board Page Type (tldraw whiteboard)
 
-**Status**: `Phase 2 COMPLETE — Phase 3 pending`
+**Status**: `Phase 2 COMPLETE — Phase 3 in progress`
 
 **Phases**:
 - [x] Phase 1 — Page type plumbing + static tldraw (no real-time)
-- [x] Phase 2 — Real-time sync via Hocuspocus + Yjs
-- [ ] Phase 3 — Polish (thumbnail, export, read-only enforcement)
+- [x] Phase 2 — Real-time sync via Hocuspocus + Yjs (working: same-account and cross-account sync confirmed)
+- [ ] Phase 3 — Polish (thumbnail, export, cursor presence)
+
+**Known implementation detail (critical):** When passing an external `HocuspocusProviderWebsocket` to `HocuspocusProvider`, you must call `provider.attach()` manually after construction — the provider does not self-attach (`manageSocket = false`), so it never registers open/close listeners or sends SyncStep1. This was the root cause of cross-account sync failure. See `board-editor.tsx`.
+
+**Known implementation detail (read-only):** tldraw v5 enforces read-only via a `Signal<'readonly' | 'readwrite'>` passed to `createTLStore({ collaboration: { mode, status } })`. The mode is backed by an `Atom` from `@tldraw/state` so it can be updated reactively. Both `@tldraw/editor` (for `createTLStore`) and `@tldraw/state` (for `atom`) are accessible via pnpm workspace hoisting without being listed in the client's `package.json`. The `<Tldraw store={store}>` prop accepts the pre-created store; `store.listen` / `store.mergeRemoteChanges` work identically to `editor.store.*`.
+
+**Known implementation detail (cursor sync):** Cursors are transported via Yjs awareness (`provider.awareness`), which Hocuspocus creates automatically on each provider. Local presence is derived via `getDefaultUserPresence(store, tlUser)` from `@tldraw/tlschema` and broadcast via `awareness.setLocalStateField('presence', record)`. Remote presences are injected as `TLInstancePresence` records into the tldraw store via `store.mergeRemoteChanges(() => store.put(presences))`. tldraw renders them automatically via its built-in `CollaboratorCursorOverlayUtil`. Presence is throttled to one `requestAnimationFrame` per burst. `awareness.setLocalState(null)` clears our cursor on disconnect. `<Tldraw user={createTLCurrentUser({...})}>` is required so tldraw knows which presence record is local and filters it from `getCollaborators()`. All relevant packages (`@tldraw/editor`, `@tldraw/state`, `@tldraw/tlschema`) are accessible via pnpm workspace hoisting.
+
+**Phase 3 — Completed:**
+- [x] Remove Table of Contents button for board pages — `page-header-menu.tsx` gates on `page?.type !== 'board'`
+- [x] Remove Comments button, Edit mode toggle, Copy as Markdown, Full width, Export, Print PDF, Word count for board pages — same gating in `page-header-menu.tsx`
+- [x] Read-only enforcement — `board-editor.tsx` uses `atom`-backed `collaboration.mode` signal; `getIsReadonly()` returns correctly for reader-role users
+- [x] Cursor/presence sync — `board-editor.tsx` uses Yjs awareness for multi-user live cursors; `store.listen({ scope: 'session' })` triggers broadcasts; remote `TLInstancePresence` records injected for rendering
+
+**Phase 3 — Remaining TODOs (needs spec before implementation):**
+- [ ] PNG/SVG export button in board toolbar (tldraw already has built-in export in its main menu; a spec is needed to decide if a separate button is warranted)
+- [ ] Thumbnail generation for space page list
 
 ---
 
