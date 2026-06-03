@@ -332,13 +332,6 @@ const module = await Test.createTestingModule({
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
-**HTML Artifact Block edge cases**
-- Empty HTML → preview shows blank iframe (no error).
-- Very large HTML (> 500 KB) → warn the user in the block header, still save.
-- Block deleted → Yjs handles undo/redo normally; no special cleanup needed.
-
----
-
 ### Spec: In-Place AI Text Improvement — Backend Fix
 
 **Status:** Not started. Frontend fully implemented; backend endpoint missing.
