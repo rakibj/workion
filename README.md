@@ -15,9 +15,10 @@ A client management platform built on top of [Docmost](https://github.com/docmos
 - Search and embeds
 
 **Added in this fork**
-- Kanban board with milestones, priorities, and assignees
+- **Kanban board page** — drag-and-drop board as a page type; columns, cards, assignees, due dates, and priorities stored per-page
+- **Whiteboard page** — full-screen tldraw canvas as a page type with real-time multi-user live cursors (Yjs-backed)
+- **AI chat (BYOK)** — per-workspace OpenRouter API key; streaming chat panel with current-page context injection and auto-generated thread titles
 - Per-client spaces with scoped access control
-- Project tracking per client
 - Client portal (planned)
 - Client user invitations (planned)
 - Activity feed per client (planned)
@@ -34,6 +35,8 @@ A client management platform built on top of [Docmost](https://github.com/docmos
 | Cache | Redis |
 | Job queue | BullMQ |
 | Real-time | Hocuspocus + Yjs |
+| Whiteboard | tldraw |
+| AI | OpenRouter (BYOK) |
 | Frontend | React 18 + Vite |
 | UI library | Mantine |
 | Editor | TipTap |

@@ -57,6 +57,7 @@ docmost/
 | Build tool | Vite |
 | UI library | Mantine |
 | Editor | TipTap ← **BLACK BOX** |
+| Whiteboard | tldraw (board page type, real-time via Yjs) |
 | Auth | JWT sessions, CASL for RBAC |
 | Storage | S3-compatible or local (`StorageService`) |
 | Email | Configurable via `MailModule` |
@@ -221,6 +222,9 @@ If a black-box module needs to change, write a spec for it first and flag explic
 | `features/user/` | User profile |
 | `features/group/` | Group management UI |
 | `features/home/` | Dashboard |
+| `features/page/board/` | tldraw whiteboard page type |
+| `features/page/kanban/` | Kanban board page type |
+| `features/ai-chat/` | AI chat panel + OpenRouter key settings |
 
 ### Black boxes
 
@@ -229,6 +233,28 @@ If a black-box module needs to change, write a spec for it first and flag explic
 | `features/editor/` | TipTap integration — rich editor, leave alone |
 | `features/transclusion/` | Page embedding feature |
 | `features/websocket/` | Real-time sync |
+
+---
+
+## Implemented Custom Features
+
+### AI Chat (BYOK via OpenRouter)
+- Users store their own OpenRouter API key per workspace (encrypted at rest in `workspace_ai_config` table).
+- Backend: `core/ai-chat/` — streaming chat via OpenRouter, context injection from current page content, auto-title generation for threads.
+- Frontend: slide-over panel with thread list, message history, and model selector; key management UI in workspace settings.
+- Do not add Anthropic/OpenAI direct calls — all AI traffic routes through OpenRouter.
+
+### Whiteboard Page (tldraw + live cursors)
+- A `board` page type renders a full-screen tldraw canvas instead of the TipTap editor.
+- Real-time multi-user cursors use the existing Hocuspocus/Yjs infrastructure with a `board.{pageId}` room prefix — additive-only touch on `collaboration/`.
+- Board state is persisted as a Yjs doc (same store as rich-text pages); no separate DB table needed.
+- Entry point: `features/page/board/` (client). Do not restructure the collab layer.
+
+### Kanban Board Page
+- A `kanban` page type renders a drag-and-drop board (columns = status, cards = tasks) inside a page.
+- Backend: `core/kanban/` — task/column CRUD with position ordering; tasks stored in `kanban_tasks` and `kanban_columns` tables.
+- Frontend: `features/page/kanban/` — uses `@hello-pangea/dnd` for drag-and-drop; inline card editing, assignees, due dates.
+- Kanban pages live in the normal page tree and respect the same space/page permission model.
 
 ---
 
