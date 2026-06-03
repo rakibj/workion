@@ -263,8 +263,9 @@ If a black-box module needs to change, write a spec for it first and flag explic
 
 ### Page Templates
 - Workspace-scoped templates with title, description, content, icon, and full-text search; stored in `templates` table.
+- Backend: `core/template/` — `TemplateService` + `TemplateController` with 6 POST endpoints (`/templates`, `/templates/info`, `/templates/create`, `/templates/update`, `/templates/delete`, `/templates/use`). `use` creates a real page via `PageService.create()`.
 - Client UI fully implemented under `apps/client/src/ee/template/` (picker modal, create modal, list page, editor).
-- Backend repo and migration exist; controller wired and `templateId` supported in page creation flow.
+- Permissions: space writer/admin for create/update/delete; any space member for list/read/use.
 
 ---
 
@@ -320,48 +321,6 @@ const module = await Test.createTestingModule({
 ## Feature Specs
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
-
----
-
-### SPEC: Template Backend — Wire Up Controller
-
-**Problem**
-The template system has a complete client UI (`apps/client/src/ee/template/`), DB migration, and repo, but no NestJS controller. All API calls (`/templates/*`) return 404.
-
-**Data model**
-No changes — `templates` table already exists with `id`, `title`, `description`, `content`, `icon`, `space_id`, `workspace_id`, `creator_id`, tsvector search column.
-
-**API endpoints to implement** (all under `apps/server/src/core/template/`)
-```
-POST   /templates              create template (body: title, description, content, icon, spaceId)
-GET    /templates              list templates for workspace (query: spaceId?, search?)
-GET    /templates/:templateId  get single template
-PATCH  /templates/:templateId  update template
-DELETE /templates/:templateId  delete template
-POST   /templates/:templateId/use  apply template — returns the page content/title to paste in
-```
-
-**Page creation integration**
-- Add optional `templateId?: string` to `CreatePageDto`.
-- In `page.service.ts` `createPage()`: if `templateId` provided, fetch template and pre-fill `title` and `content` on the new page.
-
-**Permissions**
-- Create/update/delete: space `admin` or `writer` only.
-- Read/use: any space member.
-- Guard with existing `SpaceAbility` — no new CASL actions needed.
-
-**Module**
-- New `TemplateModule` in `apps/server/src/core/template/` with `TemplateController`, `TemplateService`.
-- Import `TemplateRepo` (already exists at `apps/server/src/database/repos/template/template.repo.ts`).
-- Register in `CoreModule`.
-
-**Feature flag**
-- The client gates templates behind `Feature.TEMPLATES` (`apps/server/src/common/features.ts`). Ensure the flag is enabled by default (non-EE).
-
-**Edge cases**
-- Template belongs to a different workspace → 403.
-- `templateId` not found on page create → 404, page creation aborted.
-- Duplicate title in same space → allow (no unique constraint).
 
 ---
 
