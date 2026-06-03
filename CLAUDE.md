@@ -149,6 +149,79 @@ REDIS_URL=redis://localhost:6379
 
 ---
 
+## Deploying Local Changes to Cloud (VPS)
+
+The VPS runs the app via `docker-compose.prod.yml`. Deployment is a git-pull + rebuild cycle.
+
+### Standard deploy (code changes)
+
+```bash
+# 1. Local — commit and push your changes
+git add <files>
+git commit -m "your message"
+git push origin main
+
+# 2. SSH into the VPS
+ssh user@projects.gameloops.io
+
+# 3. On the VPS — pull latest code
+cd /home/apps/docmost
+git pull origin main
+
+# 4. Rebuild the Docker image and restart
+docker compose -f docker-compose.prod.yml build --no-cache
+docker compose -f docker-compose.prod.yml up -d
+
+# 5. Run any pending migrations
+docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
+```
+
+> Skip `--no-cache` if you didn't change `package.json` / `pnpm-lock.yaml` — the layer cache speeds up the build significantly.
+
+### Migrations only (no code changes)
+
+```bash
+ssh user@projects.gameloops.io
+cd /home/apps/docmost
+docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
+```
+
+### Env var changes only (no rebuild needed)
+
+```bash
+ssh user@projects.gameloops.io
+cd /home/apps/docmost
+# Edit .env on the server
+nano .env
+
+# Restart the app container to pick up new env
+docker compose -f docker-compose.prod.yml restart app
+```
+
+### Check app logs
+
+```bash
+# Follow live logs
+docker compose -f docker-compose.prod.yml logs -f app
+
+# Last 100 lines
+docker compose -f docker-compose.prod.yml logs --tail=100 app
+```
+
+### Rollback to previous commit
+
+```bash
+ssh user@projects.gameloops.io
+cd /home/apps/docmost
+git log --oneline -10          # find the target commit hash
+git checkout <commit-hash>
+docker compose -f docker-compose.prod.yml build --no-cache
+docker compose -f docker-compose.prod.yml up -d
+# Note: migrations are forward-only; rollback via migration:down if schema changed
+```
+
+---
+
 ## Permission System (Core — Do Not Break)
 
 This is the most important existing system. Understand it before touching anything access-related.
@@ -278,6 +351,21 @@ If a black-box module needs to change, write a spec for it first and flag explic
 | `features/editor/` | TipTap integration — rich editor, leave alone |
 | `features/transclusion/` | Page embedding feature |
 | `features/websocket/` | Real-time sync |
+
+---
+
+## Personal-Use Restrictions
+
+### New Workspace Signup — Disabled
+New workspace creation via `/setup/register` is intentionally off for personal use.
+
+**How it works (no code change needed):**
+- **Backend**: `SetupGuard` (`core/auth/guards/setup.guard.ts`) throws 403 if any workspace already exists.
+- **Frontend**: `pages/auth/setup-workspace.tsx` redirects to `/login` if workspace data loads — the form never renders.
+
+Invitations, login, and all other auth flows remain fully functional.
+
+**To re-enable:** Delete the existing workspace from the DB, or modify `SetupGuard` to always return `true`. Write a spec first if re-enabling for multi-tenant use.
 
 ---
 
