@@ -151,9 +151,9 @@ REDIS_URL=redis://localhost:6379
 
 ## Deploying Local Changes to Cloud (VPS)
 
-The VPS runs the app via `docker-compose.prod.yml`. Deployment is a git-pull + rebuild cycle.
+The VPS runs the app via `docker-compose.prod.yml`. `deploy.sh` (repo root, already pushed) handles the full cycle.
 
-### Standard deploy (code changes)
+### Every deploy
 
 ```bash
 # 1. Local — commit and push
@@ -161,23 +161,20 @@ git add <files>
 git commit -m "your message"
 git push origin main
 
-# 2. SSH into the VPS and run the deploy script
+# 2. SSH into the VPS and run
 ssh user@projects.gameloops.io
 cd /home/apps/docmost
 ./deploy.sh
 ```
 
-The script (`deploy.sh` in repo root) handles: git pull → docker build → docker up → migrations.
+The script does: git pull → docker build → docker up → migrations.
 
 ```bash
-# Flags
-./deploy.sh --no-cache      # force full image rebuild (use after dep changes)
-./deploy.sh --skip-migrate  # skip migrations if no schema changes
+./deploy.sh --no-cache      # full image rebuild — use after changing package.json / pnpm-lock.yaml
+./deploy.sh --skip-migrate  # skip migrations
 ```
 
-> By default the build uses Docker layer cache. Pass `--no-cache` only when you've changed `package.json` or `pnpm-lock.yaml`.
-
-**First-time setup on VPS** (once only):
+**First-time VPS setup** (once only — after cloning the repo):
 ```bash
 chmod +x deploy.sh
 ```
