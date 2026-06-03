@@ -268,6 +268,15 @@ If a black-box module needs to change, write a spec for it first and flag explic
 - Client UI fully implemented under `apps/client/src/ee/template/` (picker modal, create modal, list page, editor).
 - Permissions: space writer/admin for create/update/delete; any space member for list/read/use.
 
+### HTML Artifact Block
+- A custom TipTap `Node` (`htmlArtifact`) inserted via the `/html` slash command. Stores raw HTML and a persisted height in node attributes (`html`, `height`) — no new table, no new page type, no new API endpoint. Yjs syncs both attrs across collaborators for free.
+- Extension: `features/editor/extensions/html-artifact.ts` — registered in `extensions.ts` alongside all other extensions.
+- NodeView: `features/editor/components/html-artifact/html-artifact-view.tsx` — Edit / Split / Preview toggle (desktop); Preview-only with a full-screen modal editor on mobile (< 768 px). Read-only pages are locked to Preview mode.
+- Auto-sizing: a tiny script injected at the end of `srcdoc` posts `scrollHeight` via `postMessage` to the parent. A `height:auto!important` reset style (also appended after user HTML) prevents `height:100vh` / `min-height:100vh` on `html`/`body` from inflating the reported height.
+- Resizable: drag handle at the bottom sets `node.attrs.height` (persisted); double-click resets to auto-fit.
+- Security: `<iframe sandbox="allow-scripts">` without `allow-same-origin` — scripts run in a null origin, cannot access parent cookies or DOM.
+- Export: `renderHTML` emits `<pre data-type="html-artifact"><code class="language-html">…</code></pre>` as a Markdown/PDF fallback; no changes to the black-box export module.
+
 ---
 
 ## Adding a New Feature — Checklist
@@ -323,44 +332,10 @@ const module = await Test.createTestingModule({
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
----
-
-### SPEC: HTML Artifact Page Type
-
-**Problem**
-LLMs (Claude, ChatGPT, etc.) frequently generate self-contained HTML artifacts — interactive demos, data visualisations, calculators, mini-apps. Currently there is nowhere inside the platform to paste and render these. Users copy them to CodePen or similar, breaking the workflow.
-
-**Concept**
-A new `artifact` page type that renders a full-page sandboxed `<iframe srcdoc>` of user-supplied HTML. The left panel shows an HTML code editor; the right panel (or full view) renders the live result. Toggling between "code" and "preview" modes is the primary UX.
-
-**Data model**
-No new table. An artifact page stores its HTML in the existing `pages.content` column as a plain JSON blob `{ "type": "artifact", "html": "<string>" }` — same pattern as board pages using Yjs, but simpler (no collaboration needed for v1).
-
-**API**
-No new endpoints. Use existing `PATCH /pages/:pageId` to save content. The artifact content is just a string stored in the page content field.
-
-**New page type**: `'artifact'` added to `PageType` enum (server DTO + client types).
-
-**Frontend** (`apps/client/src/features/artifact/`)
-- `artifact-page.tsx` — top-level page wrapper, reads `page.content.html`, renders split layout.
-- `artifact-editor.tsx` — controlled `<textarea>` (or CodeMirror if already available) for the raw HTML source.
-- `artifact-preview.tsx` — `<iframe sandbox="allow-scripts" srcdoc={html} />`. The `sandbox` attribute must NOT include `allow-same-origin` — this is the critical security constraint.
-- Header: "Edit" / "Preview" / "Split" mode toggle buttons (hide TipTap-related header items same as board).
-- Auto-save: debounced 1 s after last keystroke, same pattern as other page types.
-- Sidebar: "HTML Artifact" as a new page creation option in `space-sidebar.tsx`.
-
-**Security**
-- `<iframe sandbox="allow-scripts">` without `allow-same-origin`: scripts run in a separate origin and cannot access cookies, localStorage, or the parent DOM. This is the standard approach used by CodePen, StackBlitz, and Claude's own artifact renderer.
-- Never inject user HTML into the main document DOM — always via `srcdoc`.
-- Content-Security-Policy header for the app should already block inline scripts in the main document; iframe sandbox is an additional layer.
-
-**Collaboration**
-- v1: no real-time collab. Last write wins. Flag in code for future Yjs upgrade.
-
 **Edge cases**
 - Empty HTML → preview shows blank iframe (no error).
-- Very large HTML (> 500 KB) → warn user, still save.
-- Non-artifact page accidentally given `type: artifact` via API → treat missing `html` key as empty string.
+- Very large HTML (> 500 KB) → warn the user in the block header, still save.
+- Block deleted → Yjs handles undo/redo normally; no special cleanup needed.
 
 ---
 

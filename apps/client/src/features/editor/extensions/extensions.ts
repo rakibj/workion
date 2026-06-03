@@ -113,6 +113,7 @@ import { countWords } from "alfaaz";
 import AutoJoiner from "@/features/editor/extensions/autojoiner.ts";
 import GlobalDragHandle from "@/features/editor/extensions/drag-handle.ts";
 import { CleanStyles } from "@/features/editor/extensions/clean-styles.ts";
+import { HtmlArtifact } from "@/features/editor/extensions/html-artifact";
 
 const lowlight = createLowlight(common);
 lowlight.register("mermaid", plaintext);
@@ -409,6 +410,7 @@ export const mainExtensions = [
   AutoJoiner.configure({
     elementsToJoin: [],
   }),
+  HtmlArtifact,
 ] as any;
 
 type CollabExtensions = (provider: HocuspocusProvider, user: IUser) => any[];

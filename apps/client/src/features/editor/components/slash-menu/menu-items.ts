@@ -1,5 +1,6 @@
 import {
   IconBlockquote,
+  IconBrandHtml5,
   IconCaretRightFilled,
   IconCheckbox,
   IconCode,
@@ -157,6 +158,14 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconCode,
       command: ({ editor, range }: CommandProps) =>
         editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+    },
+    {
+      title: "HTML Artifact",
+      description: "Embed and render a self-contained HTML snippet.",
+      searchTerms: ["html", "artifact", "demo", "interactive", "code", "iframe", "sandbox"],
+      icon: IconBrandHtml5,
+      command: ({ editor, range }: CommandProps) =>
+        editor.chain().focus().deleteRange(range).setHtmlArtifact().run(),
     },
     {
       title: "Divider",
