@@ -253,8 +253,18 @@ If a black-box module needs to change, write a spec for it first and flag explic
 ### Kanban Board Page
 - A `kanban` page type renders a drag-and-drop board (columns = status, cards = tasks) inside a page.
 - Backend: `core/kanban/` — task/column CRUD with position ordering; tasks stored in `kanban_tasks` and `kanban_columns` tables.
-- Frontend: `features/page/kanban/` — uses `@hello-pangea/dnd` for drag-and-drop; inline card editing, assignees, due dates.
+- Frontend: `features/page/kanban/` — uses `@hello-pangea/dnd` for drag-and-drop; inline card editing, assignees, due dates, priority (urgent/high/medium/low with color coding).
 - Kanban pages live in the normal page tree and respect the same space/page permission model.
+
+### In-App Notifications
+- Bell icon in app header with unread badge; popover lists notifications filtered by type (all / unread / mentions / updates).
+- Backend: `core/notification/` — service creates notifications, BullMQ processor handles queued jobs, WebSocket delivers to `user-${userId}` channel in real time.
+- Watchers (`watchers` table) are notified on comment creation; `watcher.service.ts` handles watch/unwatch for pages and spaces.
+
+### Page Templates
+- Workspace-scoped templates with title, description, content, icon, and full-text search; stored in `templates` table.
+- Client UI fully implemented under `apps/client/src/ee/template/` (picker modal, create modal, list page, editor).
+- Backend repo and migration exist; controller wired and `templateId` supported in page creation flow.
 
 ---
 
@@ -311,7 +321,111 @@ const module = await Test.createTestingModule({
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
-> No active backlog items. Add new feature specs here when work begins.
+---
+
+### SPEC: Template Backend — Wire Up Controller
+
+**Problem**
+The template system has a complete client UI (`apps/client/src/ee/template/`), DB migration, and repo, but no NestJS controller. All API calls (`/templates/*`) return 404.
+
+**Data model**
+No changes — `templates` table already exists with `id`, `title`, `description`, `content`, `icon`, `space_id`, `workspace_id`, `creator_id`, tsvector search column.
+
+**API endpoints to implement** (all under `apps/server/src/core/template/`)
+```
+POST   /templates              create template (body: title, description, content, icon, spaceId)
+GET    /templates              list templates for workspace (query: spaceId?, search?)
+GET    /templates/:templateId  get single template
+PATCH  /templates/:templateId  update template
+DELETE /templates/:templateId  delete template
+POST   /templates/:templateId/use  apply template — returns the page content/title to paste in
+```
+
+**Page creation integration**
+- Add optional `templateId?: string` to `CreatePageDto`.
+- In `page.service.ts` `createPage()`: if `templateId` provided, fetch template and pre-fill `title` and `content` on the new page.
+
+**Permissions**
+- Create/update/delete: space `admin` or `writer` only.
+- Read/use: any space member.
+- Guard with existing `SpaceAbility` — no new CASL actions needed.
+
+**Module**
+- New `TemplateModule` in `apps/server/src/core/template/` with `TemplateController`, `TemplateService`.
+- Import `TemplateRepo` (already exists at `apps/server/src/database/repos/template/template.repo.ts`).
+- Register in `CoreModule`.
+
+**Feature flag**
+- The client gates templates behind `Feature.TEMPLATES` (`apps/server/src/common/features.ts`). Ensure the flag is enabled by default (non-EE).
+
+**Edge cases**
+- Template belongs to a different workspace → 403.
+- `templateId` not found on page create → 404, page creation aborted.
+- Duplicate title in same space → allow (no unique constraint).
+
+---
+
+### SPEC: Kanban — Overdue Indicator
+
+**Problem**
+Kanban cards have milestone due dates but nothing signals when a milestone is past due. Users cannot tell at a glance which cards are late.
+
+**Data model**
+No changes — `due_date` already exists on `kanban_milestones`.
+
+**UI changes only** (frontend, `apps/client/src/features/page/kanban/`)
+- In the card component where `formatDueDate()` renders the due date string:
+  - If `due_date < today` (date comparison, ignore time): render the date in red with a warning icon.
+  - If `due_date === today`: render in amber.
+  - Otherwise: current default styling.
+- Same indicator in the card edit modal next to the milestone field.
+- No backend changes required.
+
+**Edge cases**
+- Card with no milestone → no indicator.
+- Multiple milestones on one card → flag the earliest overdue one.
+- Timezone: compare dates in the user's local timezone (use `new Date()` on the client, date-only comparison).
+
+---
+
+### SPEC: HTML Artifact Page Type
+
+**Problem**
+LLMs (Claude, ChatGPT, etc.) frequently generate self-contained HTML artifacts — interactive demos, data visualisations, calculators, mini-apps. Currently there is nowhere inside the platform to paste and render these. Users copy them to CodePen or similar, breaking the workflow.
+
+**Concept**
+A new `artifact` page type that renders a full-page sandboxed `<iframe srcdoc>` of user-supplied HTML. The left panel shows an HTML code editor; the right panel (or full view) renders the live result. Toggling between "code" and "preview" modes is the primary UX.
+
+**Data model**
+No new table. An artifact page stores its HTML in the existing `pages.content` column as a plain JSON blob `{ "type": "artifact", "html": "<string>" }` — same pattern as board pages using Yjs, but simpler (no collaboration needed for v1).
+
+**API**
+No new endpoints. Use existing `PATCH /pages/:pageId` to save content. The artifact content is just a string stored in the page content field.
+
+**New page type**: `'artifact'` added to `PageType` enum (server DTO + client types).
+
+**Frontend** (`apps/client/src/features/artifact/`)
+- `artifact-page.tsx` — top-level page wrapper, reads `page.content.html`, renders split layout.
+- `artifact-editor.tsx` — controlled `<textarea>` (or CodeMirror if already available) for the raw HTML source.
+- `artifact-preview.tsx` — `<iframe sandbox="allow-scripts" srcdoc={html} />`. The `sandbox` attribute must NOT include `allow-same-origin` — this is the critical security constraint.
+- Header: "Edit" / "Preview" / "Split" mode toggle buttons (hide TipTap-related header items same as board).
+- Auto-save: debounced 1 s after last keystroke, same pattern as other page types.
+- Sidebar: "HTML Artifact" as a new page creation option in `space-sidebar.tsx`.
+
+**Security**
+- `<iframe sandbox="allow-scripts">` without `allow-same-origin`: scripts run in a separate origin and cannot access cookies, localStorage, or the parent DOM. This is the standard approach used by CodePen, StackBlitz, and Claude's own artifact renderer.
+- Never inject user HTML into the main document DOM — always via `srcdoc`.
+- Content-Security-Policy header for the app should already block inline scripts in the main document; iframe sandbox is an additional layer.
+
+**Collaboration**
+- v1: no real-time collab. Last write wins. Flag in code for future Yjs upgrade.
+
+**Edge cases**
+- Empty HTML → preview shows blank iframe (no error).
+- Very large HTML (> 500 KB) → warn user, still save.
+- Non-artifact page accidentally given `type: artifact` via API → treat missing `html` key as empty string.
+
+---
 
 ---
 
