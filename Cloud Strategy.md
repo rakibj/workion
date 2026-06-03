@@ -2,6 +2,8 @@
 
 > Created: 2026-06-02. Updated: 2026-06-02. Update this when infrastructure decisions change.
 
+> Cloud Implementation progress on /Cloud Implementation.md
+
 ---
 
 ## Project Architecture Summary

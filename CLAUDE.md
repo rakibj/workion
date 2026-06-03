@@ -104,6 +104,30 @@ REDIS_URL=redis://localhost:6379
 
 ---
 
+## Cloud Deployment Status
+
+> Full plan in `Cloud Strategy.md`. Credentials in `Cloud Implementation.md` (never commit).
+
+### Progress
+
+| Step | Status | Detail |
+|---|---|---|
+| 1. Neon (Postgres) | Done | Connection string saved in Cloud Implementation.md |
+| 2. Upstash (Redis) | Done | REST URL + token saved in Cloud Implementation.md |
+| 3. Cloudflare R2 (storage) | Done | Bucket + API token credentials saved |
+| 4. Order Contabo VPS 10 | **Next** | 4 vCPU / 8GB / Ubuntu 24.04 LTS — add SSH key at checkout |
+| 5. Bootstrap server | Pending | apt install docker + git, create /home/apps/ dirs |
+| 6. Update docker-compose.prod.yml | Pending | Remove local Postgres/Redis, add Caddy service |
+| 7. Configure .env on server | Pending | All managed service URLs + APP_SECRET |
+| 8. Deploy app | Pending | git clone → docker compose up → migration:latest |
+| 9. DNS | Pending | A record: projects.gameloops.io → VPS IP |
+| 10. Verify | Pending | Login, file upload, real-time collab, dashboards |
+
+### Target domain
+`projects.gameloops.io` → Contabo VPS → Caddy → NestJS app (port 3000)
+
+---
+
 ## Permission System (Core — Do Not Break)
 
 This is the most important existing system. Understand it before touching anything access-related.

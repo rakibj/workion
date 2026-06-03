@@ -1,6 +1,7 @@
 .env
 .env.dev
 .env.prod
+Cloud Implementation.md
 data
 # compiled output
 /dist
