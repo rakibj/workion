@@ -49,6 +49,11 @@ export interface IWorkspaceAiSettings {
   chat?: boolean;
 }
 
+export interface IAiKeyStatus {
+  configured: boolean;
+  model: string;
+}
+
 export interface IWorkspaceSharingSettings {
   disabled?: boolean;
 }

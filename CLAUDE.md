@@ -186,6 +186,8 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 | `core/group/` | Group management |
 | `core/comment/` | Comments |
 | `core/label/` | Labels |
+| `core/kanban/` | Kanban board (project tracker pages) |
+| `core/ai-chat/` | AI chat — OpenRouter BYOK streaming, key management |
 | `database/migrations/` | Schema migrations |
 | `database/repos/` | Data access layer |
 
@@ -193,7 +195,7 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 
 | Path | Why hands-off |
 |---|---|
-| `collaboration/` | Hocuspocus real-time engine. Treat as black box — only additive touches allowed (new guards/conditions inside existing extensions, never restructuring). See Board spec for the approved pattern. |
+| `collaboration/` | Hocuspocus real-time engine. Treat as black box — only additive touches allowed (new guards/conditions inside existing extensions, never restructuring). |
 | `apps/editor-ext/` | TipTap editor extensions |
 | `apps/ee/` | Enterprise Edition — conditionally loaded, treat as plugin |
 | `integrations/storage/` | S3/local abstraction — use `StorageService`, don't re-implement |
@@ -282,154 +284,6 @@ const module = await Test.createTestingModule({
 ## Feature Specs
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
-
----
-
-### SPEC: AI Chat — OpenRouter BYOK
-
-**Status**: `Not started`
-
-**Goal**: Implement the AI chat backend (the `/api/ai/chats/*` routes the client already calls) using OpenRouter as the provider. Each workspace funds its own AI usage by supplying its own OpenRouter API key — no platform-level billing involved.
-
----
-
-#### Decision
-
-Pure BYOK — no global fallback key. If a workspace has no key configured, AI chat is disabled for that workspace. This keeps billing 100% between the workspace and OpenRouter.
-
----
-
-#### Data Model Delta
-
-No new table. Add `openrouterKey` (encrypted string) and `openrouterModel` (string) to the existing `workspace.settings.ai` JSONB field.
-
-```jsonc
-// workspace.settings.ai (extended)
-{
-  "chat": true,
-  "generative": true,
-  "search": false,
-  "openrouterKey": "<AES-256 encrypted>",   // null if not configured
-  "openrouterModel": "openai/gpt-4o-mini"   // default if not set
-}
-```
-
-Key is encrypted before write and decrypted on read using `APP_SECRET` (AES-256-GCM). Never returned to the client — only used server-side when making OpenRouter requests.
-
----
-
-#### API Contract (new endpoints — all require `JwtAuthGuard`)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/ai/chats/create` | Create new chat, return `AiChat` |
-| `POST` | `/ai/chats` | List chats (paginated cursor) |
-| `POST` | `/ai/chats/info` | Get chat + messages by `chatId` |
-| `POST` | `/ai/chats/delete` | Soft-delete a chat |
-| `POST` | `/ai/chats/update` | Update chat title |
-| `POST` | `/ai/chats/search` | Full-text search across messages |
-| `POST` | `/ai/chats/upload` | Upload file attachment for a chat |
-| `POST` | `/ai/chats/send` | **Streaming SSE** — send message, stream response |
-
-`/ai/chats/send` streams `text/event-stream`. Event types match what the client already handles: `chat_created`, `content`, `tool_call`, `tool_result`, `done`, `error`.
-
-New workspace-settings endpoints (admin only):
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/workspace/ai/key` | Save (or update) OpenRouter key + model |
-| `DELETE` | `/workspace/ai/key` | Remove the key (disables AI chat) |
-| `GET` | `/workspace/ai/key/status` | Returns `{ configured: boolean, model: string }` — never the key itself |
-
----
-
-#### Backend Module
-
-New module: `apps/server/src/core/ai-chat/`
-
-```
-ai-chat/
-├── ai-chat.module.ts
-├── controllers/
-│   ├── ai-chat.controller.ts       # /ai/chats/* routes
-│   └── workspace-ai.controller.ts  # /workspace/ai/key routes
-├── services/
-│   ├── ai-chat.service.ts          # chat CRUD + message persistence
-│   ├── ai-stream.service.ts        # OpenRouter streaming logic
-│   └── ai-key.service.ts           # encrypt/decrypt key, save to settings
-├── dto/
-│   └── *.dto.ts
-└── repos/
-    └── ai-chat.repo.ts             # queries against ai_chats + ai_chat_messages
-```
-
-`ai-stream.service.ts` uses the OpenAI SDK pointed at `https://openrouter.ai/api/v1` with the workspace's decrypted key. All requests include `HTTP-Referer` and `X-Title` headers per OpenRouter's requirements.
-
----
-
-#### Key Encryption
-
-```ts
-// Encrypt before storing
-const iv = crypto.randomBytes(12);
-const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
-// Store: base64(iv + authTag + ciphertext)
-
-// Decrypt on read
-// Split stored value → iv, authTag, ciphertext → decipher
-```
-
-`derivedKey` = `scrypt(APP_SECRET, workspaceId, 32)` — workspace-scoped so a key from one workspace cannot decrypt another.
-
----
-
-#### Frontend
-
-**Workspace settings — new "AI" panel** (`apps/client/src/features/workspace/components/ai-settings.tsx`):
-- Text input for OpenRouter API key (masked, write-only — never shown after save)
-- Model selector dropdown (curated list of OpenRouter model IDs)
-- Save / Remove key button
-- Status indicator: "AI chat active" / "No key configured"
-
-The existing `enable-ai-chat.tsx` toggle remains but is gated: only meaningful once a key is configured.
-
-No changes needed to the existing AI chat UI (`apps/client/src/ee/ai-chat/`) — it already handles all the stream events correctly.
-
----
-
-#### Permission / Access Control
-
-- Saving/removing the key: `owner` or `admin` role only (enforced in `workspace-ai.controller.ts`)
-- Using AI chat: any workspace member (existing `ai.chat` setting gates visibility)
-- Key status endpoint: `owner` or `admin` only
-
----
-
-#### Edge Cases
-
-| Case | Handling |
-|---|---|
-| No key configured | `ai-stream.service` throws `ServiceUnavailableException("AI not configured for this workspace")` → client shows "AI not set up" error |
-| Invalid / expired key | OpenRouter returns 401 → surface as `error` SSE event with `code: "invalid_key"` |
-| Model not available | OpenRouter returns 404/400 → surface as `error` SSE event |
-| User aborts stream | Client calls `AbortController.abort()` → server catches and closes stream cleanly |
-| Attachment upload | Stored via existing `StorageService`; `ai_chat_id` column on `attachments` already exists (from existing migration) |
-
----
-
-#### Implementation Order (TDD)
-
-- [ ] 1. `ai-key.service.ts` — encrypt/decrypt + save/load from `workspace.settings.ai` — write unit tests first
-- [ ] 2. `workspace-ai.controller.ts` — save/remove/status endpoints — write tests
-- [ ] 3. `ai-chat.repo.ts` — CRUD queries against `ai_chats` + `ai_chat_messages` — write tests
-- [ ] 4. `ai-chat.service.ts` — chat + message persistence — write tests
-- [ ] 5. `ai-stream.service.ts` — OpenRouter streaming via OpenAI SDK — integration test with mocked HTTP
-- [ ] 6. `ai-chat.controller.ts` — all `/ai/chats/*` routes
-- [ ] 7. Register `AiChatModule` in `CoreModule`
-- [ ] 8. Frontend: AI settings panel in workspace settings
-- [ ] 9. Smoke test: configure key → open AI chat → send message → verify stream → remove key → verify disabled
-
----
 
 ## Planned Client Management Features (Backlog — each needs a spec before implementation)
 

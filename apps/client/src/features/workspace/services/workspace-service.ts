@@ -2,6 +2,7 @@ import api from "@/lib/api-client";
 import { IUser } from "@/features/user/types/user.types";
 import {
   ICreateInvite,
+  IAiKeyStatus,
   IInvitation,
   IWorkspace,
   IAcceptInvite,
@@ -120,5 +121,21 @@ export async function createWorkspace(
 
 export async function getAppVersion(): Promise<IVersion> {
   const req = await api.post("/version");
+  return req.data;
+}
+
+export async function saveAiKey(data: {
+  apiKey: string;
+  model: string;
+}): Promise<void> {
+  await api.post("/workspace/ai/key", data);
+}
+
+export async function deleteAiKey(): Promise<void> {
+  await api.delete("/workspace/ai/key");
+}
+
+export async function getAiKeyStatus(): Promise<IAiKeyStatus> {
+  const req = await api.get<IAiKeyStatus>("/workspace/ai/key/status");
   return req.data;
 }

@@ -203,7 +203,7 @@ export class SearchService {
     if (suggestion.includePages) {
       let pageSearch = this.db
         .selectFrom('pages')
-        .select(['id', 'slugId', 'title', 'icon', 'spaceId'])
+        .select(['id', 'slugId', 'title', 'icon', 'spaceId', 'type'])
         .select((eb) => this.pageRepo.withSpace(eb))
         .where((eb) =>
           eb(
@@ -214,6 +214,7 @@ export class SearchService {
         )
         .where('deletedAt', 'is', null)
         .where('workspaceId', '=', workspaceId)
+        .where('type', '!=', 'board')
         .limit(limit);
 
       // search all spaces the user has access to, prioritizing the current space
