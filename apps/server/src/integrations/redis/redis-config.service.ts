@@ -19,7 +19,7 @@ export class RedisConfigService implements RedisOptionsFactory {
         password: redisConfig.password,
         db: redisConfig.db,
         family: redisConfig.family,
-        tls: redisConfig.tls ? {} : undefined,
+        tls: redisConfig.tls ? { rejectUnauthorized: false } : undefined,
         retryStrategy: createRetryStrategy(),
       },
     };

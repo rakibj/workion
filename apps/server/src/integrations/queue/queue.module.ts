@@ -18,7 +18,7 @@ import { GeneralQueueProcessor } from './processors/general-queue.processor';
             password: redisConfig.password,
             db: redisConfig.db,
             family: redisConfig.family,
-            tls: redisConfig.tls ? {} : undefined,
+            tls: redisConfig.tls ? { rejectUnauthorized: false } : undefined,
             retryStrategy: createRetryStrategy(),
           },
           defaultJobOptions: {
