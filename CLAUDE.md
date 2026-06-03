@@ -332,10 +332,171 @@ const module = await Test.createTestingModule({
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
-**Edge cases**
+**HTML Artifact Block edge cases**
 - Empty HTML → preview shows blank iframe (no error).
 - Very large HTML (> 500 KB) → warn the user in the block header, still save.
 - Block deleted → Yjs handles undo/redo normally; no special cleanup needed.
+
+---
+
+### Spec: In-Place AI Text Improvement — Backend Fix
+
+**Status:** Not started. Frontend fully implemented; backend endpoint missing.
+
+**Root cause:** `ai-service.ts` calls `POST /api/ai/generate/stream` and `POST /api/ai/generate` but neither route exists. `AiStreamService` is functional — only the controller is missing.
+
+**Files to create/change:**
+
+| File | Change |
+|------|--------|
+| NEW `apps/server/src/core/ai-chat/controllers/ai-generate.controller.ts` | Two routes: `POST /ai/generate/stream` (SSE) and `POST /ai/generate` (non-streaming) |
+| NEW `apps/server/src/core/ai-chat/dto/ai-generate.dto.ts` | `{ action: AiAction, content: string, prompt?: string }` with validation |
+| `apps/server/src/core/ai-chat/ai-chat.module.ts` | Register new controller |
+
+**Controller logic (`/ai/generate/stream`):**
+1. Validate body with `AiGenerateDto`
+2. Map `action` → system prompt (see table below)
+3. Call `AiStreamService.streamChat(workspace.id, [{ role: 'user', content }], systemPrompt)`
+4. Stream `data: { content: text }\n\n` chunks (matching client's `AiStreamChunk` type), end with `data: [DONE]\n\n`
+5. No message persistence, no chat creation — pure one-shot transformation
+
+**Action → system prompt mapping:**
+
+| AiAction | System prompt |
+|----------|--------------|
+| `IMPROVE_WRITING` | "Improve the writing quality of the following text. Return only the improved text, no explanations." |
+| `FIX_SPELLING_GRAMMAR` | "Fix all spelling and grammar errors. Return only the corrected text." |
+| `MAKE_SHORTER` | "Make the following text more concise while preserving meaning. Return only the shortened text." |
+| `MAKE_LONGER` | "Expand the following text with more detail. Return only the expanded text." |
+| `CONTINUE_WRITING` | "Continue writing from where this text leaves off. Return only the continuation." |
+| `EXPLAIN` | "Explain the following text in simple terms. Return only the explanation." |
+| `SUMMARIZE` | "Summarize the following text. Return only the summary." |
+| `CHANGE_TONE` | `"Rewrite the following text in a ${prompt} tone. Return only the rewritten text."` |
+| `TRANSLATE` | `"Translate the following text to ${prompt}. Return only the translated text."` |
+| `CUSTOM` | Use `prompt` field directly as the instruction |
+
+**SSE streaming pattern** — follow the exact same `reply.hijack()` + `raw.write()` + `raw.end()` pattern from `AiChatController.send()`.
+
+**Key files for reference:**
+- Client types: `apps/client/src/ee/ai/types/ai.types.ts`
+- Client service: `apps/client/src/ee/ai/services/ai-service.ts`
+- Streaming infra: `apps/server/src/core/ai-chat/services/ai-stream.service.ts`
+- Pattern to follow: `apps/server/src/core/ai-chat/controllers/ai-chat.controller.ts` (`send` method)
+
+---
+
+### Spec: Block Handle Context Menu
+
+**Status:** Not started. All building blocks exist; only the assembly is missing.
+
+**What it does:** Clicking the drag handle (⠿) opens a context menu with block-level actions. Drag behavior is unchanged — browsers distinguish a clean click from a drag on `draggable="true"` elements.
+
+#### Architecture
+
+**1. Extend `drag-handle.ts` (additive only)**
+
+Add two closure variables tracking the last hovered node:
+```ts
+let currentNodePos: number = -1;
+let currentNodeType: string = '';
+```
+
+Update both in the `mousemove` handler alongside the handle's CSS repositioning. Add a `click` listener on `dragHandleElement` in the `view` factory (after drag listeners):
+```ts
+dragHandleElement.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  view.dom.dispatchEvent(new CustomEvent('blockHandleClick', {
+    bubbles: true,
+    detail: { pos: currentNodePos, nodeType: currentNodeType, x: e.clientX, y: e.clientY },
+  }));
+});
+```
+Clean up in `destroy()`. Do not add the listener if `!view.editable` (guard same as the existing mousemove guard).
+
+**2. New `BlockContextMenu` component**
+
+```
+apps/client/src/features/editor/components/block-menu/
+  block-menu.tsx
+  block-menu.module.css
+```
+
+Props: `{ editor, opened, onClose, pos, nodeType, x, y }`
+
+Positioned `fixed` at `{ left: x, top: y }` with a small offset. Uses Mantine `Menu`.
+
+**Menu structure:**
+
+```
+[Turn into ▶]           submenu reusing NodeSelector items
+─────────────
+[🎨 Text color ▶]      submenu → 10-color swatch grid (Color extension)
+[🖍 Background ▶]      submenu → 10-color swatch grid (Highlight extension)
+─────────────
+[📋 Duplicate]
+[🔗 Copy link to block]  heading nodes only (they have stable id attrs)
+─────────────
+[✨ Ask AI]
+─────────────
+[🗑 Delete block]
+```
+
+Context-sensitivity:
+- **Turn into**: hidden for `table`, `codeBlock`, `htmlArtifact`, `image`, `video`, `audio`
+- **Text/Background color**: hidden for `table`, `htmlArtifact`, `image`, `video`, `audio`
+- **Copy link to block**: only heading nodes
+- **Read-only mode** (`!editor.isEditable`): entire menu suppressed — don't fire the event
+
+**Commands:**
+
+| Action | TipTap command |
+|--------|---------------|
+| Turn into (any) | Reuse commands from `node-selector.tsx` |
+| Text color | `editor.chain().focus().setColor(hex).run()` |
+| Background | `editor.chain().focus().setHighlight({ color: hex }).run()` |
+| Duplicate | `editor.chain().focus().insertContentAt(pos + nodeSize, node.toJSON()).run()` |
+| Delete | `editor.chain().focus().deleteNode(nodeType).run()` |
+| Copy link | `navigator.clipboard.writeText(location.href + '#' + headingId)` |
+| Ask AI | Select block via `NodeSelection.create(doc, pos)`, then trigger `EditorAiMenu` |
+| Clear color | Pass `undefined` to `setColor` / `unsetHighlight()` |
+
+**"Ask AI" flow:**
+1. `editor.commands.setNodeSelection(pos)` to select the block
+2. Extract `editor.state.doc.nodeAt(pos)?.textContent`
+3. Trigger the same AI menu used by the bubble menu — check how `EditorAiMenu` is opened in `page-editor.tsx` and replicate that trigger
+
+**Color palette (10 colors):**
+Default (clear) · Gray `#9B9A97` · Brown `#64473A` · Orange `#D9730D` · Yellow `#CB912F` · Green `#448361` · Blue `#337EA9` · Purple `#9065B0` · Pink `#C14C8A` · Red `#D44C47`
+
+**3. Wire into editor wrapper**
+
+In `advanced-editor.tsx` (or wherever `EditorContent` is rendered), add `useEffect`:
+```ts
+const handler = (e: CustomEvent) => {
+  if (!editor?.isEditable) return;
+  setBlockMenu({ opened: true, ...e.detail });
+};
+editorWrapperRef.current?.addEventListener('blockHandleClick', handler);
+```
+Render `<BlockContextMenu ... />` inside the wrapper. Manage open/close state.
+
+**Files changed/created:**
+
+| File | Change |
+|------|--------|
+| `extensions/drag-handle.ts` | Track `currentNodePos`/`currentNodeType` in mousemove; add click listener firing `blockHandleClick` custom event; clean up in destroy |
+| NEW `components/block-menu/block-menu.tsx` | Context menu component |
+| NEW `components/block-menu/block-menu.module.css` | Styles |
+| Editor wrapper (`advanced-editor.tsx` or equivalent) | Event listener, open/close state, render `BlockContextMenu` |
+
+**Edge cases:**
+- Click inside table → Turn into and Color sections hidden
+- Heading with no `id` attr → Copy link hidden
+- Menu opened while dragging → Mantine Menu `closeOnClickOutside` handles it; drag still fires normally
+- Empty doc / first block → Duplicate appends at end; no crash
+
+**Out of scope for V1:** right-click context menu, move-to-page, block locking, per-block comment threading
 
 ---
 
