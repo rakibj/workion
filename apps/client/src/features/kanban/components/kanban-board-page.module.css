@@ -377,6 +377,24 @@
   );
 }
 
+.milestoneBadgeOverdue {
+  color: var(--mantine-color-red-6);
+  border-color: var(--mantine-color-red-3);
+  background: light-dark(
+    var(--mantine-color-red-0),
+    color-mix(in srgb, var(--mantine-color-red-9) 20%, transparent)
+  );
+}
+
+.milestoneBadgeToday {
+  color: var(--mantine-color-yellow-7);
+  border-color: var(--mantine-color-yellow-4);
+  background: light-dark(
+    var(--mantine-color-yellow-0),
+    color-mix(in srgb, var(--mantine-color-yellow-9) 20%, transparent)
+  );
+}
+
 /* ── Milestone management modal rows ── */
 
 .milestoneRow {

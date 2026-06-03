@@ -23,6 +23,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconAlertTriangle,
   IconCheck,
   IconDotsVertical,
   IconFlag,
@@ -114,6 +115,23 @@ function formatDueDate(dateStr: string): string {
     return dateStr;
   }
 }
+
+type DueDateStatus = 'overdue' | 'today' | 'upcoming';
+
+function getDueDateStatus(dateStr: string): DueDateStatus {
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const dueKey = dateStr.slice(0, 10);
+  if (dueKey < todayKey) return 'overdue';
+  if (dueKey === todayKey) return 'today';
+  return 'upcoming';
+}
+
+const DUE_DATE_COLOR: Record<DueDateStatus, string | undefined> = {
+  overdue: 'var(--mantine-color-red-6)',
+  today:   'var(--mantine-color-yellow-7)',
+  upcoming: undefined,
+};
 
 // ─── Position helpers ─────────────────────────────────────────────────────────
 
@@ -261,7 +279,12 @@ function MilestoneManagementModal({
             <Group key={ms.id} gap="xs" className={classes.milestoneRow}>
               <IconTarget size={14} className={classes.milestoneIcon} />
               <Text size="sm" style={{ flex: 1 }}>{ms.name}</Text>
-              <Text size="xs" c="dimmed">{formatDueDate(ms.dueDate)}</Text>
+              <Text
+                size="xs"
+                style={{ color: DUE_DATE_COLOR[getDueDateStatus(ms.dueDate)] ?? 'var(--mantine-color-dimmed)' }}
+              >
+                {formatDueDate(ms.dueDate)}
+              </Text>
               {canEdit && (
                 <Group gap={4}>
                   <ActionIcon size="xs" variant="subtle" onClick={() => startEdit(ms)}>
@@ -337,15 +360,26 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
     updateCard.mutate({ cardId: card.id, milestoneId: id });
   };
 
+  const status = current ? getDueDateStatus(current.dueDate) : null;
+
   return (
     <Menu shadow="md" width={200} position="bottom-start" withinPortal>
       <Menu.Target>
         <button
-          className={clsx(classes.milestoneBadge, current && classes.milestoneBadgeActive)}
+          className={clsx(
+            classes.milestoneBadge,
+            current && (status === 'overdue'
+              ? classes.milestoneBadgeOverdue
+              : status === 'today'
+              ? classes.milestoneBadgeToday
+              : classes.milestoneBadgeActive),
+          )}
           onClick={(e) => e.stopPropagation()}
-          title="Set milestone"
+          title={current ? `${current.name} · ${formatDueDate(current.dueDate)}` : "Set milestone"}
         >
-          <IconTarget size={10} />
+          {status === 'overdue' || status === 'today'
+            ? <IconAlertTriangle size={10} />
+            : <IconTarget size={10} />}
           {current ? current.name : "Milestone"}
         </button>
       </Menu.Target>
@@ -364,7 +398,12 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
           >
             <Stack gap={0}>
               <Text size="xs">{ms.name}</Text>
-              <Text size="xs" c="dimmed">{formatDueDate(ms.dueDate)}</Text>
+              <Text
+                size="xs"
+                style={{ color: DUE_DATE_COLOR[getDueDateStatus(ms.dueDate)] ?? 'var(--mantine-color-dimmed)' }}
+              >
+                {formatDueDate(ms.dueDate)}
+              </Text>
             </Stack>
           </Menu.Item>
         ))}
@@ -649,6 +688,20 @@ function KanbanCardItem({
             />
           </div>
         </Group>
+        {(() => {
+          if (!card.milestone?.dueDate) return null;
+          const s = getDueDateStatus(card.milestone.dueDate);
+          if (s === 'upcoming') return null;
+          const color = DUE_DATE_COLOR[s]!;
+          return (
+            <Group gap={3} mt={3} align="center" wrap="nowrap">
+              <IconAlertTriangle size={10} style={{ color, flexShrink: 0 }} />
+              <Text size="xs" style={{ color, fontSize: 10, lineHeight: 1 }}>
+                {formatDueDate(card.milestone.dueDate)}
+              </Text>
+            </Group>
+          );
+        })()}
       </div>
       <CardDropIndicator edge={closestEdge === "bottom" ? "bottom" : null} />
     </div>
@@ -821,14 +874,32 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
                   label: `${m.name} · ${formatDueDate(m.dueDate)}`,
                 }))}
                 styles={{ input: { minWidth: 180 } }}
-                leftSection={<IconTarget size={12} />}
+                leftSection={
+                  card.milestone && getDueDateStatus(card.milestone.dueDate) !== 'upcoming'
+                    ? <IconAlertTriangle size={12} style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }} />
+                    : <IconTarget size={12} />
+                }
               />
             ) : (
-              <Text size="sm">
-                {card.milestone
-                  ? `${card.milestone.name} · ${formatDueDate(card.milestone.dueDate)}`
-                  : "None"}
-              </Text>
+              card.milestone ? (
+                <Group gap={4} align="center" wrap="nowrap">
+                  <Text size="sm">{card.milestone.name}</Text>
+                  <Text
+                    size="sm"
+                    style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] ?? 'inherit' }}
+                  >
+                    · {formatDueDate(card.milestone.dueDate)}
+                  </Text>
+                  {getDueDateStatus(card.milestone.dueDate) !== 'upcoming' && (
+                    <IconAlertTriangle
+                      size={13}
+                      style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }}
+                    />
+                  )}
+                </Group>
+              ) : (
+                <Text size="sm">None</Text>
+              )
             )}
           </Stack>
 

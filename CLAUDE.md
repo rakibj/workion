@@ -253,7 +253,8 @@ If a black-box module needs to change, write a spec for it first and flag explic
 ### Kanban Board Page
 - A `kanban` page type renders a drag-and-drop board (columns = status, cards = tasks) inside a page.
 - Backend: `core/kanban/` — task/column CRUD with position ordering; tasks stored in `kanban_tasks` and `kanban_columns` tables.
-- Frontend: `features/page/kanban/` — uses `@hello-pangea/dnd` for drag-and-drop; inline card editing, assignees, due dates, priority (urgent/high/medium/low with color coding).
+- Frontend: `features/kanban/` — uses Atlaskit pragmatic drag-and-drop; inline card editing, assignees, due dates, priority (urgent/high/medium/low with color coding).
+- Milestone overdue indicator: milestone badge turns red (overdue) or amber (today) with a warning icon; a colored date row appears below card badges; card modal also shows colored date.
 - Kanban pages live in the normal page tree and respect the same space/page permission model.
 
 ### In-App Notifications
@@ -321,29 +322,6 @@ const module = await Test.createTestingModule({
 ## Feature Specs
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
-
----
-
-### SPEC: Kanban — Overdue Indicator
-
-**Problem**
-Kanban cards have milestone due dates but nothing signals when a milestone is past due. Users cannot tell at a glance which cards are late.
-
-**Data model**
-No changes — `due_date` already exists on `kanban_milestones`.
-
-**UI changes only** (frontend, `apps/client/src/features/page/kanban/`)
-- In the card component where `formatDueDate()` renders the due date string:
-  - If `due_date < today` (date comparison, ignore time): render the date in red with a warning icon.
-  - If `due_date === today`: render in amber.
-  - Otherwise: current default styling.
-- Same indicator in the card edit modal next to the milestone field.
-- No backend changes required.
-
-**Edge cases**
-- Card with no milestone → no indicator.
-- Multiple milestones on one card → flag the earliest overdue one.
-- Timezone: compare dates in the user's local timezone (use `new Date()` on the client, date-only comparison).
 
 ---
 
