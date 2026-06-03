@@ -13,7 +13,11 @@ export class AiStreamService {
     private readonly environmentService: EnvironmentService,
   ) {}
 
-  async streamChat(workspaceId: string, messages: ModelMessage[]) {
+  async streamChat(
+    workspaceId: string,
+    messages: ModelMessage[],
+    system?: string,
+  ): Promise<ReturnType<typeof streamText>> {
     const apiKey = await this.aiKeyService.getDecryptedKey(workspaceId);
     if (!apiKey) {
       throw new ServiceUnavailableException(
@@ -36,6 +40,7 @@ export class AiStreamService {
     return streamText({
       model: provider(model),
       messages,
+      ...(system ? { system } : {}),
     });
   }
 }

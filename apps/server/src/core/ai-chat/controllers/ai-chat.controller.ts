@@ -23,6 +23,7 @@ import { AiChatService } from '../services/ai-chat.service';
 import { AiStreamService } from '../services/ai-stream.service';
 import { AiChatRepo } from '@docmost/db/repos/ai-chat/ai-chat.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { FileInterceptor } from '../../../common/interceptors/file.interceptor';
@@ -48,6 +49,7 @@ export class AiChatController {
     private readonly attachmentRepo: AttachmentRepo,
     private readonly storageService: StorageService,
     private readonly environmentService: EnvironmentService,
+    private readonly pageRepo: PageRepo,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -216,6 +218,11 @@ export class AiChatController {
       if (!chatId) {
         const chat = await this.aiChatService.createChat(user.id, workspace.id);
         chatId = chat.id;
+
+        const rawTitle = dto.content?.trim() || 'New chat';
+        const title = rawTitle.length > 80 ? rawTitle.slice(0, 80) + '…' : rawTitle;
+        await this.aiChatRepo.updateChat(chatId, workspace.id, { title });
+
         write({ type: 'chat_created', chatId });
       } else {
         await this.aiChatService.getChat(chatId, user.id, workspace.id);
@@ -252,9 +259,15 @@ export class AiChatController {
       );
       const coreMessages = this.buildCoreMessages(history.items);
 
+      const systemPrompt = await this.buildSystemPrompt(
+        dto,
+        workspace.id,
+      );
+
       const result = await this.aiStreamService.streamChat(
         workspace.id,
         coreMessages,
+        systemPrompt,
       );
 
       let fullContent = '';
@@ -339,6 +352,34 @@ export class AiChatController {
 
     raw.write('data: [DONE]\n\n');
     raw.end();
+  }
+
+  private async buildSystemPrompt(
+    dto: SendMessageDto,
+    workspaceId: string,
+  ): Promise<string | undefined> {
+    const pageIds = [
+      ...(dto.contextPageId ? [dto.contextPageId] : []),
+      ...(dto.mentionedPageIds ?? []),
+    ].filter((id, i, arr) => arr.indexOf(id) === i);
+
+    if (!pageIds.length) return undefined;
+
+    const pages = await Promise.all(
+      pageIds.map((id) => this.pageRepo.findById(id, { includeTextContent: true })),
+    );
+
+    const validPages = pages.filter(
+      (p) => p && p.workspaceId === workspaceId && !p.deletedAt,
+    );
+
+    if (!validPages.length) return undefined;
+
+    const pageBlocks = validPages
+      .map((p) => `## ${p.title || 'Untitled'}\n\n${p.textContent?.trim() || '(empty page)'}`)
+      .join('\n\n---\n\n');
+
+    return `You are a helpful assistant. Answer based on the conversation and the following page context provided by the user.\n\n${pageBlocks}`;
   }
 
   private buildCoreMessages(messages: AiChatMessage[]): ModelMessage[] {
