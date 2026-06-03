@@ -311,16 +311,7 @@ const module = await Test.createTestingModule({
 
 > Specs live here only while work is **in progress or not started**. Remove a spec once the feature is fully shipped — the code and git history are the permanent record.
 
-## Planned Client Management Features (Backlog — each needs a spec before implementation)
-
-- [ ] **Client entity**: a new top-level concept (client org → maps to a space or workspace?)
-- [ ] **Client portal**: restricted-access view for external client users
-- [ ] **Project tracking**: tasks/milestones per client space
-- [ ] **Client user invitations**: invite external users to specific spaces only
-- [ ] **Activity feed per client**: audit trail scoped to a client
-- [ ] **Client branding**: per-space logo/color theme
-
-> Update this list as features are specced and completed.
+> No active backlog items. Add new feature specs here when work begins.
 
 ---
 
