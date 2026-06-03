@@ -74,6 +74,7 @@ import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import { EditorLinkMenu } from "@/features/editor/components/link/link-menu";
 import ColumnsMenu from "@/features/editor/components/columns/columns-menu.tsx";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
+import { BlockContextMenu } from "@/features/editor/components/block-menu/block-menu";
 import { useTranslation } from "react-i18next";
 
 interface PageEditorProps {
@@ -110,6 +111,13 @@ export default function PageEditor({
     yjsConnectionStatusAtom,
   );
   const menuContainerRef = useRef(null);
+  const [blockMenu, setBlockMenu] = useState<{
+    opened: boolean;
+    pos: number;
+    nodeType: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const { data: collabQuery, refetch: refetchCollabToken } = useCollabToken();
   const { isIdle, resetIdle } = useIdle(FIVE_MINUTES, { initialState: false });
   const documentState = useDocumentVisibility();
@@ -376,6 +384,17 @@ export default function PageEditor({
     setAsideState({ tab: "", isAsideOpen: false });
   }, [pageId]);
 
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const handler = (e: Event) => {
+      const { pos, nodeType, x, y } = (e as CustomEvent).detail;
+      setBlockMenu({ opened: true, pos, nodeType, x, y });
+    };
+    dom.addEventListener("blockHandleClick", handler);
+    return () => dom.removeEventListener("blockHandleClick", handler);
+  }, [editor]);
+
   const isSynced = isLocalSynced && isRemoteSynced;
 
   useEffect(() => {
@@ -445,6 +464,17 @@ export default function PageEditor({
                 <DrawioMenu editor={editor} />
                 <ColumnsMenu editor={editor} />
               </div>
+            )}
+            {editor && blockMenu?.opened && (
+              <BlockContextMenu
+                editor={editor}
+                opened={blockMenu.opened}
+                onClose={() => setBlockMenu(null)}
+                pos={blockMenu.pos}
+                nodeType={blockMenu.nodeType}
+                x={blockMenu.x}
+                y={blockMenu.y}
+              />
             )}
             {editor &&
               !editorIsEditable &&

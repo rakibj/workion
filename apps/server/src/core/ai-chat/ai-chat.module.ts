@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiChatController } from './controllers/ai-chat.controller';
 import { WorkspaceAiController } from './controllers/workspace-ai.controller';
+import { AiGenerateController } from './controllers/ai-generate.controller';
 import { AiChatService } from './services/ai-chat.service';
 import { AiKeyService } from './services/ai-key.service';
 import { AiStreamService } from './services/ai-stream.service';
@@ -9,7 +10,7 @@ import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
 
 @Module({
   imports: [StorageModule],
-  controllers: [AiChatController, WorkspaceAiController],
+  controllers: [AiChatController, WorkspaceAiController, AiGenerateController],
   providers: [AiChatService, AiKeyService, AiStreamService, KanbanRepo],
 })
 export class AiChatModule {}

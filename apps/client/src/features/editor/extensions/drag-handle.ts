@@ -148,6 +148,8 @@ export function DragHandlePlugin(
   options: GlobalDragHandleOptions & { pluginKey: string },
 ) {
   let listType = "";
+  let currentNodePos: number = -1;
+  let currentNodeType: string = '';
   function handleDragStart(event: DragEvent, view: EditorView) {
     view.focus();
 
@@ -325,6 +327,34 @@ export function DragHandlePlugin(
 
       dragHandleElement.addEventListener("drag", onDragHandleDrag);
 
+      function onDragHandleClick(e: MouseEvent) {
+        if (!view.editable) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (currentNodePos < 0) return;
+        // Select the block and restore editor focus so menu commands have the
+        // right target even though the click moved focus off the editor.
+        try {
+          const sel = NodeSelection.create(view.state.doc, currentNodePos);
+          view.dispatch(view.state.tr.setSelection(sel));
+        } catch {
+          // ignore if NodeSelection is invalid for this node type
+        }
+        view.focus();
+        view.dom.dispatchEvent(
+          new CustomEvent("blockHandleClick", {
+            bubbles: true,
+            detail: {
+              pos: currentNodePos,
+              nodeType: currentNodeType,
+              x: e.clientX,
+              y: e.clientY,
+            },
+          }),
+        );
+      }
+      dragHandleElement.addEventListener("click", onDragHandleClick);
+
       hideDragHandle();
 
       if (!handleBySelector) {
@@ -345,6 +375,7 @@ export function DragHandlePlugin(
             "dragstart",
             onDragHandleDragStart,
           );
+          dragHandleElement?.removeEventListener("click", onDragHandleClick);
           dragHandleElement = null;
           view?.dom?.parentElement?.removeEventListener(
             "mouseout",
@@ -381,6 +412,14 @@ export function DragHandlePlugin(
           ) {
             hideDragHandle();
             return;
+          }
+
+          // Track for click handler
+          const rawPos = nodePosAtDOM(node, view, options);
+          if (rawPos != null && rawPos >= 0) {
+            const calcPos = calcNodePos(rawPos, view);
+            currentNodePos = calcPos;
+            currentNodeType = view.state.doc.nodeAt(calcPos)?.type.name ?? '';
           }
 
           const isCustomNode = isCustomNodeDOM(node, options);
