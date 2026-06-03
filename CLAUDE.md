@@ -156,27 +156,31 @@ The VPS runs the app via `docker-compose.prod.yml`. Deployment is a git-pull + r
 ### Standard deploy (code changes)
 
 ```bash
-# 1. Local — commit and push your changes
+# 1. Local — commit and push
 git add <files>
 git commit -m "your message"
 git push origin main
 
-# 2. SSH into the VPS
+# 2. SSH into the VPS and run the deploy script
 ssh user@projects.gameloops.io
-
-# 3. On the VPS — pull latest code
 cd /home/apps/docmost
-git pull origin main
-
-# 4. Rebuild the Docker image and restart
-docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d
-
-# 5. Run any pending migrations
-docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
+./deploy.sh
 ```
 
-> Skip `--no-cache` if you didn't change `package.json` / `pnpm-lock.yaml` — the layer cache speeds up the build significantly.
+The script (`deploy.sh` in repo root) handles: git pull → docker build → docker up → migrations.
+
+```bash
+# Flags
+./deploy.sh --no-cache      # force full image rebuild (use after dep changes)
+./deploy.sh --skip-migrate  # skip migrations if no schema changes
+```
+
+> By default the build uses Docker layer cache. Pass `--no-cache` only when you've changed `package.json` or `pnpm-lock.yaml`.
+
+**First-time setup on VPS** (once only):
+```bash
+chmod +x deploy.sh
+```
 
 ### Migrations only (no code changes)
 
