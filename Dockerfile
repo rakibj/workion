@@ -18,12 +18,19 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends curl bash \
   && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g tsx
+
 WORKDIR /app
 
 # Copy apps
 COPY --from=builder /app/apps/server/dist /app/apps/server/dist
 COPY --from=builder /app/apps/client/dist /app/apps/client/dist
 COPY --from=builder /app/apps/server/package.json /app/apps/server/package.json
+
+# Copy migration source files so tsx can run them in production
+COPY --from=builder /app/apps/server/src/database /app/apps/server/src/database
+COPY --from=builder /app/apps/server/src/common /app/apps/server/src/common
+COPY --from=builder /app/apps/server/tsconfig.json /app/apps/server/tsconfig.json
 
 # Copy packages
 COPY --from=builder /app/packages/editor-ext/dist /app/packages/editor-ext/dist
