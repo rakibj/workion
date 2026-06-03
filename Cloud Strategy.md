@@ -292,48 +292,48 @@ Each app lives in its own directory with its own `docker-compose.yml`. Restartin
 
 ---
 
-### Step 4 — Order Contabo Cloud VPS 10
+### Step 4 — Order Contabo Cloud VPS 10 ✅ DONE
 
-1. Order at [contabo.com](https://contabo.com) — Cloud VPS 10 (4 vCPU / 8GB RAM / 150GB SSD)
-2. Choose Ubuntu 24.04 LTS
-3. Add your SSH public key during checkout
-4. Note the VPS IP once provisioned
+- Ordered Cloud VPS 10 (4 vCPU / 8GB RAM / 150GB SSD), Ubuntu 24.04 LTS
+- VPS IP: `157.173.120.4`
+- SSH key added during provisioning (key name: `rakib-desktop`)
 
 ---
 
-### Step 5 — Bootstrap the server
+### Step 5 — Bootstrap the server ✅ DONE
 
-SSH in as root, then run:
-
+SSH in as root:
 ```bash
-apt update && apt upgrade -y
-apt install -y docker.io docker-compose-plugin git
-
-# Create app directories
-mkdir -p /home/apps/docmost
-mkdir -p /home/apps/caddy
-
-# Allow docker without sudo (optional, for non-root user)
-usermod -aG docker $USER
+ssh root@157.173.120.4
 ```
 
+Docker wasn't available via Ubuntu's default repos — installed via the official Docker script:
+```bash
+apt install -y ca-certificates curl git
+curl -fsSL https://get.docker.com | sh
+```
+
+Created app directories:
+```bash
+mkdir -p /home/apps/workion /home/apps/caddy
+```
+
+> **Note:** App directory named `workion` (not `docmost`) to match the project name.
+
 ---
 
-### Step 6 — Update `docker-compose.prod.yml`
+### Step 6 — Update `docker-compose.prod.yml` ✅ DONE
 
-The current file still bundles local Postgres + Redis with dev passwords. Replace it so the app service uses managed services and Caddy handles SSL.
-
-**New structure:**
+Rewrote the file to remove bundled Postgres/Redis and add Caddy. Final structure:
 
 ```yaml
 services:
   app:
-    image: ghcr.io/<your-github-username>/docmost:latest  # or build: .
+    build: .
     restart: unless-stopped
     env_file: .env
     ports:
       - "3000:3000"
-    depends_on: []   # no local db/redis
 
   caddy:
     image: caddy:2
@@ -351,90 +351,100 @@ volumes:
   caddy_config:
 ```
 
-**Caddyfile:**
+**Caddyfile** (temporary — using IP until domain is decided):
+```
+:80 {
+    reverse_proxy app:3000
+}
+```
 
+When domain is set, update Caddyfile to:
 ```
 projects.gameloops.io {
     reverse_proxy app:3000
 }
 ```
-
 Caddy auto-provisions Let's Encrypt SSL. No certbot needed.
 
 ---
 
-### Step 7 — Configure production `.env` on the server
+### Step 7 — Configure production `.env` on the server ✅ DONE
 
 ```bash
-cd /home/apps/docmost
-nano .env
+nano /home/apps/workion/.env
 ```
 
 ```env
-APP_URL=https://projects.gameloops.io
-APP_SECRET=<run: openssl rand -hex 32>
-
-# Neon (from Step 1)
-DATABASE_URL=postgresql://docmost:<pass>@<host>.neon.tech/docmost?sslmode=require
-
-# Upstash (from Step 2)
-REDIS_URL=rediss://:<pass>@<host>.upstash.io:6379
-
-# Cloudflare R2 (from Step 3)
+APP_URL=http://157.173.120.4
+APP_SECRET=<generated via node crypto>
+DATABASE_URL=<Neon connection string>
+REDIS_URL=<Upstash rediss:// URL>
 STORAGE_DRIVER=s3
-S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-S3_BUCKET=docmost-prod
-S3_ACCESS_KEY_ID=<r2-access-key>
-S3_SECRET_ACCESS_KEY=<r2-secret>
+S3_ENDPOINT=https://<R2-account-id>.r2.cloudflarestorage.com
+S3_BUCKET=workion
+S3_ACCESS_KEY_ID=<R2 access key>
+S3_SECRET_ACCESS_KEY=<R2 secret>
 S3_REGION=auto
-
-# Mail (configure when ready)
-# MAIL_DRIVER=smtp
-# SMTP_HOST=...
 ```
 
-**Never commit `.env` to git.**
+Actual values saved in `Cloud Implementation.md` (never committed to git).
 
 ---
 
-### Step 8 — Deploy the app
+### Step 8 — Deploy the app ✅ DONE
 
 ```bash
-cd /home/apps/docmost
+cd /home/apps/workion
 
 # Clone the repo
-git clone https://github.com/<your-username>/<repo>.git .
+git clone https://github.com/rakibj/workion.git .
 
-# Start everything
+# Start everything (takes several minutes on first run — builds the image)
 docker compose -f docker-compose.prod.yml up -d --build
 
-# Run migrations (required on first deploy and after schema changes)
-docker compose -f docker-compose.prod.yml exec app pnpm --filter server run migration:latest
+# Run migrations — use tsx directly (not pnpm script), compiled migrate.js breaks due to ESM/CJS interop with postgres-js
+docker compose -f docker-compose.prod.yml exec app tsx /app/apps/server/src/database/migrate.ts latest
 ```
+
+> **Note:** `pnpm --filter server run migration:latest` fails in production because NestJS compiles `migrate.ts` to CJS but `postgres-js` is ESM-only. Always use the `tsx` command above on the server.
 
 ---
 
-### Step 9 — DNS
+### Step 9 — DNS ⏳ PENDING (domain not decided yet)
 
-In your domain registrar / Cloudflare DNS:
+Once domain is chosen:
 
-```
-A    projects.gameloops.io    <Contabo VPS IP>    TTL: 300
-```
+1. Update `Caddyfile` in the repo from `:80` to your domain:
+   ```
+   yourdomain.com {
+       reverse_proxy app:3000
+   }
+   ```
+2. Update `APP_URL` in `/home/apps/workion/.env` on the server to `https://yourdomain.com`
+3. Add DNS A record in your registrar / Cloudflare:
+   ```
+   A    yourdomain.com    157.173.120.4    TTL: 300
+   ```
+4. On the server, pull and restart:
+   ```bash
+   cd /home/apps/workion && git pull
+   docker compose -f docker-compose.prod.yml up -d
+   ```
 
-Wait for propagation (usually under 5 minutes). Caddy picks up the domain and provisions SSL automatically on first request.
+Caddy auto-provisions Let's Encrypt SSL on first request. No certbot needed.
 
 ---
 
 ### Step 10 — Verify
 
-- [ ] `https://projects.gameloops.io` loads the app
+- [x] App loads at `http://157.173.120.4` ✅
 - [ ] Can register / log in
 - [ ] Can create a space and page
 - [ ] File upload works (attached image appears)
 - [ ] Real-time collab works (open same page in two tabs)
 - [ ] Check Upstash dashboard — commands are incrementing (confirms Redis is connected)
 - [ ] Check Neon dashboard — connection count shows active connections
+- [ ] Domain configured and HTTPS working (pending domain decision)
 
 ---
 
