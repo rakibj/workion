@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ExportService } from './export.service';
-import { ExportPageDto, ExportSpaceDto } from './dto/export-dto';
+import { ExportPageDto, ExportSpaceDto, ExportSpaceTextDto } from './dto/export-dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
@@ -158,5 +158,25 @@ export class ExportController {
     });
 
     res.send(exportFile.fileStream);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('spaces/export-text')
+  async exportSpaceAsText(
+    @Body() dto: ExportSpaceTextDto,
+    @AuthUser() user: User,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    const text = await this.exportService.exportSpaceAsMarkdownText(
+      dto.spaceId,
+      user.id,
+    );
+
+    return { text };
   }
 }

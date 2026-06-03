@@ -26,6 +26,10 @@ import {
 } from '../../common/helpers/types/export-metadata.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
+import {
+  KanbanRepo,
+  KanbanColumnWithCards,
+} from '@docmost/db/repos/kanban/kanban.repo';
 import { Node } from '@tiptap/pm/model';
 import { EditorState } from '@tiptap/pm/state';
 import slugify from '@sindresorhus/slugify';
@@ -48,6 +52,7 @@ export class ExportService {
   constructor(
     private readonly pageRepo: PageRepo,
     private readonly pagePermissionRepo: PagePermissionRepo,
+    private readonly kanbanRepo: KanbanRepo,
     @InjectKysely() private readonly db: KyselyDB,
     private readonly storageService: StorageService,
     private readonly environmentService: EnvironmentService,
@@ -211,11 +216,13 @@ export class ExportService {
         'pages.parentPageId',
         'pages.spaceId',
         'pages.workspaceId',
+        'pages.type',
         'pages.createdAt',
         'pages.updatedAt',
       ])
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
+      .where('type', '!=', 'board')
       .execute();
 
     if (!ignorePermissions && userId) {
@@ -289,36 +296,43 @@ export class ExportService {
       const children = tree[parentPageId] || [];
 
       for (const page of children) {
+        // Board pages are filtered before building the tree, but skip defensively.
+        if ((page as any).type === 'board') continue;
+
         const childPages = tree[page.id] || [];
-
-        const prosemirrorJson = await this.turnPageMentionsToLinks(
-          getProsemirrorContent(page.content),
-          page.workspaceId,
-          baseUrl,
-          userId,
-          ignorePermissions,
-        );
-
+        const pageTitle = getPageTitle(page.title);
         const currentPagePath = slugIdToPath[page.slugId];
 
-        let updatedJsonContent = replaceInternalLinks(
-          prosemirrorJson,
-          slugIdToPath,
-          currentPagePath,
-          baseUrl,
-        );
+        let pageExportContent: string;
 
-        if (includeAttachments) {
-          await this.zipAttachments(updatedJsonContent, folder, allowedAttachments);
-          updatedJsonContent =
-            updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+        if ((page as any).type === 'kanban') {
+          pageExportContent = await this.kanbanPageToMarkdown(page as any);
+        } else {
+          const prosemirrorJson = await this.turnPageMentionsToLinks(
+            getProsemirrorContent(page.content),
+            page.workspaceId,
+            baseUrl,
+            userId,
+            ignorePermissions,
+          );
+
+          let updatedJsonContent = replaceInternalLinks(
+            prosemirrorJson,
+            slugIdToPath,
+            currentPagePath,
+            baseUrl,
+          );
+
+          if (includeAttachments) {
+            await this.zipAttachments(updatedJsonContent, folder, allowedAttachments);
+            updatedJsonContent = updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+          }
+
+          pageExportContent = await this.exportPage(format, {
+            ...page,
+            content: updatedJsonContent,
+          });
         }
-
-        const pageTitle = getPageTitle(page.title);
-        const pageExportContent = await this.exportPage(format, {
-          ...page,
-          content: updatedJsonContent,
-        });
 
         folder.file(
           `${pageTitle}${getExportExtension(format)}`,
@@ -548,6 +562,152 @@ export class ExportService {
     const updatedDoc = editorState.doc;
 
     return updatedDoc.toJSON();
+  }
+
+  async exportSpaceAsMarkdownText(
+    spaceId: string,
+    userId?: string,
+    ignorePermissions = false,
+  ): Promise<string> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select(['id', 'name'])
+      .where('id', '=', spaceId)
+      .executeTakeFirst();
+
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    let pages = await this.db
+      .selectFrom('pages')
+      .select([
+        'pages.id',
+        'pages.slugId',
+        'pages.title',
+        'pages.icon',
+        'pages.position',
+        'pages.content',
+        'pages.parentPageId',
+        'pages.spaceId',
+        'pages.workspaceId',
+        'pages.type',
+        'pages.createdAt',
+        'pages.updatedAt',
+      ])
+      .where('spaceId', '=', spaceId)
+      .where('deletedAt', 'is', null)
+      .where('type', '!=', 'board')
+      .execute();
+
+    if (!ignorePermissions && userId) {
+      pages = await this.filterPagesForExport(
+        pages as Page[],
+        null,
+        userId,
+        spaceId,
+      );
+    }
+
+    if (pages.length === 0) {
+      return '';
+    }
+
+    const tree = buildTree(pages as Page[]);
+    const baseUrl = await this.getWorkspaceBaseUrl(pages[0].workspaceId);
+    const sections: string[] = [];
+
+    const stack: { parentPageId: string | null }[] = [{ parentPageId: null }];
+
+    while (stack.length > 0) {
+      const { parentPageId } = stack.pop();
+      const children = tree[parentPageId] || [];
+
+      for (const page of children) {
+        const childPages = tree[page.id] || [];
+
+        let content: string;
+        if ((page as any).type === 'kanban') {
+          content = await this.kanbanPageToMarkdown(page as any);
+        } else {
+          const prosemirrorJson = await this.turnPageMentionsToLinks(
+            getProsemirrorContent(page.content),
+            page.workspaceId,
+            baseUrl,
+            userId,
+            ignorePermissions,
+          );
+          content = await this.exportPage(ExportFormat.Markdown, {
+            ...page,
+            content: prosemirrorJson,
+          });
+        }
+
+        if (content) sections.push(content);
+
+        if (childPages.length > 0) {
+          stack.push({ parentPageId: page.id });
+        }
+      }
+    }
+
+    return sections.join('\n\n---\n\n');
+  }
+
+  private async kanbanPageToMarkdown(page: {
+    id: string;
+    title: string | null;
+  }): Promise<string> {
+    const columns = await this.kanbanRepo.getBoardByPageId(page.id);
+    const lines: string[] = [];
+
+    if (page.title) lines.push(`# ${page.title}\n`);
+
+    for (const col of columns) {
+      lines.push(`## ${col.name}`);
+
+      if (col.cards.length === 0) {
+        lines.push('_No cards_');
+      } else {
+        for (const card of col.cards) {
+          let line = `- [ ] ${card.title || 'Untitled'}`;
+
+          const meta: string[] = [];
+          if (card.priority) meta.push(`*${card.priority}*`);
+          if (card.milestone) meta.push(`Milestone: ${card.milestone.name}`);
+          if (card.assignees.length > 0) {
+            meta.push(
+              `Assigned to: ${card.assignees.map((a) => a.name).join(', ')}`,
+            );
+          }
+
+          if (meta.length > 0) line += ` — ${meta.join(' — ')}`;
+          lines.push(line);
+
+          const desc = this.extractKanbanCardDescription(card.description);
+          if (desc) lines.push(`  ${desc}`);
+        }
+      }
+
+      lines.push('');
+    }
+
+    return lines.join('\n').trimEnd();
+  }
+
+  private extractKanbanCardDescription(desc: string): string {
+    if (!desc) return '';
+    try {
+      const parsed = JSON.parse(desc);
+      if (parsed?.type === 'doc') return this.extractNodeText(parsed).trim();
+    } catch {}
+    return desc;
+  }
+
+  private extractNodeText(node: any): string {
+    if (node.type === 'text') return node.text ?? '';
+    if (!node.content) return '';
+    return (node.content as any[]).map((n) => this.extractNodeText(n)).join(' ');
   }
 
   private async getWorkspaceBaseUrl(workspaceId: string): Promise<string> {

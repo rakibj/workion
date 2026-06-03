@@ -11,7 +11,8 @@ import { exportPage } from "@/features/page/services/page-service.ts";
 import { useState } from "react";
 import { ExportFormat } from "@/features/page/types/page.types.ts";
 import { notifications } from "@mantine/notifications";
-import { exportSpace } from "@/features/space/services/space-service";
+import { exportSpace, getSpaceMarkdownText } from "@/features/space/services/space-service";
+import { useClipboard } from "@/hooks/use-clipboard";
 import { useTranslation } from "react-i18next";
 
 interface ExportModalProps {
@@ -31,6 +32,8 @@ export default function ExportModal({
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
   const [includeAttachments, setIncludeAttachments] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isCopying, setIsCopying] = useState<boolean>(false);
+  const clipboard = useClipboard({ timeout: 500 });
   const { t } = useTranslation();
 
   const handleExport = async () => {
@@ -59,6 +62,23 @@ export default function ExportModal({
       console.error("export error", err);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleCopySpaceAsMarkdown = async () => {
+    setIsCopying(true);
+    try {
+      const text = await getSpaceMarkdownText(id);
+      clipboard.copy(text);
+      notifications.show({ message: t("Copied") });
+      onClose();
+    } catch (err) {
+      notifications.show({
+        message: t("Copy failed") + ": " + err.response?.data?.message,
+        color: "red",
+      });
+    } finally {
+      setIsCopying(false);
     }
   };
 
@@ -143,6 +163,15 @@ export default function ExportModal({
             <Button onClick={onClose} variant="default">
               {t("Cancel")}
             </Button>
+            {type === "space" && (
+              <Button
+                variant="default"
+                onClick={handleCopySpaceAsMarkdown}
+                loading={isCopying}
+              >
+                {t("Copy as Markdown")}
+              </Button>
+            )}
             <Button onClick={handleExport} loading={isExporting}>{t("Export")}</Button>
           </Group>
         </Modal.Body>

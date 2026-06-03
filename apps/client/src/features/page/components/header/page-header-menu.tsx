@@ -42,6 +42,8 @@ import {
 import { formattedDate } from "@/lib/time.ts";
 import { PageEditModeToggle } from "@/features/user/components/page-state-pref.tsx";
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
+import { useKanbanBoardQuery } from "@/features/kanban/queries/kanban-query";
+import { kanbanToMarkdown } from "@/features/kanban/utils/kanban-markdown";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import { PageShareModal } from "@/ee/page-permission";
 import {
@@ -101,7 +103,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     <>
       <ConnectionWarning />
 
-      {!readOnly && page?.type !== "board" && <PageEditModeToggle size="xs" />}
+      {!readOnly && page?.type !== "board" && page?.type !== "kanban" && <PageEditModeToggle size="xs" />}
 
       <PageShareModal readOnly={readOnly} />
 
@@ -147,6 +149,9 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   const { data: page, isLoading } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+  const { data: kanbanColumns } = useKanbanBoardQuery(
+    page?.type === "kanban" ? page.id : undefined,
+  );
   const { openDeleteModal } = useDeletePageModal();
   const { handleDelete } = useTreeMutation(page?.spaceId ?? "");
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
@@ -178,6 +183,12 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   };
 
   const handleCopyAsMarkdown = () => {
+    if (page?.type === "kanban") {
+      const markdown = kanbanToMarkdown(page.title ?? "", kanbanColumns ?? []);
+      clipboard.copy(markdown);
+      notifications.show({ message: t("Copied") });
+      return;
+    }
     if (!pageEditor) return;
     const html = pageEditor.getHTML();
     const markdown = htmlToMarkdown(html);
@@ -278,7 +289,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
 
           <Menu.Divider />
 
-          {page?.type !== "board" && (
+          {page?.type !== "board" && page?.type !== "kanban" && (
             <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
               <Group wrap="nowrap">
                 <PageWidthToggle label={t("Full width")} />
@@ -311,7 +322,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </Menu.Item>
           )}
 
-          {page?.type !== "board" && (
+          {page?.type !== "board" && page?.type !== "kanban" && (
             <>
               <Menu.Item
                 leftSection={<IconFileExport size={16} />}
@@ -354,7 +365,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
                 position="left-start"
               >
                 <div style={{ width: 210 }}>
-                  {page?.type !== "board" && (
+                  {page?.type !== "board" && page?.type !== "kanban" && (
                     <Text size="xs" c="dimmed" truncate="end">
                       {t("Word count: {{wordCount}}", {
                         wordCount: pageEditor?.storage?.characterCount?.words(),

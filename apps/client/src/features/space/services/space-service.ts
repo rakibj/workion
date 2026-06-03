@@ -60,6 +60,13 @@ export async function changeMemberRole(
   await api.post("/spaces/members/change-role", data);
 }
 
+export async function getSpaceMarkdownText(spaceId: string): Promise<string> {
+  const req = await api.post<{ text: string }>('/spaces/export-text', {
+    spaceId,
+  });
+  return req.data.text;
+}
+
 export async function exportSpace(data: IExportSpaceParams): Promise<void> {
   const req = await api.post("/spaces/export", data, {
     responseType: "blob",

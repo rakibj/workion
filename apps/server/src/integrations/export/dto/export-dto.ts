@@ -42,3 +42,9 @@ export class ExportSpaceDto {
   @IsBoolean()
   includeAttachments?: boolean;
 }
+
+export class ExportSpaceTextDto {
+  @IsString()
+  @IsNotEmpty()
+  spaceId: string;
+}

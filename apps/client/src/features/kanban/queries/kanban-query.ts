@@ -7,10 +7,10 @@ const milestonesKey = (pageId: string) => ["kanban-milestones", pageId];
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
-export function useKanbanBoardQuery(pageId: string) {
+export function useKanbanBoardQuery(pageId: string | undefined) {
   return useQuery({
-    queryKey: boardKey(pageId),
-    queryFn: () => kanbanService.getBoard(pageId),
+    queryKey: boardKey(pageId ?? ""),
+    queryFn: () => kanbanService.getBoard(pageId!),
     enabled: !!pageId,
   });
 }
