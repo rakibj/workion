@@ -438,13 +438,40 @@ Caddy auto-provisions Let's Encrypt SSL on first request. No certbot needed.
 ### Step 10 — Verify
 
 - [x] App loads at `http://157.173.120.4` ✅
-- [ ] Can register / log in
+- [x] Can register / log in ✅
 - [ ] Can create a space and page
 - [ ] File upload works (attached image appears)
 - [ ] Real-time collab works (open same page in two tabs)
-- [ ] Check Upstash dashboard — commands are incrementing (confirms Redis is connected)
+- [x] Check Upstash dashboard — commands are incrementing (confirms Redis is connected) ✅
 - [ ] Check Neon dashboard — connection count shows active connections
 - [ ] Domain configured and HTTPS working (pending domain decision)
+
+---
+
+### Redis TLS fix (resolved 2026-06-03)
+
+**Problem:** All ioredis connections failed with `ECONNRESET` on startup, causing 500 on every request (including `/api/auth/setup`). Root cause: the codebase used `parseRedisUrl()` to decompose the `rediss://` URL into host/port/password and passed those as individual ioredis options — but never passed a `tls` option. Upstash requires TLS and immediately reset plain TCP connections.
+
+**Affected modules:** `nestjs-ioredis`, BullMQ, Hocuspocus collab, throttler (the throttler was the direct cause of 500s since `ThrottlerGuard` runs on every request).
+
+**Fix pattern — always pass the URL string directly to ioredis, never reconstruct from parsed parts:**
+
+```ts
+// ❌ Wrong — loses TLS from rediss:// protocol
+const c = parseRedisUrl(url);
+new Redis({ host: c.host, port: c.port, password: c.password });
+
+// ✅ Correct — ioredis detects rediss:// and enables TLS automatically
+new Redis(url);
+
+// ✅ Correct for @nestjs-labs/nestjs-ioredis
+config: { url: environmentService.getRedisUrl() }
+
+// ✅ Correct for BullMQ (pre-built instance)
+connection: new IORedis(url, { maxRetriesPerRequest: null })
+```
+
+**Rule:** Never use `parseRedisUrl()` to feed ioredis constructors directly. `parseRedisUrl()` is only safe for reading metadata (e.g. `family` flag for IPv4/IPv6 forcing) when the URL is ALSO passed as the connection string.
 
 ---
 

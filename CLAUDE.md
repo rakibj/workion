@@ -64,6 +64,27 @@ docmost/
 
 ---
 
+## Redis Connection Rule
+
+**Always pass the URL string directly to ioredis. Never reconstruct a connection from `parseRedisUrl()` parts.**
+
+`parseRedisUrl()` decomposes the URL into host/port/password but discards the `rediss://` TLS signal. Passing those parts to an ioredis constructor creates a plain TCP connection that Upstash (and any TLS-only Redis) immediately resets.
+
+```ts
+// ❌ — loses TLS
+const c = parseRedisUrl(url);
+new Redis({ host: c.host, port: c.port, password: c.password });
+
+// ✅ — ioredis detects rediss:// and enables TLS
+new Redis(url);
+new Redis(url, { maxRetriesPerRequest: null }); // BullMQ
+config: { url }                                  // @nestjs-labs/nestjs-ioredis
+```
+
+`parseRedisUrl()` is still safe for reading metadata (e.g. `family` for IPv4/IPv6 forcing) as long as the URL is also passed as the actual connection string.
+
+---
+
 ## Infrastructure (Dev)
 
 ```bash
