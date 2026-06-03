@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import IORedis from 'ioredis';
 import { EnvironmentService } from '../environment/environment.service';
-import { createRetryStrategy, parseRedisUrl } from '../../common/helpers';
 import { QueueName } from './constants';
 import { GeneralQueueProcessor } from './processors/general-queue.processor';
 
@@ -10,17 +10,10 @@ import { GeneralQueueProcessor } from './processors/general-queue.processor';
   imports: [
     BullModule.forRootAsync({
       useFactory: (environmentService: EnvironmentService) => {
-        const redisConfig = parseRedisUrl(environmentService.getRedisUrl());
         return {
-          connection: {
-            host: redisConfig.host,
-            port: redisConfig.port,
-            password: redisConfig.password,
-            db: redisConfig.db,
-            family: redisConfig.family,
-            tls: redisConfig.tls ? { rejectUnauthorized: false } : undefined,
-            retryStrategy: createRetryStrategy(),
-          },
+          connection: new IORedis(environmentService.getRedisUrl(), {
+            maxRetriesPerRequest: null,
+          }),
           defaultJobOptions: {
             attempts: 3,
             backoff: {

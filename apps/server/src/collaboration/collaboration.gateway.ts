@@ -5,11 +5,7 @@ import { AuthenticationExtension } from './extensions/authentication.extension';
 import { PersistenceExtension } from './extensions/persistence.extension';
 import { Injectable } from '@nestjs/common';
 import { EnvironmentService } from '../integrations/environment/environment.service';
-import {
-  createRetryStrategy,
-  parseRedisUrl,
-  RedisConfig,
-} from '../common/helpers';
+import { createRetryStrategy } from '../common/helpers';
 import { LoggerExtension } from './extensions/logger.extension';
 import {
   RedisSyncExtension,
@@ -29,7 +25,6 @@ import {
 @Injectable()
 export class CollaborationGateway {
   private readonly hocuspocus: Hocuspocus;
-  private redisConfig: RedisConfig;
   // @ts-ignore
   private readonly redisSync: RedisSyncExtension<CollabEventHandlers> | null =
     null;
@@ -42,7 +37,6 @@ export class CollaborationGateway {
     private environmentService: EnvironmentService,
     private collabEventsService: CollaborationHandler,
   ) {
-    this.redisConfig = parseRedisUrl(this.environmentService.getRedisUrl());
     this.withRedis = !this.environmentService.isCollabDisableRedis();
 
     this.hocuspocus = new Hocuspocus({
@@ -59,15 +53,7 @@ export class CollaborationGateway {
     if (this.withRedis) {
       // @ts-ignore
       this.redisSync = new RedisSyncExtension({
-        redis: new RedisClient({
-          host: this.redisConfig.host,
-          port: this.redisConfig.port,
-          password: this.redisConfig.password,
-          db: this.redisConfig.db,
-          family: this.redisConfig.family,
-          tls: this.redisConfig.tls ? { rejectUnauthorized: false } : undefined,
-          retryStrategy: createRetryStrategy(),
-        }),
+        redis: new RedisClient(this.environmentService.getRedisUrl()),
         serverId: `collab-${os?.hostname()}-${nanoid(10)}`,
         prefix: 'collab',
         pack,
