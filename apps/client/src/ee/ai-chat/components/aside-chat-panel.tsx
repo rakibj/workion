@@ -57,8 +57,16 @@ export default function AsideChatPanel() {
     },
   });
 
+  const isBoardPage = page?.type === "board";
+
   useEffect(() => {
-    if (page && !chatId) {
+    if (isBoardPage) {
+      setAsideState({ tab: "", isAsideOpen: false });
+    }
+  }, [isBoardPage, setAsideState]);
+
+  useEffect(() => {
+    if (page && !chatId && page.type !== "board") {
       setContextPages([{ id: page.id, title: page.title || "", slugId: page.slugId }]);
     }
   }, [page, chatId]);
@@ -94,10 +102,12 @@ export default function AsideChatPanel() {
       }
       event.preventDefault();
       setChatId(undefined);
-      if (page) {
+      if (page && page.type !== "board") {
         setContextPages([
           { id: page.id, title: page.title || "", slugId: page.slugId },
         ]);
+      } else {
+        setContextPages([]);
       }
     },
     [page],

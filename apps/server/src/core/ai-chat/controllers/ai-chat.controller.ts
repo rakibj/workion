@@ -24,6 +24,7 @@ import { AiStreamService } from '../services/ai-stream.service';
 import { AiChatRepo } from '@docmost/db/repos/ai-chat/ai-chat.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { KanbanRepo, KanbanColumnWithCards } from '@docmost/db/repos/kanban/kanban.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { FileInterceptor } from '../../../common/interceptors/file.interceptor';
@@ -50,6 +51,7 @@ export class AiChatController {
     private readonly storageService: StorageService,
     private readonly environmentService: EnvironmentService,
     private readonly pageRepo: PageRepo,
+    private readonly kanbanRepo: KanbanRepo,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -375,11 +377,46 @@ export class AiChatController {
 
     if (!validPages.length) return undefined;
 
-    const pageBlocks = validPages
-      .map((p) => `## ${p.title || 'Untitled'}\n\n${p.textContent?.trim() || '(empty page)'}`)
-      .join('\n\n---\n\n');
+    const pageBlocks = (
+      await Promise.all(
+        validPages.map(async (p) => {
+          const title = p.title || 'Untitled';
+          if (p.type === 'board') {
+            return null;
+          }
+          if (p.type === 'kanban') {
+            const columns = await this.kanbanRepo.getBoardByPageId(p.id);
+            return `## ${title} (Project Tracker)\n\n${this.formatKanbanAsText(columns)}`;
+          }
+          return `## ${title}\n\n${p.textContent?.trim() || '(empty page)'}`;
+        }),
+      )
+    ).filter(Boolean).join('\n\n---\n\n');
+
+    if (!pageBlocks) return undefined;
 
     return `You are a helpful assistant. Answer based on the conversation and the following page context provided by the user.\n\n${pageBlocks}`;
+  }
+
+  private formatKanbanAsText(columns: KanbanColumnWithCards[]): string {
+    if (!columns.length) return '(no columns)';
+    return columns
+      .map((col) => {
+        if (!col.cards.length) return `**${col.name}**\n(no cards)`;
+        const cards = col.cards
+          .map((card) => {
+            let line = `- ${card.title || 'Untitled'}`;
+            if (card.priority) line += ` [${card.priority}]`;
+            if (card.milestone) line += ` [milestone: ${card.milestone.name}]`;
+            if (card.assignees?.length)
+              line += ` [assigned: ${card.assignees.map((a) => a.name).join(', ')}]`;
+            if (card.description?.trim()) line += `\n  ${card.description.trim()}`;
+            return line;
+          })
+          .join('\n');
+        return `**${col.name}**\n${cards}`;
+      })
+      .join('\n\n');
   }
 
   private buildCoreMessages(messages: AiChatMessage[]): ModelMessage[] {
