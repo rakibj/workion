@@ -29,6 +29,7 @@ import type {
   KanbanData,
 } from "@docmost/editor-ext";
 import classes from "./kanban.module.css";
+import { generateId } from "@/lib/utils.tsx";
 
 // ─── color palette ────────────────────────────────────────────────────────────
 
@@ -46,12 +47,7 @@ const colorCss = (name: KanbanColor) =>
 
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
-function genId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+const genId = generateId;
 
 function moveCard(
   data: KanbanData,

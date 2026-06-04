@@ -110,6 +110,15 @@ export function platformModifierKey(event: KeyboardEvent): boolean {
 
 export const platformModifierLabel = _isApple ? "⌘" : "Ctrl";
 
+// crypto.randomUUID() is only available in secure contexts (HTTPS/localhost).
+// Over plain HTTP, it is undefined — fall back to a Math.random-based ID.
+export function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function castToBoolean(value: unknown): boolean {
   if (value == null) {
     return false;

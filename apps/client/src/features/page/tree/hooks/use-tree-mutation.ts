@@ -22,6 +22,7 @@ import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import type { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
+import { generateId } from "@/lib/utils.tsx";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
@@ -150,12 +151,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
 
       // Insert a placeholder node immediately so the sidebar updates before
       // the server round-trip completes (~180ms to Europe).
-      // crypto.randomUUID() requires a secure context (HTTPS/localhost), so
-      // fall back to a Math.random ID when the app is served over plain HTTP.
-      const tempId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const tempId = generateId();
       const tempNode: SpaceTreeNode = {
         id: tempId,
         slugId: tempId,
