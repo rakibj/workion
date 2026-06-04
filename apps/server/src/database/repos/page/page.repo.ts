@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '../../types/kysely.types';
 import { dbOrTx, executeTx } from '../../utils';
@@ -16,6 +18,11 @@ import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import {
+  CacheKey,
+  PAGE_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
+import { withCache } from '../../../common/helpers/with-cache';
 
 @Injectable()
 export class PageRepo {
@@ -23,6 +30,7 @@ export class PageRepo {
     @InjectKysely() private readonly db: KyselyDB,
     private spaceMemberRepo: SpaceMemberRepo,
     private eventEmitter: EventEmitter2,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   private baseFields: Array<keyof Page> = [
@@ -46,6 +54,46 @@ export class PageRepo {
   ];
 
   async findById(
+    pageId: string,
+    opts?: {
+      includeContent?: boolean;
+      includeTextContent?: boolean;
+      includeYdoc?: boolean;
+      includeSpace?: boolean;
+      includeCreator?: boolean;
+      includeLastUpdatedBy?: boolean;
+      includeContributors?: boolean;
+      includeDeletedBy?: boolean;
+      includeHasChildren?: boolean;
+      withLock?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Page> {
+    const isBase =
+      !opts?.includeContent &&
+      !opts?.includeTextContent &&
+      !opts?.includeYdoc &&
+      !opts?.includeSpace &&
+      !opts?.includeCreator &&
+      !opts?.includeLastUpdatedBy &&
+      !opts?.includeContributors &&
+      !opts?.includeDeletedBy &&
+      !opts?.includeHasChildren &&
+      !opts?.withLock &&
+      !opts?.trx;
+
+    if (isBase) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.PAGE(pageId),
+        PAGE_CACHE_TTL_MS,
+        () => this._findById(pageId, opts),
+      );
+    }
+    return this._findById(pageId, opts);
+  }
+
+  private async _findById(
     pageId: string,
     opts?: {
       includeContent?: boolean;
@@ -106,6 +154,12 @@ export class PageRepo {
     return query.executeTakeFirst();
   }
 
+  async invalidatePageCache(pageId: string, slugId?: string): Promise<void> {
+    const dels: Promise<any>[] = [this.cacheManager.del(CacheKey.PAGE(pageId))];
+    if (slugId) dels.push(this.cacheManager.del(CacheKey.PAGE(slugId)));
+    await Promise.all(dels);
+  }
+
   async findManyByIds(
     pageIds: string[],
     opts?: {
@@ -153,6 +207,8 @@ export class PageRepo {
       )
       .executeTakeFirst();
 
+    await Promise.all(pageIds.map((id) => this.cacheManager.del(CacheKey.PAGE(id))));
+
     this.eventEmitter.emit(EventName.PAGE_UPDATED, {
       pageIds: pageIds,
       workspaceId: updatePageData.workspaceId,
@@ -190,6 +246,7 @@ export class PageRepo {
     }
 
     await query.execute();
+    await this.cacheManager.del(CacheKey.PAGE(pageId));
   }
 
   async removePage(
@@ -234,6 +291,8 @@ export class PageRepo {
 
         await trx.deleteFrom('shares').where('pageId', 'in', pageIds).execute();
       });
+
+      await Promise.all(pageIds.map((id) => this.cacheManager.del(CacheKey.PAGE(id))));
 
       this.eventEmitter.emit(EventName.PAGE_SOFT_DELETED, {
         pageIds: pageIds,
@@ -302,6 +361,9 @@ export class PageRepo {
         .where('id', '=', pageId)
         .execute();
     }
+
+    await Promise.all(pageIds.map((id) => this.cacheManager.del(CacheKey.PAGE(id))));
+
     this.eventEmitter.emit(EventName.PAGE_RESTORED, {
       pageIds: pageIds,
       workspaceId: workspaceId,

@@ -13,6 +13,7 @@ export const CacheKey = {
     `entity:user:${userId}:${workspaceId}`,
   SPACE: (spaceId: string, workspaceId: string) =>
     `entity:space:${spaceId}:${workspaceId}`,
+  PAGE: (pageId: string) => `entity:page:${pageId}`,
 };
 
 // Permission caches dedupe repeated checks within and across short request bursts.
@@ -24,3 +25,4 @@ export const WORKSPACE_CACHE_TTL_MS = 300_000; // 5 min
 export const USER_CACHE_TTL_MS = 60_000;        // 1 min
 export const SPACE_CACHE_TTL_MS = 120_000;      // 2 min
 export const MEMBER_COUNT_CACHE_TTL_MS = 60_000; // 1 min
+export const PAGE_CACHE_TTL_MS = 60_000;         // 1 min — base metadata only, not content

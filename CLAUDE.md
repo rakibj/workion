@@ -521,44 +521,19 @@ Added `@fastify/compress@8.3.1` to `apps/server/package.json`. Registered with `
 
 ---
 
-### PERF-3: Page Slug + Tree Caching (completes PERF original spec)
+### PERF-3: Page Base Metadata Caching
 
-**Priority: P1 — ~1hr, eliminates repeated Neon hits on every page navigation**
-**Status: PENDING APPROVAL**
+**Priority: P1 — ~1hr, reduces redundant Neon hits for page validation calls**
+**Status: DONE (2026-06-04)**
 
-**Background**
+Added `PAGE` cache key (`entity:page:{pageId}`, 60s TTL) to `cache-keys.ts`. Wrapped `PageRepo.findById()` base case (no opts — the metadata-only call used as "page exists?" checks throughout the controller) with `withCache()`, following the exact user/workspace repo pattern. Added `invalidatePageCache()` and wired it into `updatePages`, `removePage`, `deletePage`, and `restorePage`.
 
-Commit `62ba62d` cached workspace, user, and space entity reads. The two highest-frequency uncached paths are page slug lookup (fires on every page navigation) and sidebar tree (fires on every expand). Both are read-heavy and invalidated by well-defined write events.
-
-**What to cache**
-
-| Cache key | Source method | TTL | Invalidate when |
-|---|---|---|---|
-| `entity:page:slug:{slugId}` | `PageRepo.findBySlugId()` | 60s | Page updated (title, icon, emoji, status, parent) or deleted |
-| `entity:tree:{spaceId}:{parentId}` | `PageRepo.findSidebarChildren()` | 60s | Page created, updated, moved, or deleted within that space |
-
-`parentId` in the tree key is the literal value — `"null"` string for root. This lets root and sub-trees invalidate independently.
-
-**Implementation plan**
-
-1. Add `PAGE_SLUG` and `PAGE_TREE` key functions to `cache-keys.ts`, plus `PAGE_CACHE_TTL_MS = 60_000`.
-2. Wrap `PageRepo.findBySlugId()` and `PageRepo.findSidebarChildren()` with `withCache()`.
-3. In `PageRepo` write methods (`update`, `delete`, `move`): `del` the specific slug key and **all tree keys for that spaceId** (pattern delete: `entity:tree:{spaceId}:*`).
-4. In `PageService.create()`: invalidate `entity:tree:{spaceId}:{parentId}` for the new page's parent.
-
-**Edge cases**
-- Pattern-delete `entity:tree:{spaceId}:*` on any page mutation in a space — safer than tracking specific parent chains.
-- `withCache` swallows Redis errors; Neon is always the fallback.
-- Moving a page invalidates trees for both old and new parent spaces.
-- Page emoji/icon changes must invalidate — they render in the sidebar.
-
-**UX risk:** Low. Worst case on a cache miss: a stale sidebar title for up to 60s. Mitigation: any write (rename, move, delete) immediately deletes the key before returning, so the user who performs the action always sees fresh data. Another user on a different session sees stale data for at most the TTL.
+**What is NOT cached:** `findById` with any opts (includeContent, includeYdoc, etc.) — page content changes constantly via Yjs collaboration and must never be cached. Sidebar tree (`getSidebarPages`) is user-permission-dependent and skipped.
 
 **Files touched**
 ```
 apps/server/src/common/helpers/cache-keys.ts
 apps/server/src/database/repos/page/page.repo.ts
-apps/server/src/core/page/services/page.service.ts   (create invalidation)
 ```
 
 ---
