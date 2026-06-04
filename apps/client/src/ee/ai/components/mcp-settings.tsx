@@ -1,5 +1,4 @@
 import {
-  Anchor,
   Group,
   List,
   Text,
@@ -8,12 +7,11 @@ import {
   ActionIcon,
   Tooltip,
   Stack,
-  Alert,
 } from "@mantine/core";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import React, { useState } from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { updateWorkspace } from "@/features/workspace/services/workspace-service.ts";
 import { notifications } from "@mantine/notifications";
 import { useHasFeature } from "@/ee/hooks/use-feature";
@@ -48,27 +46,13 @@ export default function McpSettings() {
 
   return (
     <Stack gap="lg">
-      {!hasAccess && (
-        <Alert icon={<IconInfoCircle />} title={upgradeLabel} color="blue">
-          {t(
-            "MCP is only available in the Docmost enterprise edition. Contact sales@docmost.com.",
-          )}
-        </Alert>
-      )}
-
       <Group justify="space-between" wrap="nowrap" gap="xl">
         <div>
           <Text size="md">{t("Model Context Protocol (MCP)")}</Text>
           <Text size="sm" c="dimmed">
             {t(
               "Enable the MCP server to allow AI assistants and tools to interact with your workspace content.",
-            )}{" "}
-            <Trans
-              i18nKey="View the <anchor>MCP documentation</anchor>."
-              components={{
-                anchor: <Anchor href="https://docmost.com/docs/user-guide/mcp" target="_blank" size="sm" />,
-              }}
-            />
+            )}
           </Text>
         </div>
 

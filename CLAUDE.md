@@ -135,7 +135,7 @@ REDIS_URL=redis://localhost:6379
 |---|---|---|
 | App (NestJS) | Contabo VPS — Docker | Live at `http://157.173.120.4` |
 | Redis | Contabo VPS — Docker (local) | Running alongside app, `REDIS_URL=redis://redis:6379` |
-| Postgres | Neon (managed, ap-southeast-1) | Connected |
+| Postgres | Neon (managed, eu-central-1 Frankfurt) | Connected |
 | File storage | Cloudflare R2 | Connected (bucket: `workion`) |
 
 **No domain in use.** App is accessed directly via bare IP `http://157.173.120.4`. No DNS, no Caddy, no Cloudflare proxy. Do not reference `projects.gameloops.io` or suggest domain-based solutions until a domain is actually set up.
@@ -160,7 +160,7 @@ git push origin main
 
 # 2. SSH into the VPS and run
 ssh root@157.173.120.4
-cd /home/apps/docmost
+cd /home/apps/workion
 ./deploy.sh
 ```
 
@@ -180,7 +180,7 @@ chmod +x deploy.sh
 
 ```bash
 ssh root@157.173.120.4
-cd /home/apps/docmost
+cd /home/apps/workion
 docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
 ```
 
@@ -188,7 +188,7 @@ docker compose -f docker-compose.prod.yml exec app pnpm --filter server migratio
 
 ```bash
 ssh root@157.173.120.4
-cd /home/apps/docmost
+cd /home/apps/workion
 # Edit .env on the server
 nano .env
 
@@ -210,7 +210,7 @@ docker compose -f docker-compose.prod.yml logs --tail=100 app
 
 ```bash
 ssh root@157.173.120.4
-cd /home/apps/docmost
+cd /home/apps/workion
 git log --oneline -10          # find the target commit hash
 git checkout <commit-hash>
 docker compose -f docker-compose.prod.yml build --no-cache
@@ -499,46 +499,161 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 Specs waiting for approval before implementation. Do not implement any of these until explicitly approved in conversation.
 
+> **Performance spec audit (2026-06-04):** Full performance audit completed. Root causes of slowness: (1) no HTTP compression — all JSON sent raw, (2) page and tree reads still hit Neon on every navigation despite partial cache rollout, (3) share reads uncached, (4) Neon direct connection (not pooler) adds per-query overhead, (5) notification query always refetches. Specs below are ordered by priority. P0 and P1 are safe to ship together in one pass.
+
 ---
 
-### SPEC: Redis Read Caching
+### PERF-1: Neon Connection Pooler
 
+**Priority: P0 — 2 min env var change, zero code, biggest latency gain per query**
+**Status: DONE (2026-06-04)**
+
+Switched `DATABASE_URL` on the VPS from the direct Neon endpoint to the PgBouncer pooler endpoint (`ep-super-fire-a2rltgof-pooler.eu-central-1.aws.neon.tech`). Added `&pgbouncer=true` to disable prepared statements (required for PgBouncer transaction pooling mode). No code change, no rebuild — just a restart. Eliminates 50–100ms cold-connection overhead per query burst.
+
+---
+
+### PERF-2: HTTP Response Compression
+
+**Priority: P0 — 15 min, biggest bandwidth win**
+**Status: DONE (2026-06-04)**
+
+Added `@fastify/compress@8.3.1` to `apps/server/package.json`. Registered with `{ global: true }` in `apps/server/src/main.ts` before all other plugin registrations. SSE routes (`text/event-stream`) are excluded automatically by the plugin — not in the default compressible MIME type list, so AI streaming is safe. 60–80% response size reduction for all JSON payloads.
+
+---
+
+### PERF-3: Page Slug + Tree Caching (completes PERF original spec)
+
+**Priority: P1 — ~1hr, eliminates repeated Neon hits on every page navigation**
 **Status: PENDING APPROVAL**
 
-**Problem**
+**Background**
 
-Every page load hits Neon (remote Postgres, ~10–30ms per query) for data that almost never changes. With the server in Europe and users in Asia, 5–10 uncached queries per page load adds 50–300ms of avoidable latency. Redis is already running locally on the VPS (sub-1ms round-trip). Only two permission lookups are currently cached.
+Commit `62ba62d` cached workspace, user, and space entity reads. The two highest-frequency uncached paths are page slug lookup (fires on every page navigation) and sidebar tree (fires on every expand). Both are read-heavy and invalidated by well-defined write events.
 
 **What to cache**
 
-| Cache key | Source | TTL | Invalidate when |
+| Cache key | Source method | TTL | Invalidate when |
 |---|---|---|---|
-| `user:me:{userId}` | `UserRepo.findById()` | 300s | User updates profile or workspace settings |
-| `spaces:{workspaceId}` | `SpaceRepo.findByWorkspaceId()` | 120s | Space created, updated, or deleted |
-| `page:slug:{slugId}` | `PageRepo.findBySlugId()` | 30s | Page updated (title, icon, status) |
-| `tree:{spaceId}:{parentId}` | `PageRepo.findSidebarChildren()` | 60s | Page created, moved, or deleted in that space |
-| `space:members:{spaceId}` | `SpaceMemberRepo.findBySpaceId()` | 120s | Member added or removed |
+| `entity:page:slug:{slugId}` | `PageRepo.findBySlugId()` | 60s | Page updated (title, icon, emoji, status, parent) or deleted |
+| `entity:tree:{spaceId}:{parentId}` | `PageRepo.findSidebarChildren()` | 60s | Page created, updated, moved, or deleted within that space |
 
-**No schema changes.** Pure cache layer using the existing `withCache()` helper and `CACHE_MANAGER` token already wired throughout the app.
+`parentId` in the tree key is the literal value — `"null"` string for root. This lets root and sub-trees invalidate independently.
 
 **Implementation plan**
 
-1. Add new key constants to `cache-keys.ts` for each entry above.
-2. Wrap the relevant repo `find*` methods with `withCache()` — one change per method.
-3. Add `cacheManager.del(key)` calls in the corresponding repo write methods (update/delete) and service create methods. Invalidation must be synchronous with the write — no eventual consistency.
-4. No migration, no new module, no frontend changes.
+1. Add `PAGE_SLUG` and `PAGE_TREE` key functions to `cache-keys.ts`, plus `PAGE_CACHE_TTL_MS = 60_000`.
+2. Wrap `PageRepo.findBySlugId()` and `PageRepo.findSidebarChildren()` with `withCache()`.
+3. In `PageRepo` write methods (`update`, `delete`, `move`): `del` the specific slug key and **all tree keys for that spaceId** (pattern delete: `entity:tree:{spaceId}:*`).
+4. In `PageService.create()`: invalidate `entity:tree:{spaceId}:{parentId}` for the new page's parent.
 
 **Edge cases**
-- Cache miss always falls through to DB — never throw if Redis is unavailable (`withCache` already swallows errors).
-- Invalidate on any field change, not just content — icon, title, status, parent all affect what the sidebar renders.
-- `tree` cache key includes `parentId` (null for root) so root tree and sub-trees are invalidated independently.
-- Space member cache must be invalidated when group membership changes (group → space, not just user → space).
+- Pattern-delete `entity:tree:{spaceId}:*` on any page mutation in a space — safer than tracking specific parent chains.
+- `withCache` swallows Redis errors; Neon is always the fallback.
+- Moving a page invalidates trees for both old and new parent spaces.
+- Page emoji/icon changes must invalidate — they render in the sidebar.
+
+**UX risk:** Low. Worst case on a cache miss: a stale sidebar title for up to 60s. Mitigation: any write (rename, move, delete) immediately deletes the key before returning, so the user who performs the action always sees fresh data. Another user on a different session sees stale data for at most the TTL.
 
 **Files touched**
 ```
 apps/server/src/common/helpers/cache-keys.ts
-apps/server/src/database/repos/user/user.repo.ts
-apps/server/src/database/repos/space/space.repo.ts
 apps/server/src/database/repos/page/page.repo.ts
-apps/server/src/database/repos/space/space-member.repo.ts
+apps/server/src/core/page/services/page.service.ts   (create invalidation)
+```
+
+---
+
+### PERF-4: Share Entity Caching
+
+**Priority: P1 — 30 min, eliminates DB hit on every public share page load**
+**Status: PENDING APPROVAL**
+
+**Problem**
+
+Every public share page open (`/share/:shareId/p/:pageSlug`) calls `ShareRepo.findByKey()` to validate the share exists and is active. Shares almost never change after creation. These reads currently go straight to Neon.
+
+**What to cache**
+
+| Cache key | Source method | TTL | Invalidate when |
+|---|---|---|---|
+| `entity:share:{shareKey}` | `ShareRepo.findByKey()` | 300s | Share updated (password, expiry, enabled toggle) or deleted |
+
+**Implementation plan**
+
+1. Add `SHARE` key and `SHARE_CACHE_TTL_MS = 300_000` to `cache-keys.ts`.
+2. Wrap `ShareRepo.findByKey()` with `withCache()`.
+3. In `ShareRepo.update()` and `ShareRepo.delete()`: invalidate `entity:share:{shareKey}`.
+
+**UX risk:** Low. If a share is disabled/deleted, a cached response persists for up to 5 minutes. Acceptable for personal use. If tighter invalidation is needed, reduce TTL to 60s — still eliminates the majority of Neon hits.
+
+**Files touched**
+```
+apps/server/src/common/helpers/cache-keys.ts
+apps/server/src/database/repos/share/share.repo.ts
+```
+
+---
+
+### PERF-5: Notification Query staleTime
+
+**Priority: P2 — 2 min frontend change, stops unnecessary refetches**
+**Status: PENDING APPROVAL**
+
+**Problem**
+
+`useNotificationsQuery` is configured with `staleTime: 0` and `gcTime: 0`. Every time the notification popover mounts (every time the bell icon is clicked), it fires a fresh request to the server. New notifications already arrive in real time via WebSocket — the initial-load fetch is the only one that needs to be fresh.
+
+**Fix**
+
+In the notification query file, change:
+```ts
+// Before
+staleTime: 0,
+gcTime: 0,
+
+// After
+staleTime: 30_000,   // 30s — WebSocket handles real-time delivery
+gcTime: 60_000,      // keep in memory 1 min after popover closes
+```
+
+**UX risk:** None. The WebSocket `notification` event already pushes new notifications into the query cache via `queryClient.invalidateQueries`. The staleTime only affects re-opens of the popover within 30 seconds — they show cached data instead of refetching, which is fine since real-time delivery via WebSocket is active.
+
+**Files touched**
+```
+apps/client/src/features/notification/  (notification query hook)
+```
+
+---
+
+### PERF-6: QueryClient gcTime (memory cache for fast back-navigation)
+
+**Priority: P2 — 5 min, improves back-navigation feel**
+**Status: PENDING APPROVAL**
+
+**Problem**
+
+`gcTime` is not set in the global `QueryClient` config, so it uses React Query's default of 5 minutes. Once a page is unmounted, its cached data is garbage-collected after 5 minutes. Navigating back to a recently visited page within 5 minutes uses cached data (fast), but after that it refetches. For a knowledge-base app where users browse many pages, extending this window meaningfully reduces refetches.
+
+**Fix**
+
+In `apps/client/src/main.tsx`:
+```ts
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: false,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,   // add: keep cache 30min after unmount
+    },
+  },
+});
+```
+
+**UX risk:** None. `gcTime` only affects when unused cache entries are garbage-collected from memory. It does not affect whether data is considered stale or triggers refetches. Slightly higher memory usage (cached pages stay in RAM longer), but negligible for a personal-use app with few open tabs.
+
+**Files touched**
+```
+apps/client/src/main.tsx
 ```

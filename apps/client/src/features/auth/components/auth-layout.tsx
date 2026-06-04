@@ -12,12 +12,12 @@ export function AuthLayout({ children }: AuthLayoutProps) {
       <Group justify="center" gap={8} className={classes.logo}>
         <img
           src="/icons/favicon-32x32.png"
-          alt="Docion"
+          alt="Workion"
           width={22}
           height={22}
         />
         <Text size="28px" fw={700} style={{ userSelect: "none" }}>
-          Docion
+          Workion
         </Text>
       </Group>
       <main>{children}</main>

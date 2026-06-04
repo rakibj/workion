@@ -308,9 +308,9 @@ export default function SettingsSidebar() {
             size="sm"
             c="dimmed"
             component="a"
-            href="mailto:help@docmost.com"
+            href="mailto:rakib@gameloops.io"
           >
-            help@docmost.com
+            rakib@gameloops.io
           </Text>
         </div>
       )}

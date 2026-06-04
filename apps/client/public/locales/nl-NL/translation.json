@@ -1,4 +1,4 @@
-{
+﻿{
   "Account": "Account",
   "Active": "Actief",
   "Add": "Toevoegen",
@@ -886,7 +886,7 @@
   "Chat transcript": "Chattranscript",
   "Close": "Sluiten",
   "Copy assistant response": "Reactie van assistent kopiëren",
-  "Docmost AI": "Docmost AI",
+  "Docmost AI": "Workion AI",
   "Failed to load chat. An error occurred.": "Chat laden mislukt. Er is een fout opgetreden.",
   "Failed to render this message.": "Dit bericht kon niet worden weergegeven.",
   "How can I help you today?": "Hoe kan ik je vandaag helpen?",
@@ -1086,3 +1086,4 @@
   "Page menu for {{name}}": "Paginamenu voor {{name}}",
   "Create subpage of {{name}}": "Subpagina van {{name}} maken"
 }
+

@@ -89,11 +89,11 @@ export function AppHeader() {
             />
           </Tooltip>
 
-          <Link to="/home" className={classes.brand} aria-label="Docion">
+          <Link to="/home" className={classes.brand} aria-label="Workion">
             <Box hiddenFrom="sm" className={classes.brandIcon}>
               <img
                 src="/icons/favicon-32x32.png"
-                alt="Docion"
+                alt="Workion"
                 width={22}
                 height={22}
               />
@@ -104,7 +104,7 @@ export function AppHeader() {
               style={{ userSelect: "none" }}
               visibleFrom="sm"
             >
-              Docion
+              Workion
             </Text>
           </Link>
 

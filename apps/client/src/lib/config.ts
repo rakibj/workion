@@ -10,7 +10,7 @@ declare global {
 }
 
 export function getAppName(): string {
-  return "Docion";
+  return "Workion";
 }
 
 export function getAppUrl(): string {

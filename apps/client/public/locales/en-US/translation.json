@@ -1,4 +1,4 @@
-{
+﻿{
   "Account": "Account",
   "Active": "Active",
   "Add": "Add",
@@ -887,7 +887,7 @@
   "Chat transcript": "Chat transcript",
   "Close": "Close",
   "Copy assistant response": "Copy assistant response",
-  "Docmost AI": "Docmost AI",
+  "Docmost AI": "Workion AI",
   "Failed to load chat. An error occurred.": "Failed to load chat. An error occurred.",
   "Failed to render this message.": "Failed to render this message.",
   "How can I help you today?": "How can I help you today?",
@@ -1087,3 +1087,4 @@
   "Page menu for {{name}}": "Page menu for {{name}}",
   "Create subpage of {{name}}": "Create subpage of {{name}}"
 }
+

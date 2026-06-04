@@ -10,7 +10,7 @@ export function Error404() {
   return (
     <>
       <Helmet>
-        <title>{t("404 page not found")} - Docion</title>
+        <title>{t("404 page not found")} - Workion</title>
       </Helmet>
       <Container className={classes.root}>
         <Title className={classes.title}>{t("404 page not found")}</Title>
