@@ -5,6 +5,14 @@ services:
     env_file: .env
     ports:
       - "3000:3000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
 
   caddy:
     image: caddy:2
@@ -20,3 +28,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  redis_data:
