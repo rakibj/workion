@@ -129,20 +129,25 @@ REDIS_URL=redis://localhost:6379
 
 > Full plan in `Cloud Strategy.md`. Credentials in `Cloud Implementation.md` (never commit).
 
-### Progress
+### Current infrastructure
 
-| Step | Status | Detail |
+| Service | Where | Status |
 |---|---|---|
-| 1. Neon (Postgres) | Done | Connection string saved in Cloud Implementation.md |
-| 2. Upstash (Redis) | Done | REST URL + token saved in Cloud Implementation.md |
-| 3. Cloudflare R2 (storage) | Done | Bucket + API token credentials saved |
-| 4. Order Contabo VPS 10 | **Next** | 4 vCPU / 8GB / Ubuntu 24.04 LTS — add SSH key at checkout |
-| 5. Bootstrap server | Pending | apt install docker + git, create /home/apps/ dirs |
-| 6. Update docker-compose.prod.yml | Pending | Remove local Postgres/Redis, add Caddy service |
-| 7. Configure .env on server | Pending | All managed service URLs + APP_SECRET |
-| 8. Deploy app | Pending | git clone → docker compose up → migration:latest |
-| 9. DNS | Pending | A record: projects.gameloops.io → VPS IP |
-| 10. Verify | Pending | Login, file upload, real-time collab, dashboards |
+| App (NestJS) | Contabo VPS — Docker | Live at `http://157.173.120.4` |
+| Redis | Contabo VPS — Docker (local) | Running alongside app |
+| Postgres | Neon (managed) | Connected |
+| File storage | Cloudflare R2 | Connected (bucket: `workion`) |
+
+**Upstash abandoned** — BullMQ's idle polling exhausted the 500K/month free tier in ~10 days. Switched to local Redis on the VPS (free, no limits, Redis data is non-critical).
+
+**R2 env var fix** — original `.env` used `S3_*` prefix; app requires `AWS_S3_*`. Fixed on server and in Cloud Implementation.md.
+
+### Pending
+
+| Step | Detail |
+|---|---|
+| DNS | A record: `projects.gameloops.io` → `157.173.120.4`, update `APP_URL` + Caddyfile |
+| Verify file upload | Upload image, confirm visible from another device/browser |
 
 ### Target domain
 `projects.gameloops.io` → Contabo VPS → Caddy → NestJS app (port 3000)

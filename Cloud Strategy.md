@@ -1,6 +1,6 @@
 # Cloud Strategy
 
-> Created: 2026-06-02. Updated: 2026-06-02. Update this when infrastructure decisions change.
+> Created: 2026-06-02. Updated: 2026-06-04. Update this when infrastructure decisions change.
 
 > Cloud Implementation progress on /Cloud Implementation.md
 
@@ -58,23 +58,26 @@ Worth setting up before real clients are on it.
 
 ## Cloud Strategy
 
-### Architecture decision: stateless VPS + managed services
-
-Running Postgres + Redis + NestJS on a single VPS creates a fragile server — any restart risks data loss or forced downtime. The correct model:
+### Architecture decision: VPS for app + stateless services, managed only for Postgres
 
 ```
-VPS (stateless)          Managed services
-─────────────────        ──────────────────────────
-NestJS app only    →     Postgres (Neon)
-+ other apps       →     Redis (Upstash)
-                   →     File storage (Cloudflare R2)
+VPS (Docker)                     Managed services
+────────────────────────         ──────────────────────────
+NestJS app                  →    Postgres (Neon)
+Redis (local container)     →    File storage (Cloudflare R2)
++ other apps
 ```
+
+**Why Redis is local (not Upstash):**
+BullMQ runs 6 queue workers that each poll Redis every 10 seconds even with zero usage — ~52K Redis calls/day idle. Upstash's free tier (500K/month) exhausts in ~10 days with no real usage. At this scale, local Redis on the VPS is strictly better: free, faster (no network round-trip), and the data is not critical (queues drain on restart, cache warms quickly).
+
+**Why Postgres stays on Neon:**
+Postgres is the only truly stateful service — losing it means losing all data. Self-hosting Postgres properly requires WAL archiving, backups, and point-in-time recovery. Neon handles all of that for free at this scale.
 
 **Benefits:**
-- Server is disposable — if it dies, spin up a new one, point at same managed services, back online in under an hour. No data at risk.
-- Managed services handle backups and failover
-- Smaller, cheaper VPS needed
-- Multiple apps can share the same VPS behind a reverse proxy
+- Server is disposable for app code — if it dies, spin up a new one, point at Neon + R2, back online in under an hour. No user data at risk.
+- Redis loss on restart is acceptable — queues are transient, cache rebuilds automatically
+- Multiple apps can share the same VPS behind Caddy
 
 ---
 
@@ -114,15 +117,17 @@ NestJS app only    →     Postgres (Neon)
 
 ---
 
-### Managed Redis — Upstash (free tier)
+### Redis — Local (Docker on VPS)
 
 | Detail | Value |
 |---|---|
-| Limit | 10,000 commands/day |
-| Cost | $0 |
-| Upgrade | $0.20 per 100K commands (pay-per-use) |
+| Image | `redis:7-alpine` |
+| Cost | $0 (uses ~5MB of VPS RAM at idle) |
+| Persistence | Docker volume (`redis_data`) — survives container restarts |
 
-**Watch for:** Live cursor / whiteboard features broadcast position updates constantly via Socket.io → Redis pub/sub. This will burn the 10K daily limit fast during active sessions. Monitor from day one via the Upstash dashboard. Upgrade cost is negligible when needed.
+**Why not Upstash:** BullMQ's 6 queue workers poll Redis every 10s idle → ~52K calls/day → exhausts Upstash's 500K/month free tier in ~10 days with zero real usage. Local Redis has no limits.
+
+**Acceptable tradeoff:** If the VPS itself goes down, Redis data (queue jobs, cache) is lost. Queue jobs are transient by design. Cache rebuilds on reconnect. No user data lives in Redis.
 
 ---
 
@@ -146,7 +151,7 @@ Migration path (half a day, no code changes):
 1. Create B2 bucket, get credentials
 2. rclone copy r2:bucket b2:bucket
 3. Point subdomain to Cloudflare, configure B2 pull zone
-4. Swap env vars: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY
+4. Swap env vars: AWS_S3_ENDPOINT, AWS_S3_ACCESS_KEY_ID, AWS_S3_SECRET_ACCESS_KEY
 5. Restart app — done
 ```
 
@@ -160,7 +165,7 @@ Both are S3-compatible. `StorageService` abstraction handles it. No code changes
 |---|---|---|
 | App server | Contabo Cloud VPS 10 | ~$5-6/mo |
 | Postgres | Neon free tier | $0 |
-| Redis | Upstash free tier | $0 |
+| Redis | Local Docker (VPS) | $0 |
 | File storage | Cloudflare R2 free tier | $0 |
 | **Total** | | **~$5-6/mo** |
 
@@ -225,7 +230,7 @@ Each app lives in its own directory with its own `docker-compose.yml`. Restartin
 | Oracle Free Tier | Unreliable — instances reclaimed without warning. Not acceptable for client-facing tool. |
 | Hetzner | Account locked due to verification issues. Revisit if resolved. |
 | Vercel for backend | Architecturally incompatible — NestJS requires a persistent server process. WebSockets, Redis pub/sub, BullMQ, and Hocuspocus all break in serverless. |
-| Everything on one VPS | Data coupled to server lifecycle. Stateless app + managed services is the correct separation. |
+| Everything on one VPS (Postgres included) | Postgres data coupled to server lifecycle — losing the VPS means losing all data. Postgres stays on Neon. Redis is local because it's non-critical transient data. |
 | DigitalOcean | 3x the cost of Contabo for equivalent specs. Not justified. |
 
 ---
@@ -235,7 +240,7 @@ Each app lives in its own directory with its own `docker-compose.yml`. Restartin
 | Trigger | Action |
 |---|---|
 | Neon cold starts noticeable to clients | Upgrade to Neon paid ($19/mo) or switch to Railway Postgres |
-| Upstash 10K/day limit hit regularly | Upgrade to Upstash pay-per-use (~cents/mo at small scale) |
+| Redis on VPS becomes a concern (data loss on crash) | Redis is non-critical (queues + cache only) — acceptable tradeoff at this scale |
 | R2 storage exceeds ~50GB | Migrate to B2 + Cloudflare CDN (half-day, no code changes) |
 | Deploy downtime becomes unacceptable | Set up GitHub Actions → build image → push to registry → server pulls prebuilt |
 | Hetzner verification resolves | Migrate VPS (trivial — stateless app, data on managed services) |
@@ -261,34 +266,46 @@ Each app lives in its own directory with its own `docker-compose.yml`. Restartin
 
 ---
 
-### Step 2 — Provision managed Redis (Upstash)
+### Step 2 — Redis (local, no setup needed)
 
-1. Sign up at [upstash.com](https://upstash.com)
-2. Create a Redis database (region: match Neon region)
-3. Enable TLS (default on Upstash)
-4. Copy the connection string — it looks like:
-   ```
-   rediss://:<pass>@<host>.upstash.io:6379
-   ```
-   Note `rediss://` (double-s) — TLS required.
-5. Monitor daily command usage from day one via the Upstash dashboard. Whiteboard/live cursor features burn the 10K/day free limit fast.
+Redis runs as a Docker container on the VPS alongside the app. No external service needed.
+
+The `docker-compose.prod.yml` includes:
+```yaml
+redis:
+  image: redis:7-alpine
+  restart: unless-stopped
+  volumes:
+    - redis_data:/data
+```
+
+Set in `.env` on the server:
+```env
+REDIS_URL=redis://redis:6379
+```
+
+The `redis` hostname resolves within Docker Compose's internal network.
 
 ---
 
-### Step 3 — Provision file storage (Cloudflare R2)
+### Step 3 — Provision file storage (Cloudflare R2) ✅ DONE
 
 1. Sign up / log in at [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Go to **R2** → Create bucket (name e.g. `docmost-prod`)
+2. Go to **R2** → Create bucket (`workion`)
 3. Go to **R2** → Manage R2 API tokens → Create token with **Object Read & Write** on your bucket
 4. Note your **Account ID** (shown on the R2 overview page)
-5. Collect these values:
+5. Add to `.env` on the server (note: the app uses `AWS_S3_*` prefix for S3-compatible storage):
+   ```env
+   STORAGE_DRIVER=s3
+   AWS_S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   AWS_S3_BUCKET=workion
+   AWS_S3_ACCESS_KEY_ID=<token-access-key>
+   AWS_S3_SECRET_ACCESS_KEY=<token-secret>
+   AWS_S3_REGION=auto
+   AWS_S3_FORCE_PATH_STYLE=false
    ```
-   S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-   S3_BUCKET=docmost-prod
-   S3_ACCESS_KEY_ID=<token-access-key>
-   S3_SECRET_ACCESS_KEY=<token-secret>
-   S3_REGION=auto
-   ```
+
+> **Important:** The env var prefix is `AWS_S3_*` (not `S3_*`) — that's how `EnvironmentService` reads them. R2 is S3-compatible so the AWS SDK talks to it via the `AWS_S3_ENDPOINT`.
 
 ---
 
@@ -324,7 +341,7 @@ mkdir -p /home/apps/workion /home/apps/caddy
 
 ### Step 6 — Update `docker-compose.prod.yml` ✅ DONE
 
-Rewrote the file to remove bundled Postgres/Redis and add Caddy. Final structure:
+Final structure (app + local Redis + Caddy):
 
 ```yaml
 services:
@@ -334,6 +351,14 @@ services:
     env_file: .env
     ports:
       - "3000:3000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
 
   caddy:
     image: caddy:2
@@ -349,6 +374,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  redis_data:
 ```
 
 **Caddyfile** (temporary — using IP until domain is decided):
@@ -378,13 +404,14 @@ nano /home/apps/workion/.env
 APP_URL=http://157.173.120.4
 APP_SECRET=<generated via node crypto>
 DATABASE_URL=<Neon connection string>
-REDIS_URL=<Upstash rediss:// URL>
+REDIS_URL=redis://redis:6379
 STORAGE_DRIVER=s3
-S3_ENDPOINT=https://<R2-account-id>.r2.cloudflarestorage.com
-S3_BUCKET=workion
-S3_ACCESS_KEY_ID=<R2 access key>
-S3_SECRET_ACCESS_KEY=<R2 secret>
-S3_REGION=auto
+AWS_S3_ENDPOINT=https://<R2-account-id>.r2.cloudflarestorage.com
+AWS_S3_BUCKET=workion
+AWS_S3_ACCESS_KEY_ID=<R2 access key>
+AWS_S3_SECRET_ACCESS_KEY=<R2 secret>
+AWS_S3_REGION=auto
+AWS_S3_FORCE_PATH_STYLE=false
 ```
 
 Actual values saved in `Cloud Implementation.md` (never committed to git).
@@ -442,7 +469,7 @@ Caddy auto-provisions Let's Encrypt SSL on first request. No certbot needed.
 - [ ] Can create a space and page
 - [ ] File upload works (attached image appears)
 - [ ] Real-time collab works (open same page in two tabs)
-- [x] Check Upstash dashboard — commands are incrementing (confirms Redis is connected) ✅
+- [x] Check app logs — `RedisModule: the connection was successfully established` ✅
 - [ ] Check Neon dashboard — connection count shows active connections
 - [ ] Domain configured and HTTPS working (pending domain decision)
 
