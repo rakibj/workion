@@ -65,7 +65,10 @@ export function useCreateCommentMutation() {
       const previousCache = queryClient.getQueryData(RQ_KEY(variables.pageId));
 
       const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
-      const tempId = crypto.randomUUID();
+      const tempId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       const tempComment: IComment = {
         id: tempId,

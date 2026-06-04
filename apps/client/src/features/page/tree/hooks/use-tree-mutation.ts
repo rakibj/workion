@@ -150,7 +150,12 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
 
       // Insert a placeholder node immediately so the sidebar updates before
       // the server round-trip completes (~180ms to Europe).
-      const tempId = crypto.randomUUID();
+      // crypto.randomUUID() requires a secure context (HTTPS/localhost), so
+      // fall back to a Math.random ID when the app is served over plain HTTP.
+      const tempId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const tempNode: SpaceTreeNode = {
         id: tempId,
         slugId: tempId,

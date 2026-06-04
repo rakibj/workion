@@ -65,14 +65,10 @@ export function usePageQuery(
 }
 
 export function useCreatePageMutation() {
-  const { t } = useTranslation();
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => createPage(data),
     onSuccess: (data) => {
       invalidateOnCreatePage(data);
-    },
-    onError: (error) => {
-      notifications.show({ message: t("Failed to create page"), color: "red" });
     },
   });
 }
