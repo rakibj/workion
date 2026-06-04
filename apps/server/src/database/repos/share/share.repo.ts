@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '../../types/kysely.types';
 import { dbOrTx } from '../../utils';
@@ -14,12 +16,18 @@ import { ExpressionBuilder, sql } from 'kysely';
 import { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import {
+  CacheKey,
+  SHARE_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
+import { withCache } from '../../../common/helpers/with-cache';
 
 @Injectable()
 export class ShareRepo {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private spaceMemberRepo: SpaceMemberRepo,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   private baseFields: Array<keyof Share> = [
@@ -37,6 +45,32 @@ export class ShareRepo {
   ];
 
   async findById(
+    shareId: string,
+    opts?: {
+      includeSharedPage?: boolean;
+      includeCreator?: boolean;
+      withLock?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Share> {
+    const isBase =
+      !opts?.includeSharedPage &&
+      !opts?.includeCreator &&
+      !opts?.withLock &&
+      !opts?.trx;
+
+    if (isBase) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.SHARE(shareId),
+        SHARE_CACHE_TTL_MS,
+        () => this._findById(shareId),
+      );
+    }
+    return this._findById(shareId, opts);
+  }
+
+  private async _findById(
     shareId: string,
     opts?: {
       includeSharedPage?: boolean;
@@ -100,7 +134,7 @@ export class ShareRepo {
     shareId: string,
     trx?: KyselyTransaction,
   ) {
-    return dbOrTx(this.db, trx)
+    const updated = await dbOrTx(this.db, trx)
       .updateTable('shares')
       .set({ ...updatableShare, updatedAt: new Date() })
       .where(
@@ -110,6 +144,14 @@ export class ShareRepo {
       )
       .returning(this.baseFields)
       .executeTakeFirst();
+
+    if (updated) {
+      await Promise.all([
+        this.cacheManager.del(CacheKey.SHARE(updated.id)),
+        this.cacheManager.del(CacheKey.SHARE(updated.key)),
+      ]);
+    }
+    return updated;
   }
 
   async insertShare(
@@ -125,6 +167,8 @@ export class ShareRepo {
   }
 
   async deleteShare(shareId: string): Promise<void> {
+    const existing = await this._findById(shareId);
+
     let query = this.db.deleteFrom('shares');
 
     if (isValidUUID(shareId)) {
@@ -134,6 +178,13 @@ export class ShareRepo {
     }
 
     await query.execute();
+
+    if (existing) {
+      await Promise.all([
+        this.cacheManager.del(CacheKey.SHARE(existing.id)),
+        this.cacheManager.del(CacheKey.SHARE(existing.key)),
+      ]);
+    }
   }
 
   async deleteBySpaceId(

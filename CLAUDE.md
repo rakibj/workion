@@ -541,7 +541,7 @@ apps/server/src/database/repos/page/page.repo.ts
 ### PERF-4: Share Entity Caching
 
 **Priority: P1 — 30 min, eliminates DB hit on every public share page load**
-**Status: PENDING APPROVAL**
+**Status: DONE (2026-06-04)**
 
 **Problem**
 
@@ -572,7 +572,7 @@ apps/server/src/database/repos/share/share.repo.ts
 ### PERF-5: Notification Query staleTime
 
 **Priority: P2 — 2 min frontend change, stops unnecessary refetches**
-**Status: PENDING APPROVAL**
+**Status: DONE (2026-06-04)**
 
 **Problem**
 
@@ -603,7 +603,7 @@ apps/client/src/features/notification/  (notification query hook)
 ### PERF-6: QueryClient gcTime (memory cache for fast back-navigation)
 
 **Priority: P2 — 5 min, improves back-navigation feel**
-**Status: PENDING APPROVAL**
+**Status: DONE (2026-06-04)**
 
 **Problem**
 

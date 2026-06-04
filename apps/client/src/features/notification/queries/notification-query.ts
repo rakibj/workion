@@ -22,8 +22,8 @@ export function useNotificationsQuery(type?: string) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 30_000,
+    gcTime: 60_000,
     placeholderData: keepPreviousData,
   });
 }
