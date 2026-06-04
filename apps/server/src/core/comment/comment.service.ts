@@ -17,7 +17,10 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import { extractUserMentionIdsFromJson } from '../../common/helpers/prosemirror/utils';
-import { ICommentNotificationJob } from '../../integrations/queue/constants/queue.interface';
+import {
+  ICommentNotificationJob,
+  ICommentResolvedNotificationJob,
+} from '../../integrations/queue/constants/queue.interface';
 import { WsService } from '../../ws/ws.service';
 
 @Injectable()
@@ -204,6 +207,52 @@ export class CommentService {
     });
 
     return comment;
+  }
+
+  async resolve(
+    comment: Comment,
+    resolved: boolean,
+    user: User,
+    workspaceId: string,
+  ): Promise<Comment> {
+    const now = new Date();
+    await this.commentRepo.updateComment(
+      resolved
+        ? { resolvedAt: now, resolvedById: user.id, updatedAt: now }
+        : { resolvedAt: null, resolvedById: null, updatedAt: now },
+      comment.id,
+    );
+
+    const updated = await this.commentRepo.findById(comment.id, {
+      includeCreator: true,
+      includeResolvedBy: true,
+    });
+
+    this.wsService.emitCommentEvent(comment.spaceId, comment.pageId, {
+      operation: 'commentResolved',
+      pageId: comment.pageId,
+      comment: updated,
+    });
+
+    if (resolved && comment.creatorId !== user.id) {
+      const jobData: ICommentResolvedNotificationJob = {
+        commentId: comment.id,
+        commentCreatorId: comment.creatorId,
+        pageId: comment.pageId,
+        spaceId: comment.spaceId,
+        workspaceId,
+        actorId: user.id,
+      };
+      await this.notificationQueue
+        .add(QueueJob.COMMENT_RESOLVED_NOTIFICATION, jobData)
+        .catch((err) =>
+          this.logger.warn(
+            `Failed to queue comment-resolved notification: ${err.message}`,
+          ),
+        );
+    }
+
+    return updated;
   }
 
   private async queueCommentNotification(

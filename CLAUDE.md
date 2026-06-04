@@ -127,30 +127,22 @@ REDIS_URL=redis://localhost:6379
 
 ## Cloud Deployment Status
 
-> Full plan in `Cloud Strategy.md`. Credentials in `Cloud Implementation.md` (never commit).
+> Credentials in `Cloud Implementation.md` (never commit).
 
 ### Current infrastructure
 
 | Service | Where | Status |
 |---|---|---|
 | App (NestJS) | Contabo VPS — Docker | Live at `http://157.173.120.4` |
-| Redis | Contabo VPS — Docker (local) | Running alongside app |
-| Postgres | Neon (managed) | Connected |
+| Redis | Contabo VPS — Docker (local) | Running alongside app, `REDIS_URL=redis://redis:6379` |
+| Postgres | Neon (managed, ap-southeast-1) | Connected |
 | File storage | Cloudflare R2 | Connected (bucket: `workion`) |
 
-**Upstash abandoned** — BullMQ's idle polling exhausted the 500K/month free tier in ~10 days. Switched to local Redis on the VPS (free, no limits, Redis data is non-critical).
+**No domain in use.** App is accessed directly via bare IP `http://157.173.120.4`. No DNS, no Caddy, no Cloudflare proxy. Do not reference `projects.gameloops.io` or suggest domain-based solutions until a domain is actually set up.
 
-**R2 env var fix** — original `.env` used `S3_*` prefix; app requires `AWS_S3_*`. Fixed on server and in Cloud Implementation.md.
+**Upstash abandoned** — BullMQ's idle polling exhausted the 500K/month free tier in ~10 days. Switched to local Redis (free, no limits). Upstash credentials kept in `Cloud Implementation.md` for reference only.
 
-### Pending
-
-| Step | Detail |
-|---|---|
-| DNS | A record: `projects.gameloops.io` → `157.173.120.4`, update `APP_URL` + Caddyfile |
-| Verify file upload | Upload image, confirm visible from another device/browser |
-
-### Target domain
-`projects.gameloops.io` → Contabo VPS → Caddy → NestJS app (port 3000)
+**R2 env var fix** — app requires `AWS_S3_*` prefix (not `S3_*`). Already fixed on server.
 
 ---
 
@@ -167,7 +159,7 @@ git commit -m "your message"
 git push origin main
 
 # 2. SSH into the VPS and run
-ssh user@projects.gameloops.io
+ssh root@157.173.120.4
 cd /home/apps/docmost
 ./deploy.sh
 ```
@@ -187,7 +179,7 @@ chmod +x deploy.sh
 ### Migrations only (no code changes)
 
 ```bash
-ssh user@projects.gameloops.io
+ssh root@157.173.120.4
 cd /home/apps/docmost
 docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
 ```
@@ -195,7 +187,7 @@ docker compose -f docker-compose.prod.yml exec app pnpm --filter server migratio
 ### Env var changes only (no rebuild needed)
 
 ```bash
-ssh user@projects.gameloops.io
+ssh root@157.173.120.4
 cd /home/apps/docmost
 # Edit .env on the server
 nano .env
@@ -217,7 +209,7 @@ docker compose -f docker-compose.prod.yml logs --tail=100 app
 ### Rollback to previous commit
 
 ```bash
-ssh user@projects.gameloops.io
+ssh root@157.173.120.4
 cd /home/apps/docmost
 git log --oneline -10          # find the target commit hash
 git checkout <commit-hash>
@@ -429,6 +421,11 @@ Invitations, login, and all other auth flows remain fully functional.
 - Wired in `page-editor.tsx` via `addEventListener('blockHandleClick')` on the `menuContainerRef`.
 - Context-sensitive: Turn into and Color sections hidden for tables/images/code blocks; Copy link only for headings with an `id` attr.
 
+### Comment Resolve + Realtime Toast
+- **Comment resolve** was broken — `POST /comments/resolve` endpoint was missing from the backend despite the DB schema, frontend mutation, and notification infrastructure all existing.
+- Added: `dto/resolve-comment.dto.ts`, `resolve()` method in `CommentService`, `POST /comments/resolve` in `CommentController`. Sets `resolvedAt`/`resolvedById` in DB, emits `commentResolved` WS event, queues `COMMENT_RESOLVED_NOTIFICATION` job (only when resolving someone else's comment).
+- **Realtime toast**: `use-query-subscription.ts` now shows a blue Mantine toast ("X left a comment") on `commentCreated` WS events from other users. Uses `queryClient.getQueryData(["currentUser"])` to filter out self-comments — no extra hook calls.
+
 ---
 
 ## Adding a New Feature — Checklist
@@ -492,4 +489,56 @@ Migrations:           apps/server/src/database/migrations/
 Repos:                apps/server/src/database/repos/
 Feature flags:        apps/server/src/common/features.ts
 App env config:       apps/server/src/integrations/environment/environment.service.ts
+Cache helper:         apps/server/src/common/helpers/with-cache.ts
+Cache keys:           apps/server/src/common/helpers/cache-keys.ts
+```
+
+---
+
+## Pending Specs
+
+Specs waiting for approval before implementation. Do not implement any of these until explicitly approved in conversation.
+
+---
+
+### SPEC: Redis Read Caching
+
+**Status: PENDING APPROVAL**
+
+**Problem**
+
+Every page load hits Neon (remote Postgres, ~10–30ms per query) for data that almost never changes. With the server in Europe and users in Asia, 5–10 uncached queries per page load adds 50–300ms of avoidable latency. Redis is already running locally on the VPS (sub-1ms round-trip). Only two permission lookups are currently cached.
+
+**What to cache**
+
+| Cache key | Source | TTL | Invalidate when |
+|---|---|---|---|
+| `user:me:{userId}` | `UserRepo.findById()` | 300s | User updates profile or workspace settings |
+| `spaces:{workspaceId}` | `SpaceRepo.findByWorkspaceId()` | 120s | Space created, updated, or deleted |
+| `page:slug:{slugId}` | `PageRepo.findBySlugId()` | 30s | Page updated (title, icon, status) |
+| `tree:{spaceId}:{parentId}` | `PageRepo.findSidebarChildren()` | 60s | Page created, moved, or deleted in that space |
+| `space:members:{spaceId}` | `SpaceMemberRepo.findBySpaceId()` | 120s | Member added or removed |
+
+**No schema changes.** Pure cache layer using the existing `withCache()` helper and `CACHE_MANAGER` token already wired throughout the app.
+
+**Implementation plan**
+
+1. Add new key constants to `cache-keys.ts` for each entry above.
+2. Wrap the relevant repo `find*` methods with `withCache()` — one change per method.
+3. Add `cacheManager.del(key)` calls in the corresponding repo write methods (update/delete) and service create methods. Invalidation must be synchronous with the write — no eventual consistency.
+4. No migration, no new module, no frontend changes.
+
+**Edge cases**
+- Cache miss always falls through to DB — never throw if Redis is unavailable (`withCache` already swallows errors).
+- Invalidate on any field change, not just content — icon, title, status, parent all affect what the sidebar renders.
+- `tree` cache key includes `parentId` (null for root) so root tree and sub-trees are invalidated independently.
+- Space member cache must be invalidated when group membership changes (group → space, not just user → space).
+
+**Files touched**
+```
+apps/server/src/common/helpers/cache-keys.ts
+apps/server/src/database/repos/user/user.repo.ts
+apps/server/src/database/repos/space/space.repo.ts
+apps/server/src/database/repos/page/page.repo.ts
+apps/server/src/database/repos/space/space-member.repo.ts
 ```

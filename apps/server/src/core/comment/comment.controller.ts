@@ -12,6 +12,7 @@ import {
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { PageIdDto, CommentIdDto } from './dto/comments.input';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -137,6 +138,28 @@ export class CommentController {
     await this.pageAccessService.validateCanComment(page, user, workspace.id);
 
     return this.commentService.update(comment, dto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resolve')
+  async resolve(
+    @Body() dto: ResolveCommentDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const comment = await this.commentRepo.findById(dto.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+
+    return this.commentService.resolve(comment, dto.resolved, user, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)

@@ -13,6 +13,8 @@ import {
 } from "../page/queries/page-query";
 import { RQ_KEY } from "../comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
+import { ICurrentUser } from "@/features/user/types/user.types";
+import { notifications } from "@mantine/notifications";
 
 export const useQuerySubscription = () => {
   const queryClient = useQueryClient();
@@ -50,6 +52,15 @@ export const useQuerySubscription = () => {
                   ? { ...page, items: [...page.items, data.comment] }
                   : page,
               ),
+            });
+          }
+
+          const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
+          if (data.comment.creatorId !== currentUser?.user?.id) {
+            notifications.show({
+              message: `${data.comment.creator?.name || "Someone"} left a comment`,
+              color: "blue",
+              autoClose: 4000,
             });
           }
           break;
