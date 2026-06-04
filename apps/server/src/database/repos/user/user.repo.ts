@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { DB, Users } from '@docmost/db/types/db';
@@ -14,10 +16,19 @@ import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagin
 import { ExpressionBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { NotificationSettingKey } from '../../../core/notification/notification.constants';
+import {
+  CacheKey,
+  USER_CACHE_TTL_MS,
+  MEMBER_COUNT_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
+import { withCache } from '../../../common/helpers/with-cache';
 
 @Injectable()
 export class UserRepo {
-  constructor(@InjectKysely() private readonly db: KyselyDB) {}
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
 
   public baseFields: Array<keyof Users> = [
     'id',
@@ -39,6 +50,33 @@ export class UserRepo {
   ];
 
   async findById(
+    userId: string,
+    workspaceId: string,
+    opts?: {
+      includePassword?: boolean;
+      includeUserMfa?: boolean;
+      includeScimExternalId?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<User> {
+    const isBase =
+      !opts?.includePassword &&
+      !opts?.includeUserMfa &&
+      !opts?.includeScimExternalId &&
+      !opts?.trx;
+
+    if (isBase) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.USER(userId, workspaceId),
+        USER_CACHE_TTL_MS,
+        () => this._findById(userId, workspaceId, opts),
+      );
+    }
+    return this._findById(userId, workspaceId, opts);
+  }
+
+  private async _findById(
     userId: string,
     workspaceId: string,
     opts?: {
@@ -82,6 +120,12 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
+  async invalidateUserCache(userId: string, workspaceId: string): Promise<void> {
+    await this.cacheManager
+      .del(CacheKey.USER(userId, workspaceId))
+      .catch(() => {});
+  }
+
   async updateUser(
     updatableUser: UpdatableUser,
     userId: string,
@@ -89,13 +133,14 @@ export class UserRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-
-    return await db
+    const result = await db
       .updateTable('users')
       .set({ ...updatableUser, updatedAt: new Date() })
       .where('id', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .execute();
+    await this.invalidateUserCache(userId, workspaceId);
+    return result;
   }
 
   async updateLastLogin(userId: string, workspaceId: string) {
@@ -183,17 +228,19 @@ export class UserRepo {
     prefKey: string,
     prefValue: string | boolean,
   ) {
-    return await this.db
+    const result = await this.db
       .updateTable('users')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
-                || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
+                || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb)
                 || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    if (result) await this.invalidateUserCache(userId, result.workspaceId);
+    return result;
   }
 
   async updateNotificationSetting(
@@ -201,7 +248,7 @@ export class UserRepo {
     settingKey: NotificationSettingKey,
     settingValue: boolean,
   ) {
-    return await this.db
+    const result = await this.db
       .updateTable('users')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -212,6 +259,8 @@ export class UserRepo {
       .where('id', '=', userId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    if (result) await this.invalidateUserCache(userId, result.workspaceId);
+    return result;
   }
 
   withUserMfa(eb: ExpressionBuilder<DB, 'users'>) {

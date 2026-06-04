@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '../../types/kysely.types';
 import { dbOrTx } from '../../utils';
@@ -9,6 +11,12 @@ import {
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
 import { DB, Workspaces } from '@docmost/db/types/db';
+import {
+  CacheKey,
+  WORKSPACE_CACHE_TTL_MS,
+  MEMBER_COUNT_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
+import { withCache } from '../../../common/helpers/with-cache';
 
 @Injectable()
 export class WorkspaceRepo {
@@ -36,9 +44,38 @@ export class WorkspaceRepo {
     'trashRetentionDays',
     'isScimEnabled',
   ];
-  constructor(@InjectKysely() private readonly db: KyselyDB) {}
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
 
   async findById(
+    workspaceId: string,
+    opts?: {
+      withLock?: boolean;
+      withMemberCount?: boolean;
+      withLicenseKey?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Workspace> {
+    const isBase =
+      !opts?.withLock &&
+      !opts?.withMemberCount &&
+      !opts?.withLicenseKey &&
+      !opts?.trx;
+
+    if (isBase) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.WORKSPACE(workspaceId),
+        WORKSPACE_CACHE_TTL_MS,
+        () => this._findById(workspaceId, opts),
+      );
+    }
+    return this._findById(workspaceId, opts);
+  }
+
+  private async _findById(
     workspaceId: string,
     opts?: {
       withLock?: boolean;
@@ -119,12 +156,14 @@ export class WorkspaceRepo {
     trx?: KyselyTransaction,
   ): Promise<Workspace> {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('workspaces')
       .set({ ...updatableWorkspace, updatedAt: new Date() })
       .where('id', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    await this.invalidateWorkspaceCache(workspaceId);
+    return result;
   }
 
   async insertWorkspace(
@@ -158,17 +197,31 @@ export class WorkspaceRepo {
   }
 
   async getActiveUserCount(workspaceId: string): Promise<number> {
-    const users = await this.db
-      .selectFrom('users')
-      .select(['id', 'deactivatedAt', 'deletedAt'])
-      .where('workspaceId', '=', workspaceId)
-      .execute();
+    return withCache(
+      this.cacheManager,
+      CacheKey.WORKSPACE_MEMBER_COUNT(workspaceId),
+      MEMBER_COUNT_CACHE_TTL_MS,
+      async () => {
+        const users = await this.db
+          .selectFrom('users')
+          .select(['id', 'deactivatedAt', 'deletedAt'])
+          .where('workspaceId', '=', workspaceId)
+          .execute();
 
-    const activeUsers = users.filter(
-      (user) => user.deletedAt === null && user.deactivatedAt === null,
+        const activeUsers = users.filter(
+          (user) => user.deletedAt === null && user.deactivatedAt === null,
+        );
+
+        return activeUsers.length;
+      },
     );
+  }
 
-    return activeUsers.length;
+  async invalidateWorkspaceCache(workspaceId: string): Promise<void> {
+    await Promise.all([
+      this.cacheManager.del(CacheKey.WORKSPACE(workspaceId)),
+      this.cacheManager.del(CacheKey.WORKSPACE_MEMBER_COUNT(workspaceId)),
+    ]).catch(() => {});
   }
 
   async updateApiSettings(
@@ -178,7 +231,7 @@ export class WorkspaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -189,6 +242,8 @@ export class WorkspaceRepo {
       .where('id', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    await this.invalidateWorkspaceCache(workspaceId);
+    return result;
   }
 
   async updateAiSettings(
@@ -198,7 +253,7 @@ export class WorkspaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -209,6 +264,8 @@ export class WorkspaceRepo {
       .where('id', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    await this.invalidateWorkspaceCache(workspaceId);
+    return result;
   }
 
   async updateSharingSettings(
@@ -218,7 +275,7 @@ export class WorkspaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -229,6 +286,8 @@ export class WorkspaceRepo {
       .where('id', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    await this.invalidateWorkspaceCache(workspaceId);
+    return result;
   }
 
   async updateTemplateSettings(
@@ -238,7 +297,7 @@ export class WorkspaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -249,6 +308,8 @@ export class WorkspaceRepo {
       .where('id', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
+    await this.invalidateWorkspaceCache(workspaceId);
+    return result;
   }
 
 }

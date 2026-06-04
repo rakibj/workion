@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
@@ -14,15 +16,39 @@ import { DB } from '@docmost/db/types/db';
 import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import {
+  CacheKey,
+  SPACE_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
+import { withCache } from '../../../common/helpers/with-cache';
 
 @Injectable()
 export class SpaceRepo {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private eventEmitter: EventEmitter2,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async findById(
+    spaceId: string,
+    workspaceId: string,
+    opts?: { includeMemberCount?: boolean; trx?: KyselyTransaction },
+  ): Promise<Space> {
+    const isBase = !opts?.includeMemberCount && !opts?.trx;
+
+    if (isBase) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.SPACE(spaceId, workspaceId),
+        SPACE_CACHE_TTL_MS,
+        () => this._findById(spaceId, workspaceId, opts),
+      );
+    }
+    return this._findById(spaceId, workspaceId, opts);
+  }
+
+  private async _findById(
     spaceId: string,
     workspaceId: string,
     opts?: { includeMemberCount?: boolean; trx?: KyselyTransaction },
@@ -73,6 +99,12 @@ export class SpaceRepo {
     return count != 0;
   }
 
+  async invalidateSpaceCache(spaceId: string, workspaceId: string): Promise<void> {
+    await this.cacheManager
+      .del(CacheKey.SPACE(spaceId, workspaceId))
+      .catch(() => {});
+  }
+
   async updateSpace(
     updatableSpace: UpdatableSpace,
     spaceId: string,
@@ -80,13 +112,15 @@ export class SpaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('spaces')
       .set({ ...updatableSpace, updatedAt: new Date() })
       .where('id', '=', spaceId)
       .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
+    await this.invalidateSpaceCache(spaceId, workspaceId);
+    return result;
   }
 
   async updateSharingSettings(
@@ -97,7 +131,7 @@ export class SpaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -109,6 +143,8 @@ export class SpaceRepo {
       .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
+    await this.invalidateSpaceCache(spaceId, workspaceId);
+    return result;
   }
 
   async updateCommentSettings(
@@ -119,7 +155,7 @@ export class SpaceRepo {
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -131,6 +167,8 @@ export class SpaceRepo {
       .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
+    await this.invalidateSpaceCache(spaceId, workspaceId);
+    return result;
   }
 
   async insertSpace(
@@ -211,6 +249,8 @@ export class SpaceRepo {
       .where('id', '=', spaceId)
       .where('workspaceId', '=', workspaceId)
       .execute();
+
+    await this.invalidateSpaceCache(spaceId, workspaceId);
 
     this.eventEmitter.emit(EventName.SPACE_DELETED, {
       spaceId,
