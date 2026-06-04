@@ -210,6 +210,10 @@ export class EnvironmentService {
     return cloudConfig === 'true';
   }
 
+  isSignupAllowed(): boolean {
+    return this.configService.get<string>('ALLOW_SIGNUP', 'false').toLowerCase() === 'true';
+  }
+
   isSelfHosted(): boolean {
     return !this.isCloud();
   }

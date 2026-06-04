@@ -44,6 +44,10 @@ export default defineConfig(({ mode }) => {
                 name: "vendor-mantine",
                 test: /[\\/]node_modules[\\/]@mantine[\\/]/,
               },
+              {
+                name: "vendor-tiptap",
+                test: /[\\/]node_modules[\\/]@tiptap[\\/]/,
+              },
             ],
           },
         },

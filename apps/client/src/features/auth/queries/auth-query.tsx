@@ -1,5 +1,5 @@
 import { useQuery, UseQueryResult } from "@tanstack/react-query";
-import { getCollabToken, verifyUserToken } from "../services/auth-service";
+import { getCollabToken, getSetupConfig, verifyUserToken } from "../services/auth-service";
 import { ICollabToken, IVerifyUserToken } from "../types/auth.types";
 import { isAxiosError } from "axios";
 
@@ -11,6 +11,14 @@ export function useVerifyUserTokenQuery(
     queryFn: () => verifyUserToken(verify),
     enabled: !!verify.token,
     staleTime: 0,
+  });
+}
+
+export function useSetupConfigQuery() {
+  return useQuery({
+    queryKey: ["setup-config"],
+    queryFn: getSetupConfig,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

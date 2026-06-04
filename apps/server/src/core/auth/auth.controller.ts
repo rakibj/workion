@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Inject,
@@ -227,5 +228,11 @@ export class AuthController {
       expires: this.environmentService.getCookieExpiresIn(),
       secure: this.environmentService.isHttps(),
     });
+  }
+
+  @SkipThrottle({ [AUTH_THROTTLER]: true })
+  @Get('setup-config')
+  getSetupConfig() {
+    return { allowSignup: this.environmentService.isSignupAllowed() };
   }
 }

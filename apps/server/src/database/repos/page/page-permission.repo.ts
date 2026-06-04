@@ -23,6 +23,7 @@ import { withCache } from '../../../common/helpers/with-cache';
 import {
   CacheKey,
   PERMISSION_CACHE_TTL_MS,
+  SPACE_RESTRICTION_CACHE_TTL_MS,
 } from '../../../common/helpers/cache-keys';
 
 export { PagePermissionMember } from './types/page-permission.types';
@@ -52,19 +53,23 @@ export class PagePermissionRepo {
     trx?: KyselyTransaction,
   ): Promise<PageAccess> {
     const db = dbOrTx(this.db, trx);
-    return db
+    const result = await db
       .insertInto('pageAccess')
       .values(data)
       .returningAll()
       .executeTakeFirst();
+    await this.cacheManager.del(CacheKey.SPACE_RESTRICTION(data.spaceId));
+    return result;
   }
 
   async deletePageAccess(
     pageId: string,
+    spaceId: string,
     trx?: KyselyTransaction,
   ): Promise<void> {
     const db = dbOrTx(this.db, trx);
     await db.deleteFrom('pageAccess').where('pageId', '=', pageId).execute();
+    await this.cacheManager.del(CacheKey.SPACE_RESTRICTION(spaceId));
   }
 
   async insertPagePermissions(
@@ -885,22 +890,30 @@ export class PagePermissionRepo {
   /**
    * Check if any page in a space has restrictions.
    * Used as a quick check to skip heavy permission filtering when no restrictions exist.
+   * Cached per spaceId — invalidated when a page_access record is inserted or deleted.
    */
   async hasRestrictedPagesInSpace(spaceId: string): Promise<boolean> {
-    const result = await this.db
-      .selectNoFrom((eb) =>
-        eb
-          .exists(
+    return withCache(
+      this.cacheManager,
+      CacheKey.SPACE_RESTRICTION(spaceId),
+      SPACE_RESTRICTION_CACHE_TTL_MS,
+      async () => {
+        const result = await this.db
+          .selectNoFrom((eb) =>
             eb
-              .selectFrom('pageAccess')
-              .select(sql`1`.as('one'))
-              .where('pageAccess.spaceId', '=', spaceId),
+              .exists(
+                eb
+                  .selectFrom('pageAccess')
+                  .select(sql`1`.as('one'))
+                  .where('pageAccess.spaceId', '=', spaceId),
+              )
+              .as('exists'),
           )
-          .as('exists'),
-      )
-      .executeTakeFirst();
+          .executeTakeFirst();
 
-    return Boolean(result?.exists);
+        return Boolean(result?.exists);
+      },
+    );
   }
 
   /**

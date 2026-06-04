@@ -14,6 +14,10 @@ export class SetupGuard implements CanActivate {
       return false;
     }
 
+    if (this.environmentService.isSignupAllowed()) {
+      return true;
+    }
+
     const workspaceCount = await this.workspaceRepo.count();
     if (workspaceCount > 0) {
       throw new ForbiddenException('Workspace setup already completed.');

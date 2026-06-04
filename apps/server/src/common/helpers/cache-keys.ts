@@ -15,6 +15,7 @@ export const CacheKey = {
     `entity:space:${spaceId}:${workspaceId}`,
   PAGE: (pageId: string) => `entity:page:${pageId}`,
   SHARE: (shareKey: string) => `entity:share:${shareKey}`,
+  SPACE_RESTRICTION: (spaceId: string) => `space:restriction:${spaceId}`,
 };
 
 // Permission caches dedupe repeated checks within and across short request bursts.
@@ -28,3 +29,4 @@ export const SPACE_CACHE_TTL_MS = 120_000;      // 2 min
 export const MEMBER_COUNT_CACHE_TTL_MS = 60_000; // 1 min
 export const PAGE_CACHE_TTL_MS = 60_000;         // 1 min — base metadata only, not content
 export const SHARE_CACHE_TTL_MS = 300_000;       // 5 min — shares rarely change
+export const SPACE_RESTRICTION_CACHE_TTL_MS = 60_000; // 1 min — invalidated on restrict/unrestrict

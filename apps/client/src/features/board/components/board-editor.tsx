@@ -29,6 +29,20 @@ import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 
 const TX_ORIGIN = "board-tldraw";
 
+// Module-level WebSocket singleton — created once, reused across board navigations.
+// Recreated only if the collaboration URL changes (token rotation, etc.).
+let _boardSocket: HocuspocusProviderWebsocket | null = null;
+let _boardSocketUrl: string | null = null;
+
+function getBoardSocket(url: string): HocuspocusProviderWebsocket {
+  if (!_boardSocket || _boardSocketUrl !== url) {
+    _boardSocket?.destroy();
+    _boardSocket = new HocuspocusProviderWebsocket({ url });
+    _boardSocketUrl = url;
+  }
+  return _boardSocket;
+}
+
 // Stable color palette for user cursors.
 const PRESENCE_COLORS = [
   "#E03131", "#C2255C", "#9C36B5", "#3B5BDB", "#1971C2",
@@ -111,7 +125,7 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
     const store = editor.store;
 
     const localPersistence = new IndexeddbPersistence(roomName, yDoc);
-    const socket = new HocuspocusProviderWebsocket({ url: collaborationURL });
+    const socket = getBoardSocket(collaborationURL);
 
     let unlistenStore: (() => void) | null = null;
     let unlistenSession: (() => void) | null = null;
@@ -337,7 +351,7 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
       cleanupPresence?.();
       localPersistence.destroy();
       provider.destroy();
-      socket.destroy();
+      // socket is a singleton — not destroyed on unmount
       yDoc.destroy();
     };
   }, [editor, collabQuery?.token, pageId, collaborationURL]);

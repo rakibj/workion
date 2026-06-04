@@ -52,3 +52,8 @@ export async function getCollabToken(): Promise<ICollabToken> {
   return req.data;
 }
 
+export async function getSetupConfig(): Promise<{ allowSignup: boolean }> {
+  const req = await api.get<{ allowSignup: boolean }>("/auth/setup-config");
+  return req.data;
+}
+

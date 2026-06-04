@@ -68,6 +68,14 @@ export class WsService {
     pageId: string,
     data: any,
   ): Promise<void> {
+    return this.emitPageScopedEvent(spaceId, pageId, data);
+  }
+
+  async emitPageScopedEvent(
+    spaceId: string,
+    pageId: string,
+    data: any,
+  ): Promise<void> {
     const room = getSpaceRoomName(spaceId);
 
     const hasRestrictions = await this.spaceHasRestrictions(spaceId);

@@ -14,6 +14,7 @@ import {
 import { RQ_KEY } from "../comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
 import { ICurrentUser } from "@/features/user/types/user.types";
+import { IKanbanCard, IKanbanColumn } from "@/features/kanban/types/kanban.types";
 import { notifications } from "@mantine/notifications";
 
 export const useQuerySubscription = () => {
@@ -173,6 +174,45 @@ export const useQuerySubscription = () => {
             queryKey: ["page-verification-info", data.pageId],
           });
           break;
+        case "kanbanCardMoved": {
+          const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
+          if (data.userId === currentUser?.user?.id) break;
+          queryClient.setQueryData<IKanbanColumn[]>(
+            ["kanban-board", data.pageId],
+            (prev = []) => {
+              let card: IKanbanCard | undefined;
+              for (const col of prev) {
+                card = col.cards.find((c) => c.id === data.cardId);
+                if (card) break;
+              }
+              if (!card) return prev;
+              const movedCard: IKanbanCard = { ...card, columnId: data.columnId, position: data.position };
+              return prev.map((col) => {
+                if (col.id === data.columnId) {
+                  return {
+                    ...col,
+                    cards: [...col.cards.filter((c) => c.id !== data.cardId), movedCard]
+                      .sort((a, b) => a.position - b.position),
+                  };
+                }
+                return { ...col, cards: col.cards.filter((c) => c.id !== data.cardId) };
+              });
+            },
+          );
+          break;
+        }
+        case "kanbanColumnMoved": {
+          const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
+          if (data.userId === currentUser?.user?.id) break;
+          queryClient.setQueryData<IKanbanColumn[]>(
+            ["kanban-board", data.pageId],
+            (prev = []) =>
+              prev
+                .map((c) => (c.id === data.columnId ? { ...c, position: data.position } : c))
+                .sort((a, b) => a.position - b.position),
+          );
+          break;
+        }
       }
     });
   }, [queryClient, socket]);

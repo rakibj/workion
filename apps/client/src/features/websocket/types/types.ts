@@ -90,6 +90,23 @@ export type VerificationUpdatedEvent = {
   pageId: string;
 };
 
+export type KanbanCardMovedEvent = {
+  operation: "kanbanCardMoved";
+  pageId: string;
+  cardId: string;
+  columnId: string;
+  position: number;
+  userId: string;
+};
+
+export type KanbanColumnMovedEvent = {
+  operation: "kanbanColumnMoved";
+  pageId: string;
+  columnId: string;
+  position: number;
+  userId: string;
+};
+
 export type WebSocketEvent =
   | InvalidateEvent
   | CommentCreatedEvent
@@ -102,4 +119,6 @@ export type WebSocketEvent =
   | MoveTreeNodeEvent
   | DeleteTreeNodeEvent
   | RefetchRootTreeNodeEvent
-  | VerificationUpdatedEvent;
+  | VerificationUpdatedEvent
+  | KanbanCardMovedEvent
+  | KanbanColumnMovedEvent;

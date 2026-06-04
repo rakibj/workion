@@ -632,3 +632,252 @@ export const queryClient = new QueryClient({
 ```
 apps/client/src/main.tsx
 ```
+
+---
+
+### PERF-7: Cache `hasRestrictedPagesInSpace` in PageService
+
+**Priority: P1 — 15 min backend change, eliminates a DB hit on every sidebar tree load**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+`PageService.getSidebarPages()` calls `pagePermissionRepo.hasRestrictedPagesInSpace(spaceId)` on every sidebar pagination request (`page.service.ts:334`). This fires an EXISTS query against the `page_access` table — one Neon round-trip per tree node expansion. For the common case (no restricted pages), it always returns `false` but still pays full query latency.
+
+`ws.service.ts` already solves the identical problem with a cached helper `spaceHasRestrictions()` (lines 163–177) using a `WS_SPACE_RESTRICTION_CACHE_PREFIX` Redis key. The page service needs the same treatment.
+
+**Implementation plan**
+
+1. Add `SPACE_RESTRICTION: (spaceId: string) => \`space:restriction:${spaceId}\`` and `SPACE_RESTRICTION_CACHE_TTL_MS = 60_000` to `cache-keys.ts`.
+2. In `page.service.ts`, before calling `pagePermissionRepo.hasRestrictedPagesInSpace()`, check and set the Redis cache via `withCache()`.
+3. Invalidate `SPACE_RESTRICTION` key whenever a `page_access` record is created or deleted (in `PageAccessService`).
+
+**Files touched**
+```
+apps/server/src/common/helpers/cache-keys.ts
+apps/server/src/core/page/services/page.service.ts
+apps/server/src/core/page/page-access/page-access.service.ts
+```
+
+---
+
+### PERF-8: Vite Manual Chunk for @tiptap
+
+**Priority: P2 — 10 min, reduces initial bundle parse time**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+`vite.config.ts` only splits `@mantine` into its own chunk. TipTap and its extensions (`@tiptap/*`) are statically imported from `features/editor/` and end up in the main bundle alongside all app code. Splitting them out reduces the JS the browser has to parse on cold load.
+
+tldraw is already fine — `board-page.tsx` uses `lazy(() => import("./board-editor"))` so Rolldown auto-splits it.
+
+**Implementation plan**
+
+Add a `vendor-tiptap` group to `advancedChunks.groups` in `vite.config.ts`:
+```ts
+{ name: "vendor-tiptap", test: /[\\/]node_modules[\\/]@tiptap[\\/]/ },
+```
+
+**UX risk:** None. Code splitting is transparent to the user; the chunks are loaded in parallel with the main chunk.
+
+**Files touched**
+```
+apps/client/vite.config.ts
+```
+
+---
+
+### BOARD-2: Whiteboard Slow Load on Every Visit
+
+**Priority: P1 — Medium effort, high UX impact**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+Every time a user navigates to a board page, `board-editor.tsx` tears down and rebuilds the entire collaboration stack:
+- `socket.destroy()` — closes the WebSocket connection
+- `provider.destroy()` — destroys the Hocuspocus provider
+- `yDoc.destroy()` — destroys the Yjs document
+
+On the next visit, all three are recreated from scratch: new WebSocket TCP handshake → TLS → Hocuspocus auth → Yjs sync from server. This adds 300–800ms of perceived loading every time, even though IndexedDB persistence (`IndexeddbPersistence`) already stores the board state locally.
+
+The tldraw lazy bundle is fine after first visit (browser caches it).
+
+**Root cause:** The cleanup in the `useEffect` return is correct for preventing memory leaks, but the WebSocket is destroyed even when navigating between non-board pages — there's no reason to hold it alive — but reconnecting it on every re-entry is expensive.
+
+**Chosen approach — Shared WebSocket singleton:**
+
+Lift the `HocuspocusProviderWebsocket` out of `BoardEditor` into a module-level singleton. The socket is created once on first board visit and stays alive for the app session. Only the per-board `HocuspocusProvider` (one per `pageId`) is created/destroyed per page. Eliminates the TCP reconnect + TLS + auth handshake on every board visit — the expensive part.
+
+Option A (IDB-first render) was rejected: it would hide the reconnect behind stale data but wouldn't actually remove the reconnect cost. The board would still flash stale content then re-sync.
+
+**Implementation plan**
+
+1. In `board-editor.tsx`, extract the `HocuspocusProviderWebsocket` instantiation into a module-level lazy singleton (created on first call, reused after):
+   ```ts
+   let _boardSocket: HocuspocusProviderWebsocket | null = null;
+   function getBoardSocket(url: string) {
+     if (!_boardSocket) _boardSocket = new HocuspocusProviderWebsocket({ url });
+     return _boardSocket;
+   }
+   ```
+2. Use `getBoardSocket(collaborationURL)` inside the `useEffect` instead of `new HocuspocusProviderWebsocket(...)`.
+3. Remove `socket.destroy()` from the effect cleanup — the socket must not be torn down on unmount.
+4. Keep `provider.destroy()` and `yDoc.destroy()` in the cleanup — per-board resources still get cleaned up.
+
+**Files touched**
+```
+apps/client/src/features/board/components/board-editor.tsx
+```
+
+---
+
+### KANBAN-RT: Realtime Kanban Card/Column Movement
+
+**Priority: P2 — Significant effort, multi-user UX improvement**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+Card and column moves in the kanban board are persisted via HTTP PATCH to the backend (`POST /kanban/cards/move`, `POST /kanban/columns/move`). Other users viewing the same board see no update until they refresh the page.
+
+**Desired behaviour:** When user A moves a card or column, all other users viewing the same kanban page see the board update in real time within ~500ms — no refresh required.
+
+**Data model delta:** None. Position changes are already persisted in `kanban_tasks.position` and `kanban_columns.position`.
+
+**Implementation plan**
+
+1. **Backend:** After a successful `moveCard` or `moveColumn` call in `KanbanService`, emit a WebSocket event on the page's room (`page-${pageId}`):
+   - `kanbanCardMoved` — payload: `{ cardId, columnId, position, pageId }`
+   - `kanbanColumnMoved` — payload: `{ columnId, position, pageId }`
+   Use the existing `WsService.broadcastToPage()` (or equivalent) — do not add new infrastructure.
+
+2. **Frontend:** In the kanban board hook/component, subscribe to these two WS events for the current `pageId`. On receipt, call `queryClient.invalidateQueries(['kanban', pageId])` (or apply an optimistic update directly to the cached board state).
+
+**Edge cases:**
+- Ignore events emitted by the current user (use `userId` in payload and filter).
+- Debounce rapid successive moves (drag is fast; only apply the final position).
+
+**Files touched**
+```
+apps/server/src/core/kanban/kanban.service.ts
+apps/server/src/core/kanban/kanban.controller.ts
+apps/client/src/features/kanban/  (board hook + query)
+```
+
+---
+
+### AUTH-SIGNUP: Re-enable Workspace Signup
+
+**Priority: P0 — ~20 min, blocked feature**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+New workspace signup was intentionally disabled for personal use. `SetupGuard` throws 403 if any workspace already exists. The frontend `setup-workspace.tsx` redirects to `/login` if workspace data loads.
+
+**Goal:** Allow new workspaces to be created again (multi-tenant or demo use).
+
+**Implementation plan**
+
+1. **Env var:** Add `ALLOW_SIGNUP` to `EnvironmentService` (`apps/server/src/integrations/environment/environment.service.ts`). Defaults to `false`.
+
+2. **Backend:** In `SetupGuard.canActivate()`, allow the route if the workspace count is zero (first-time setup) OR if `ALLOW_SIGNUP=true`. Keep the 403 behaviour when a workspace exists and the flag is off.
+
+3. **Frontend:** In `setup-workspace.tsx`, remove (or guard) the `useEffect` redirect so the form renders when `ALLOW_SIGNUP` is enabled. The env var needs to be surfaced to the client — either via an existing `/api/workspace/setup-status` response field or a new `GET /api/auth/setup-config` endpoint that returns `{ allowSignup: boolean }`.
+
+4. **`.env` on VPS:** Add `ALLOW_SIGNUP=true` when re-enabling; remove or set to `false` to lock it back down.
+
+**Files touched**
+```
+apps/server/src/integrations/environment/environment.service.ts
+apps/server/src/core/auth/guards/setup.guard.ts
+apps/client/src/pages/auth/setup-workspace.tsx
+```
+
+---
+
+### LOGO-CACHE: Logo Not Updating After SVG Replacement
+
+**Priority: P0 — ~15 min, visual bug**
+**Status: DONE (2026-06-04)**
+
+**Problem**
+
+`logo-workion.svg` lived at the repo root and was not referenced by any app component — replacing it changed nothing visible in the browser. Additionally, static assets in `public/` are served without a content hash, so even if referenced, the browser would cache the old version indefinitely.
+
+**Fix**
+
+Copied `logo-workion.svg` → `apps/client/src/assets/logo-workion.svg`. Vite content-hashes assets imported as JS modules (e.g., `logo-Dab3kX9f.svg`), guaranteeing a cache miss whenever the file changes.
+
+Updated `auth-layout.tsx` to import the SVG via `import logoUrl from '@/assets/logo-workion.svg'` and render it instead of the old favicon PNG. Now updating `src/assets/logo-workion.svg` and redeploying will always show the new logo.
+
+To update the logo in the future: replace `apps/client/src/assets/logo-workion.svg` and redeploy.
+
+**Files touched**
+```
+apps/client/src/assets/logo-workion.svg  (new — copy of repo-root logo-workion.svg)
+apps/client/src/features/auth/components/auth-layout.tsx
+```
+
+---
+
+### DOMAIN: Apply Domain to VPS
+
+**Priority: P1 — Infrastructure change, enables HTTPS**
+**Status: TODO**
+
+**Context**
+
+App currently runs at `http://157.173.120.4` with no domain and no TLS. No Caddy or Nginx proxy is in place.
+
+**Goal**
+
+Point a domain at the VPS, terminate TLS with Caddy (auto-cert via Let's Encrypt), and proxy to the NestJS app on port 3000.
+
+**Implementation plan**
+
+1. **DNS:** Add an A record for the chosen domain pointing to `157.173.120.4`. Wait for propagation.
+
+2. **Caddy on VPS:** Add a `caddy` service to `docker-compose.prod.yml`:
+   ```yaml
+   caddy:
+     image: caddy:2-alpine
+     restart: unless-stopped
+     ports:
+       - "80:80"
+       - "443:443"
+     volumes:
+       - ./Caddyfile:/etc/caddy/Caddyfile
+       - caddy_data:/data
+       - caddy_config:/config
+   ```
+   Add `caddy_data` and `caddy_config` named volumes.
+
+3. **Caddyfile** (repo root):
+   ```
+   yourdomain.com {
+     reverse_proxy app:3000
+   }
+   ```
+
+4. **Remove port 3000 exposure** from the `app` service in `docker-compose.prod.yml` (no need to expose it publicly once Caddy proxies it).
+
+5. **Update env on VPS:**
+   ```
+   APP_URL=https://yourdomain.com
+   ```
+
+6. **Redeploy:** `./deploy.sh --no-cache`
+
+**Notes**
+- Caddy auto-issues Let's Encrypt certs on first request. Port 80 must be reachable for the ACME HTTP-01 challenge.
+- `COLLAB_URL` (Hocuspocus WebSocket) may also need updating to `wss://yourdomain.com/collab` depending on how the frontend resolves it — check `environment.service.ts`.
+
+**Files touched** (all new or modified infra files)
+```
+docker-compose.prod.yml
+Caddyfile  (new)
+.env on VPS (manual edit — not committed)
+```

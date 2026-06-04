@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { KanbanService } from './kanban.service';
+import { WsService } from '../../ws/ws.service';
 import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
 import {
   CardAssigneeDto,
@@ -45,6 +46,7 @@ export class KanbanController {
     private readonly kanbanRepo: KanbanRepo,
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly wsService: WsService,
   ) {}
 
   // ─── Board ────────────────────────────────────────────────────────────────
@@ -95,8 +97,16 @@ export class KanbanController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.assertCanWriteByColumnId(user, dto.columnId);
-    return this.kanbanService.moveColumn(dto.columnId, dto.position, user.id);
+    const { pageId, spaceId } = await this.assertCanWriteByColumnId(user, dto.columnId);
+    const result = await this.kanbanService.moveColumn(dto.columnId, dto.position, user.id);
+    this.wsService.emitPageScopedEvent(spaceId, pageId, {
+      operation: 'kanbanColumnMoved',
+      pageId,
+      columnId: dto.columnId,
+      position: dto.position,
+      userId: user.id,
+    });
+    return result;
   }
 
   @HttpCode(HttpStatus.OK)
@@ -150,13 +160,22 @@ export class KanbanController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.assertCanWriteByCardId(user, dto.cardId);
-    return this.kanbanService.moveCard(
+    const { pageId, spaceId } = await this.assertCanWriteByCardId(user, dto.cardId);
+    const result = await this.kanbanService.moveCard(
       dto.cardId,
       dto.columnId,
       dto.position,
       user.id,
     );
+    this.wsService.emitPageScopedEvent(spaceId, pageId, {
+      operation: 'kanbanCardMoved',
+      pageId,
+      cardId: dto.cardId,
+      columnId: dto.columnId,
+      position: dto.position,
+      userId: user.id,
+    });
+    return result;
   }
 
   @HttpCode(HttpStatus.OK)
@@ -255,33 +274,39 @@ export class KanbanController {
     }
   }
 
-  private async assertCanWrite(user: User, pageId: string): Promise<void> {
+  private async assertCanWrite(
+    user: User,
+    pageId: string,
+  ): Promise<{ spaceId: string }> {
     const page = await this.pageRepo.findById(pageId);
     if (!page) throw new NotFoundException('Page not found');
     const ability = await this.spaceAbility.createForUser(user, page.spaceId);
     if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
+    return { spaceId: page.spaceId };
   }
 
   private async assertCanWriteByColumnId(
     user: User,
     columnId: string,
-  ): Promise<void> {
+  ): Promise<{ pageId: string; spaceId: string }> {
     const col = await this.kanbanRepo.findColumnById(columnId);
     if (!col) throw new NotFoundException('Column not found');
-    await this.assertCanWrite(user, col.pageId);
+    const { spaceId } = await this.assertCanWrite(user, col.pageId);
+    return { pageId: col.pageId, spaceId };
   }
 
   private async assertCanWriteByCardId(
     user: User,
     cardId: string,
-  ): Promise<void> {
+  ): Promise<{ pageId: string; spaceId: string }> {
     const card = await this.kanbanRepo.findCardById(cardId);
     if (!card) throw new NotFoundException('Card not found');
     const col = await this.kanbanRepo.findColumnById(card.columnId);
     if (!col) throw new NotFoundException('Column not found');
-    await this.assertCanWrite(user, col.pageId);
+    const { spaceId } = await this.assertCanWrite(user, col.pageId);
+    return { pageId: col.pageId, spaceId };
   }
 
   private async assertCanWriteByMilestoneId(

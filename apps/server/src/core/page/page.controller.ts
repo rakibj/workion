@@ -860,7 +860,7 @@ export class PageController {
     const pageAccess = await this.pagePermissionRepo.findPageAccessByPageId(page.id);
     if (!pageAccess) throw new BadRequestException('Page is not restricted');
 
-    await this.pagePermissionRepo.deletePageAccess(page.id);
+    await this.pagePermissionRepo.deletePageAccess(page.id, pageAccess.spaceId);
   }
 
   @HttpCode(HttpStatus.OK)
