@@ -14,6 +14,7 @@ import {
   ICommentParams,
   IComment,
 } from "@/features/comment/types/comment.types";
+import { ICurrentUser } from "@/features/user/types/user.types";
 import { notifications } from "@mantine/notifications";
 import { IPagination } from "@/lib/types.ts";
 import { useTranslation } from "react-i18next";
@@ -57,33 +58,66 @@ export function useCreateCommentMutation() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
-  return useMutation<IComment, Error, Partial<IComment>>({
+  return useMutation<IComment, Error, Partial<IComment>, { previousCache: unknown; tempId: string }>({
     mutationFn: (data) => createComment(data),
-    onSuccess: (newComment) => {
-      const cache = queryClient.getQueryData(
-        RQ_KEY(newComment.pageId),
-      ) as InfiniteData<IPagination<IComment>> | undefined;
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: RQ_KEY(variables.pageId) });
+      const previousCache = queryClient.getQueryData(RQ_KEY(variables.pageId));
 
+      const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
+      const tempId = crypto.randomUUID();
+
+      const tempComment: IComment = {
+        id: tempId,
+        content: variables.content as string,
+        pageId: variables.pageId,
+        parentCommentId: variables.parentCommentId,
+        type: variables.type ?? "page",
+        creatorId: currentUser?.user?.id ?? "",
+        creator: currentUser?.user ?? null,
+        workspaceId: currentUser?.workspace?.id ?? "",
+        createdAt: new Date(),
+      };
+
+      const cache = previousCache as InfiniteData<IPagination<IComment>> | undefined;
       if (cache && cache.pages.length > 0) {
-        const alreadyExists = cache.pages.some((page) =>
-          page.items.some((c) => c.id === newComment.id),
-        );
-        if (alreadyExists) return;
-
         const lastIdx = cache.pages.length - 1;
-        queryClient.setQueryData(RQ_KEY(newComment.pageId), {
+        queryClient.setQueryData(RQ_KEY(variables.pageId), {
           ...cache,
           pages: cache.pages.map((page, i) =>
             i === lastIdx
-              ? { ...page, items: [...page.items, newComment] }
+              ? { ...page, items: [...page.items, tempComment] }
               : page,
           ),
         });
       }
 
+      return { previousCache, tempId };
+    },
+    onSuccess: (newComment, _variables, context) => {
+      // Replace the temp placeholder with the confirmed comment from the server.
+      const cache = queryClient.getQueryData(
+        RQ_KEY(newComment.pageId),
+      ) as InfiniteData<IPagination<IComment>> | undefined;
+
+      if (cache && context?.tempId) {
+        queryClient.setQueryData(RQ_KEY(newComment.pageId), {
+          ...cache,
+          pages: cache.pages.map((page) => ({
+            ...page,
+            items: page.items.map((c) =>
+              c.id === context.tempId ? newComment : c,
+            ),
+          })),
+        });
+      }
+
       notifications.show({ message: t("Comment created successfully") });
     },
-    onError: () => {
+    onError: (_err, variables, context) => {
+      if (context?.previousCache) {
+        queryClient.setQueryData(RQ_KEY(variables.pageId), context.previousCache);
+      }
       notifications.show({
         message: t("Error creating comment"),
         color: "red",

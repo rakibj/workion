@@ -138,13 +138,41 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
       if (parentId) payload.parentPageId = parentId;
       if (type !== "document") payload.type = type;
 
+      // Read tree now so lastIndex is computed against the pre-insert state.
+      const current = store.get(treeDataAtom);
+      let lastIndex: number;
+      if (parentId === null) {
+        lastIndex = current.length;
+      } else {
+        const parent = treeModel.find(current, parentId);
+        lastIndex = parent?.children?.length ?? 0;
+      }
+
+      // Insert a placeholder node immediately so the sidebar updates before
+      // the server round-trip completes (~180ms to Europe).
+      const tempId = crypto.randomUUID();
+      const tempNode: SpaceTreeNode = {
+        id: tempId,
+        slugId: tempId,
+        name: "",
+        position: "",
+        spaceId,
+        parentPageId: parentId ?? undefined,
+        hasChildren: false,
+        children: [],
+      };
+      setData((prev) => treeModel.insert(prev, parentId, tempNode, lastIndex));
+
       let createdPage: IPage;
       try {
         createdPage = await createPageMutation.mutateAsync(payload);
       } catch {
-        throw new Error("Failed to create page");
+        setData((prev) => treeModel.remove(prev, tempId));
+        notifications.show({ message: t("Failed to create page"), color: "red" });
+        return;
       }
 
+      // Replace placeholder with the real node from the server.
       const newNode: SpaceTreeNode = {
         id: createdPage.id,
         slugId: createdPage.slugId,
@@ -155,21 +183,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         hasChildren: false,
         children: [],
       };
-
-      // Read latest tree at call time. Without this, callers that mutate the
-      // tree (e.g. lazy-load children on expand) immediately before calling
-      // handleCreate hit a stale closure and compute lastIndex against the
-      // pre-load tree, requiring a setTimeout-based wait at the call site.
-      const current = store.get(treeDataAtom);
-      let lastIndex: number;
-      if (parentId === null) {
-        lastIndex = current.length;
-      } else {
-        const parent = treeModel.find(current, parentId);
-        lastIndex = parent?.children?.length ?? 0;
-      }
-
-      setData((prev) => treeModel.insert(prev, parentId, newNode, lastIndex));
+      setData((prev) => treeModel.insert(treeModel.remove(prev, tempId), parentId, newNode, lastIndex));
 
       setTimeout(() => {
         emit({
@@ -190,7 +204,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
       );
       navigate(pageUrl);
     },
-    [spaceId, createPageMutation, setData, store, emit, navigate, spaceSlug],
+    [spaceId, createPageMutation, setData, store, emit, navigate, spaceSlug, t],
   );
 
   const handleRename = useCallback(
