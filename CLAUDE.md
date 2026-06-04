@@ -48,9 +48,9 @@ docmost/
 |---|---|
 | Backend framework | NestJS (modular, DI-based) |
 | Database | PostgreSQL 18 |
-| Query builder | Kysely (typed SQL — NOT an ORM; no magic, raw-ish) |
+| Query builder | Kysely (typed SQL — NOT an ORM) |
 | Migrations | Kysely migrations (`apps/server/src/database/migrations/`) |
-| Caching | Redis + `@nestjs/cache-manager` (5s default TTL) |
+| Caching | Redis + `@nestjs/cache-manager` |
 | Job queue | BullMQ (Redis-backed) |
 | Real-time collab | Hocuspocus + Yjs ← **BLACK BOX** |
 | Frontend framework | React 18 |
@@ -66,9 +66,9 @@ docmost/
 
 ## Redis Connection Rule
 
-**Always pass the URL string directly to ioredis. Never reconstruct a connection from `parseRedisUrl()` parts.**
+**Always pass the URL string directly to ioredis. Never reconstruct from `parseRedisUrl()` parts.**
 
-`parseRedisUrl()` decomposes the URL into host/port/password but discards the `rediss://` TLS signal. Passing those parts to an ioredis constructor creates a plain TCP connection that Upstash (and any TLS-only Redis) immediately resets.
+`parseRedisUrl()` discards the `rediss://` TLS signal — reconstructed parts create a plain TCP connection that Upstash resets immediately.
 
 ```ts
 // ❌ — loses TLS
@@ -81,39 +81,32 @@ new Redis(url, { maxRetriesPerRequest: null }); // BullMQ
 config: { url }                                  // @nestjs-labs/nestjs-ioredis
 ```
 
-`parseRedisUrl()` is still safe for reading metadata (e.g. `family` for IPv4/IPv6 forcing) as long as the URL is also passed as the actual connection string.
+`parseRedisUrl()` is still safe for reading metadata (e.g. `family`) as long as the URL is also passed as the actual connection string.
 
 ---
 
 ## Infrastructure (Dev)
 
 ```bash
-# 1. Start DB + Redis (run once, keep running in background)
-docker compose up -d
+docker compose up -d            # start DB + Redis
+pnpm run dev                    # client + server with hot reload
+pnpm run server:dev             # NestJS only
+pnpm run client:dev             # Vite only
 
-# 2. Start the app with hot reload
-pnpm run dev            # client + server concurrently
-
-# Individual
-pnpm run server:dev     # NestJS with watch
-pnpm run client:dev     # Vite dev server
-
-# Migrations
-pnpm --filter server run migration:create   # scaffold new migration
-pnpm --filter server run migration:latest   # run all pending migrations
+pnpm --filter server run migration:create   # scaffold migration
+pnpm --filter server run migration:latest   # run pending
 pnpm --filter server run migration:down     # rollback one
 
-# Tests
 pnpm --filter server run test               # Jest (backend)
 pnpm --filter server run test:cov           # with coverage
 pnpm --filter client run test               # Vitest (frontend)
 ```
 
-**Docker Compose files — do not confuse them:**
+**Docker Compose files:**
 | File | Purpose |
 |---|---|
-| `docker-compose.yml` | **Dev default.** Starts PostgreSQL + Redis only. App runs locally via `pnpm run dev`. |
-| `docker-compose.prod.yml` | Full production stack with a built image. Requires real `APP_SECRET`. Never use for local dev. |
+| `docker-compose.yml` | Dev default — PostgreSQL + Redis only. App runs locally. |
+| `docker-compose.prod.yml` | Full production stack. Never use for local dev. |
 
 **Required env vars** (`.env` at repo root):
 ```
@@ -129,100 +122,50 @@ REDIS_URL=redis://localhost:6379
 
 > Credentials in `Cloud Implementation.md` (never commit).
 
-### Current infrastructure
-
-| Service | Where | Status |
+| Service | Where | Notes |
 |---|---|---|
-| App (NestJS) | Contabo VPS — Docker | Live at `http://157.173.120.4` |
-| Redis | Contabo VPS — Docker (local) | Running alongside app, `REDIS_URL=redis://redis:6379` |
-| Postgres | Neon (managed, eu-central-1 Frankfurt) | Connected |
-| File storage | Cloudflare R2 | Connected (bucket: `workion`) |
+| App (NestJS) | Contabo VPS — Docker | `http://157.173.120.4` |
+| Redis | Contabo VPS — Docker | `REDIS_URL=redis://redis:6379` |
+| Postgres | Neon (eu-central-1, pooler endpoint) | `&pgbouncer=true` required |
+| File storage | Cloudflare R2 | bucket: `workion`, uses `AWS_S3_*` prefix |
 
-**No domain in use.** App is accessed directly via bare IP `http://157.173.120.4`. No DNS, no Caddy, no Cloudflare proxy. Do not reference `projects.gameloops.io` or suggest domain-based solutions until a domain is actually set up.
+**No domain in use.** Direct bare IP only. Do not suggest domain-based solutions until a domain is set up.
 
-**Upstash abandoned** — BullMQ's idle polling exhausted the 500K/month free tier in ~10 days. Switched to local Redis (free, no limits). Upstash credentials kept in `Cloud Implementation.md` for reference only.
-
-**R2 env var fix** — app requires `AWS_S3_*` prefix (not `S3_*`). Already fixed on server.
+**Upstash abandoned** — BullMQ exhausted the free tier in ~10 days. Now using local Redis.
 
 ---
 
-## Deploying Local Changes to Cloud (VPS)
+## Deploying to VPS
 
-The VPS runs the app via `docker-compose.prod.yml`. `deploy.sh` (repo root, already pushed) handles the full cycle.
-
-### Every deploy
+`deploy.sh` at repo root: git pull → docker build → docker up → migrations.
 
 ```bash
-# 1. Local — commit and push
-git add <files>
-git commit -m "your message"
+# Standard deploy
 git push origin main
-
-# 2. SSH into the VPS and run
 ssh root@157.173.120.4
-cd /home/apps/workion
-./deploy.sh
-```
+cd /home/apps/workion && ./deploy.sh
 
-The script does: git pull → docker build → docker up → migrations.
-
-```bash
-./deploy.sh --no-cache      # full image rebuild — use after changing package.json / pnpm-lock.yaml
+./deploy.sh --no-cache      # after package.json / pnpm-lock.yaml changes
 ./deploy.sh --skip-migrate  # skip migrations
-```
 
-**First-time VPS setup** (once only — after cloning the repo):
-```bash
-chmod +x deploy.sh
-```
-
-### Migrations only (no code changes)
-
-```bash
-ssh root@157.173.120.4
-cd /home/apps/workion
+# Migrations only
 docker compose -f docker-compose.prod.yml exec app pnpm --filter server migration:latest
-```
 
-### Env var changes only (no rebuild needed)
-
-```bash
-ssh root@157.173.120.4
-cd /home/apps/workion
-# Edit .env on the server
+# Env var change (no rebuild)
 nano .env
-
-# Restart the app container to pick up new env
 docker compose -f docker-compose.prod.yml restart app
-```
 
-### Check app logs
-
-```bash
-# Follow live logs
+# Logs
 docker compose -f docker-compose.prod.yml logs -f app
 
-# Last 100 lines
-docker compose -f docker-compose.prod.yml logs --tail=100 app
-```
-
-### Rollback to previous commit
-
-```bash
-ssh root@157.173.120.4
-cd /home/apps/workion
-git log --oneline -10          # find the target commit hash
+# Rollback
 git checkout <commit-hash>
-docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d
-# Note: migrations are forward-only; rollback via migration:down if schema changed
+docker compose -f docker-compose.prod.yml build --no-cache && up -d
 ```
 
 ---
 
 ## Permission System (Core — Do Not Break)
-
-This is the most important existing system. Understand it before touching anything access-related.
 
 ### Three-tier hierarchy
 
@@ -240,37 +183,25 @@ SpaceRole:  admin | writer | reader         // space membership level
 PagePermissionRole: writer | reader         // page-level override
 ```
 
-### Space membership
+`space_members`: member is either a **user** OR a **group** (DB check constraint).
 
-`space_members` table: a member is either a **user** OR a **group** (enforced by DB check constraint). Groups allow bulk role assignment.
+**Page access:** No restriction → space role determines read/write. Restricted → only users/groups in `page_permissions` can access (space membership still required as outer gate).
 
-### Page access logic (`page-access.service.ts`)
-
-- If page has **no restriction**: space-level role determines read/write.
-- If page is **restricted** (`PageAccessLevel.RESTRICTED`): only users/groups in `page_permissions` can access. Space role still required as minimum barrier.
-- Both checks always apply — space membership is the outer gate.
-
-### CASL abilities (`apps/server/src/core/casl/`)
-
-- `workspace-ability.factory.ts` — workspace-scoped actions
-- `space-ability.factory.ts` — space-scoped actions (Settings, Member, Page, Share)
-- Used via `@UseGuards(JwtAuthGuard)` + manual `ability.cannot(...)` calls in controllers
-
-**Rule**: never bypass CASL checks. Add new abilities through the factory pattern.
+**CASL** (`apps/server/src/core/casl/`): `workspace-ability.factory.ts` + `space-ability.factory.ts`. Never bypass — add new abilities through the factory pattern.
 
 ---
 
 ## Database Schema (Key Tables)
 
-Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated, do not hand-edit).
+Generated types: `apps/server/src/database/types/db.d.ts` (auto-generated, do not hand-edit).
 
 | Table | Purpose |
 |---|---|
 | `workspaces` | Top-level tenant |
-| `users` | Workspace-scoped users (email unique per workspace) |
+| `users` | Workspace-scoped users |
 | `groups` / `group_users` | Role grouping |
-| `spaces` | Document spaces within a workspace |
-| `space_members` | User or group → space role mapping |
+| `spaces` | Document spaces |
+| `space_members` | User or group → space role |
 | `pages` | Hierarchical docs (parent_id self-ref) |
 | `page_permissions` | Per-page user/group overrides |
 | `page_access` | Restriction flag per page |
@@ -279,17 +210,18 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 | `attachments` | File attachments |
 | `workspace_invitations` | Invite flow |
 | `shares` | Public share links |
-| `labels` | Page tagging |
-| `watchers` | Page subscription |
-| `favorites` | Starred pages |
+| `labels` / `watchers` / `favorites` | Tagging, subscriptions, starred |
+| `kanban_tasks` / `kanban_columns` | Kanban board data |
+| `templates` | Page templates |
+| `workspace_ai_config` | OpenRouter API key (encrypted) |
 
-**New tables for client management features** go in new migration files. Never alter existing migrations.
+New tables go in new migration files. Never alter existing migrations.
 
 ---
 
-## Server Module Map (Black Box vs. Work Area)
+## Server Module Map
 
-### Work areas (safe to extend)
+### Work areas
 
 | Path | What it is |
 |---|---|
@@ -303,8 +235,10 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 | `core/group/` | Group management |
 | `core/comment/` | Comments |
 | `core/label/` | Labels |
-| `core/kanban/` | Kanban board (project tracker pages) |
-| `core/ai-chat/` | AI chat — OpenRouter BYOK streaming, key management |
+| `core/kanban/` | Kanban board |
+| `core/ai-chat/` | AI chat — OpenRouter BYOK streaming |
+| `core/notification/` | In-app notifications |
+| `core/template/` | Page templates |
 | `database/migrations/` | Schema migrations |
 | `database/repos/` | Data access layer |
 
@@ -312,20 +246,18 @@ Generated types live in `apps/server/src/database/types/db.d.ts` (auto-generated
 
 | Path | Why hands-off |
 |---|---|
-| `collaboration/` | Hocuspocus real-time engine. Treat as black box — only additive touches allowed (new guards/conditions inside existing extensions, never restructuring). |
-| `apps/editor-ext/` | TipTap editor extensions |
-| `apps/ee/` | Enterprise Edition — conditionally loaded, treat as plugin |
-| `integrations/storage/` | S3/local abstraction — use `StorageService`, don't re-implement |
-| `integrations/mail/` | Email sending — use `MailModule`, don't touch internals |
-| `integrations/queue/` | BullMQ setup — add new jobs/queues, don't change infra |
+| `collaboration/` | Hocuspocus engine — additive touches only |
+| `apps/editor-ext/` | TipTap extensions |
+| `apps/ee/` | Enterprise Edition — conditionally loaded |
+| `integrations/storage/` | Use `StorageService`, don't re-implement |
+| `integrations/mail/` | Use `MailModule`, don't touch internals |
+| `integrations/queue/` | Add new jobs/queues, don't change infra |
 | `integrations/export/` | PDF/Markdown export |
 | `integrations/import/` | Confluence/DOCX import |
 
-If a black-box module needs to change, write a spec for it first and flag explicitly in the PR.
-
 ---
 
-## Client (Frontend) Module Map
+## Client Module Map
 
 ### Work areas
 
@@ -338,93 +270,62 @@ If a black-box module needs to change, write a spec for it first and flag explic
 | `features/user/` | User profile |
 | `features/group/` | Group management UI |
 | `features/home/` | Dashboard |
-| `features/page/board/` | tldraw whiteboard page type |
-| `features/page/kanban/` | Kanban board page type |
-| `features/ai-chat/` | AI chat panel + OpenRouter key settings |
+| `features/page/board/` | tldraw whiteboard |
+| `features/page/kanban/` | Kanban board |
+| `features/ai-chat/` | AI chat panel + key settings |
+| `features/notification/` | Notification bell + popover |
+| `apps/client/src/ee/template/` | Page templates UI |
 
 ### Black boxes
 
 | Path | Why hands-off |
 |---|---|
-| `features/editor/` | TipTap integration — rich editor, leave alone |
-| `features/transclusion/` | Page embedding feature |
+| `features/editor/` | TipTap integration |
+| `features/transclusion/` | Page embedding |
 | `features/websocket/` | Real-time sync |
 
 ---
 
 ## Personal-Use Restrictions
 
-### New Workspace Signup — Disabled
-New workspace creation via `/setup/register` is intentionally off for personal use.
-
-**How it works (no code change needed):**
-- **Backend**: `SetupGuard` (`core/auth/guards/setup.guard.ts`) throws 403 if any workspace already exists.
-- **Frontend**: `pages/auth/setup-workspace.tsx` redirects to `/login` if workspace data loads — the form never renders.
-
-Invitations, login, and all other auth flows remain fully functional.
-
-**To re-enable:** Delete the existing workspace from the DB, or modify `SetupGuard` to always return `true`. Write a spec first if re-enabling for multi-tenant use.
+New workspace creation is gated by `ALLOW_SIGNUP` env var (default `false`):
+- **Backend**: `SetupGuard` allows if workspace count is zero (first-time) OR `ALLOW_SIGNUP=true`; 403 otherwise.
+- **Frontend**: `setup-workspace.tsx` fetches `allowSignup` via `GET /api/auth/setup-config`; redirects to `/login` if `false`.
+- Set `ALLOW_SIGNUP=true` in VPS `.env` to re-enable. Invitations and login always work.
 
 ---
 
 ## Implemented Custom Features
 
 ### AI Chat (BYOK via OpenRouter)
-- Users store their own OpenRouter API key per workspace (encrypted at rest in `workspace_ai_config` table).
-- Backend: `core/ai-chat/` — streaming chat via OpenRouter, context injection from current page content, auto-title generation for threads.
-- Frontend: slide-over panel with thread list, message history, and model selector; key management UI in workspace settings.
-- Do not add Anthropic/OpenAI direct calls — all AI traffic routes through OpenRouter.
+OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backend: `core/ai-chat/` — streaming chat, page content injection, auto-title. Frontend: slide-over panel with thread list + model selector; key UI in workspace settings. All AI routes through OpenRouter only — no direct Anthropic/OpenAI calls.
 
-### Whiteboard Page (tldraw + live cursors)
-- A `board` page type renders a full-screen tldraw canvas instead of the TipTap editor.
-- Real-time multi-user cursors use the existing Hocuspocus/Yjs infrastructure with a `board.{pageId}` room prefix — additive-only touch on `collaboration/`.
-- Board state is persisted as a Yjs doc (same store as rich-text pages); no separate DB table needed.
-- Entry point: `features/page/board/` (client). Do not restructure the collab layer.
+### Whiteboard Page (tldraw)
+`board` page type → full-screen tldraw canvas. Uses Hocuspocus/Yjs with `board.{pageId}` room prefix (additive-only touch on `collaboration/`). `HocuspocusProviderWebsocket` is a **module-level singleton** in `board-editor.tsx` — do not destroy it on unmount (expensive TCP reconnect). Only the per-board `HocuspocusProvider` is created/destroyed per page.
 
 ### Kanban Board Page
-- A `kanban` page type renders a drag-and-drop board (columns = status, cards = tasks) inside a page.
-- Backend: `core/kanban/` — task/column CRUD with position ordering; tasks stored in `kanban_tasks` and `kanban_columns` tables.
-- Frontend: `features/kanban/` — uses Atlaskit pragmatic drag-and-drop; inline card editing, assignees, due dates, priority (urgent/high/medium/low with color coding).
-- Milestone overdue indicator: milestone badge turns red (overdue) or amber (today) with a warning icon; a colored date row appears below card badges; card modal also shows colored date.
-- Kanban pages live in the normal page tree and respect the same space/page permission model.
+`kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room; filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
 
 ### In-App Notifications
-- Bell icon in app header with unread badge; popover lists notifications filtered by type (all / unread / mentions / updates).
-- Backend: `core/notification/` — service creates notifications, BullMQ processor handles queued jobs, WebSocket delivers to `user-${userId}` channel in real time.
-- Watchers (`watchers` table) are notified on comment creation; `watcher.service.ts` handles watch/unwatch for pages and spaces.
+Bell icon with unread badge. Backend: `core/notification/` — BullMQ processor + WS delivery to `user-${userId}` channel. `watchers` table: `watcher.service.ts` handles watch/unwatch for pages and spaces.
 
 ### Page Templates
-- Workspace-scoped templates with title, description, content, icon, and full-text search; stored in `templates` table.
-- Backend: `core/template/` — `TemplateService` + `TemplateController` with 6 POST endpoints (`/templates`, `/templates/info`, `/templates/create`, `/templates/update`, `/templates/delete`, `/templates/use`). `use` creates a real page via `PageService.create()`.
-- Client UI fully implemented under `apps/client/src/ee/template/` (picker modal, create modal, list page, editor).
-- Permissions: space writer/admin for create/update/delete; any space member for list/read/use.
+`templates` table (workspace-scoped). `core/template/` — `TemplateController` with 6 POST endpoints (`/templates`, `/templates/info`, `/templates/create`, `/templates/update`, `/templates/delete`, `/templates/use`). UI: `apps/client/src/ee/template/`.
 
 ### HTML Artifact Block
-- A custom TipTap `Node` (`htmlArtifact`) inserted via the `/html` slash command. Stores raw HTML and a persisted height in node attributes (`html`, `height`) — no new table, no new page type, no new API endpoint. Yjs syncs both attrs across collaborators for free.
-- Extension: `features/editor/extensions/html-artifact.ts` — registered in `extensions.ts` alongside all other extensions.
-- NodeView: `features/editor/components/html-artifact/html-artifact-view.tsx` — Edit / Split / Preview toggle (desktop); Preview-only with a full-screen modal editor on mobile (< 768 px). Read-only pages are locked to Preview mode.
-- Auto-sizing: a tiny script injected at the end of `srcdoc` posts `scrollHeight` via `postMessage` to the parent. A `height:auto!important` reset style (also appended after user HTML) prevents `height:100vh` / `min-height:100vh` on `html`/`body` from inflating the reported height.
-- Resizable: drag handle at the bottom sets `node.attrs.height` (persisted); double-click resets to auto-fit.
-- Security: `<iframe sandbox="allow-scripts">` without `allow-same-origin` — scripts run in a null origin, cannot access parent cookies or DOM.
-- Export: `renderHTML` emits `<pre data-type="html-artifact"><code class="language-html">…</code></pre>` as a Markdown/PDF fallback; no changes to the black-box export module.
+`htmlArtifact` TipTap node via `/html` slash command. `features/editor/extensions/html-artifact.ts`. Sandboxed `<iframe sandbox="allow-scripts">` (no `allow-same-origin`). Persists `html` + `height` attrs in Yjs — no DB table. Auto-sizes via `postMessage(scrollHeight)`. Resizable drag handle; double-click resets.
 
 ### In-Place AI Text Improvement
-- Backend for the editor's inline AI transformation feature. Frontend was pre-built; this adds the missing server endpoints.
-- Routes: `POST /ai/generate/stream` (SSE) and `POST /ai/generate` (non-streaming) — both in `core/ai-chat/controllers/ai-generate.controller.ts`.
-- Maps `AiAction` enum values to system prompts; delegates to `AiStreamService.streamChat()`. No message persistence — pure one-shot transformation.
-- DTO: `core/ai-chat/dto/ai-generate.dto.ts` with `{ action, content, prompt? }`.
+`POST /ai/generate/stream` (SSE) and `POST /ai/generate` in `core/ai-chat/controllers/ai-generate.controller.ts`. DTO: `{ action, content, prompt? }`. No message persistence — pure one-shot transformation.
 
 ### Block Handle Context Menu
-- Clicking the drag handle (⠿) opens a context menu with block-level actions. Drag is unaffected.
-- `drag-handle.ts`: tracks `currentNodePos`/`currentNodeType` on `mousemove`; dispatches `blockHandleClick` custom event on click.
-- Component: `features/editor/components/block-menu/block-menu.tsx` — uses Mantine `Menu` with submenus for Turn into, Text color, Background color; plus Duplicate, Copy link (headings), Ask AI, Delete.
-- Wired in `page-editor.tsx` via `addEventListener('blockHandleClick')` on the `menuContainerRef`.
-- Context-sensitive: Turn into and Color sections hidden for tables/images/code blocks; Copy link only for headings with an `id` attr.
+`drag-handle.ts` dispatches `blockHandleClick` event on handle click. Component: `features/editor/components/block-menu/block-menu.tsx` — Turn into, Text/Background color, Duplicate, Copy link (headings), Ask AI, Delete. Wired via `addEventListener('blockHandleClick')` in `page-editor.tsx`.
 
 ### Comment Resolve + Realtime Toast
-- **Comment resolve** was broken — `POST /comments/resolve` endpoint was missing from the backend despite the DB schema, frontend mutation, and notification infrastructure all existing.
-- Added: `dto/resolve-comment.dto.ts`, `resolve()` method in `CommentService`, `POST /comments/resolve` in `CommentController`. Sets `resolvedAt`/`resolvedById` in DB, emits `commentResolved` WS event, queues `COMMENT_RESOLVED_NOTIFICATION` job (only when resolving someone else's comment).
-- **Realtime toast**: `use-query-subscription.ts` now shows a blue Mantine toast ("X left a comment") on `commentCreated` WS events from other users. Uses `queryClient.getQueryData(["currentUser"])` to filter out self-comments — no extra hook calls.
+`POST /comments/resolve` → `CommentService.resolve()` — sets `resolvedAt`/`resolvedById`, emits `commentResolved` WS event, queues notification. `use-query-subscription.ts` shows toast on `commentCreated` from other users (filtered via `queryClient.getQueryData(["currentUser"])`).
+
+### Logo
+SVG at `apps/client/src/assets/logo-workion.svg`, imported in `auth-layout.tsx` as a JS module (Vite content-hashes it). To update: replace the SVG and redeploy.
 
 ---
 
@@ -432,9 +333,9 @@ Invitations, login, and all other auth flows remain fully functional.
 
 ```
 [ ] 1. Write spec (problem, data model delta, API endpoints, UI flows, edge cases)
-[ ] 2. Get spec approved in conversation before touching code
+[ ] 2. Get spec approved before touching code
 [ ] 3. Write migration (if schema changes) — run locally, verify
-[ ] 4. Write unit tests (Jest/Vitest) — they must fail first
+[ ] 4. Write unit tests — they must fail first
 [ ] 5. Implement service/repo layer
 [ ] 6. Tests pass
 [ ] 7. Implement controller + DTOs
@@ -447,37 +348,21 @@ Invitations, login, and all other auth flows remain fully functional.
 
 ## Testing Conventions
 
-### Backend (Jest, co-located `.spec.ts` files)
-
-- Use `@nestjs/testing` `Test.createTestingModule` with mocked repos.
-- Mock all repos with `jest.Mocked<RepoClass>` — never hit a real DB in unit tests.
-- See `apps/server/src/core/page/services/backlink.service.spec.ts` for the canonical pattern.
-- Test files live next to the file they test: `foo.service.ts` → `foo.service.spec.ts`.
+**Backend (Jest, co-located `.spec.ts`):** Use `@nestjs/testing` with `jest.Mocked<RepoClass>` — never hit a real DB. Canonical pattern: `apps/server/src/core/page/services/backlink.service.spec.ts`.
 
 ```ts
-// Pattern:
 const module = await Test.createTestingModule({
-  providers: [
-    ServiceUnderTest,
-    { provide: SomeDependency, useValue: mockValue },
-  ],
+  providers: [ServiceUnderTest, { provide: SomeDep, useValue: mockValue }],
 }).compile();
 ```
 
-### Frontend (Vitest)
+**Frontend (Vitest):** Test hooks and utility functions; avoid snapshot tests.
 
-- Run with `pnpm --filter client run test`.
-- Test hooks and utility functions; avoid snapshot tests.
-
-### What to test
-
-- Happy path + at least two failure/edge cases per unit.
-- Permission boundaries: ensure forbidden paths throw `ForbiddenException`.
-- New DB queries: test with mocked repo, not real DB.
+**What to test:** Happy path + two failure/edge cases. Permission boundaries must throw `ForbiddenException`.
 
 ---
 
-## Key File Locations (Quick Reference)
+## Key File Locations
 
 ```
 Permission types:     apps/server/src/common/helpers/types/permission.ts
@@ -497,387 +382,27 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Specs
 
-Specs waiting for approval before implementation. Do not implement any of these until explicitly approved in conversation.
-
-> **Performance spec audit (2026-06-04):** Full performance audit completed. Root causes of slowness: (1) no HTTP compression — all JSON sent raw, (2) page and tree reads still hit Neon on every navigation despite partial cache rollout, (3) share reads uncached, (4) Neon direct connection (not pooler) adds per-query overhead, (5) notification query always refetches. Specs below are ordered by priority. P0 and P1 are safe to ship together in one pass.
-
----
-
-### PERF-1: Neon Connection Pooler
-
-**Priority: P0 — 2 min env var change, zero code, biggest latency gain per query**
-**Status: DONE (2026-06-04)**
-
-Switched `DATABASE_URL` on the VPS from the direct Neon endpoint to the PgBouncer pooler endpoint (`ep-super-fire-a2rltgof-pooler.eu-central-1.aws.neon.tech`). Added `&pgbouncer=true` to disable prepared statements (required for PgBouncer transaction pooling mode). No code change, no rebuild — just a restart. Eliminates 50–100ms cold-connection overhead per query burst.
-
----
-
-### PERF-2: HTTP Response Compression
-
-**Priority: P0 — 15 min, biggest bandwidth win**
-**Status: DONE (2026-06-04)**
-
-Added `@fastify/compress@8.3.1` to `apps/server/package.json`. Registered with `{ global: true }` in `apps/server/src/main.ts` before all other plugin registrations. SSE routes (`text/event-stream`) are excluded automatically by the plugin — not in the default compressible MIME type list, so AI streaming is safe. 60–80% response size reduction for all JSON payloads.
-
----
-
-### PERF-3: Page Base Metadata Caching
-
-**Priority: P1 — ~1hr, reduces redundant Neon hits for page validation calls**
-**Status: DONE (2026-06-04)**
-
-Added `PAGE` cache key (`entity:page:{pageId}`, 60s TTL) to `cache-keys.ts`. Wrapped `PageRepo.findById()` base case (no opts — the metadata-only call used as "page exists?" checks throughout the controller) with `withCache()`, following the exact user/workspace repo pattern. Added `invalidatePageCache()` and wired it into `updatePages`, `removePage`, `deletePage`, and `restorePage`.
-
-**What is NOT cached:** `findById` with any opts (includeContent, includeYdoc, etc.) — page content changes constantly via Yjs collaboration and must never be cached. Sidebar tree (`getSidebarPages`) is user-permission-dependent and skipped.
-
-**Files touched**
-```
-apps/server/src/common/helpers/cache-keys.ts
-apps/server/src/database/repos/page/page.repo.ts
-```
-
----
-
-### PERF-4: Share Entity Caching
-
-**Priority: P1 — 30 min, eliminates DB hit on every public share page load**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-Every public share page open (`/share/:shareId/p/:pageSlug`) calls `ShareRepo.findByKey()` to validate the share exists and is active. Shares almost never change after creation. These reads currently go straight to Neon.
-
-**What to cache**
-
-| Cache key | Source method | TTL | Invalidate when |
-|---|---|---|---|
-| `entity:share:{shareKey}` | `ShareRepo.findByKey()` | 300s | Share updated (password, expiry, enabled toggle) or deleted |
-
-**Implementation plan**
-
-1. Add `SHARE` key and `SHARE_CACHE_TTL_MS = 300_000` to `cache-keys.ts`.
-2. Wrap `ShareRepo.findByKey()` with `withCache()`.
-3. In `ShareRepo.update()` and `ShareRepo.delete()`: invalidate `entity:share:{shareKey}`.
-
-**UX risk:** Low. If a share is disabled/deleted, a cached response persists for up to 5 minutes. Acceptable for personal use. If tighter invalidation is needed, reduce TTL to 60s — still eliminates the majority of Neon hits.
-
-**Files touched**
-```
-apps/server/src/common/helpers/cache-keys.ts
-apps/server/src/database/repos/share/share.repo.ts
-```
-
----
-
-### PERF-5: Notification Query staleTime
-
-**Priority: P2 — 2 min frontend change, stops unnecessary refetches**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-`useNotificationsQuery` is configured with `staleTime: 0` and `gcTime: 0`. Every time the notification popover mounts (every time the bell icon is clicked), it fires a fresh request to the server. New notifications already arrive in real time via WebSocket — the initial-load fetch is the only one that needs to be fresh.
-
-**Fix**
-
-In the notification query file, change:
-```ts
-// Before
-staleTime: 0,
-gcTime: 0,
-
-// After
-staleTime: 30_000,   // 30s — WebSocket handles real-time delivery
-gcTime: 60_000,      // keep in memory 1 min after popover closes
-```
-
-**UX risk:** None. The WebSocket `notification` event already pushes new notifications into the query cache via `queryClient.invalidateQueries`. The staleTime only affects re-opens of the popover within 30 seconds — they show cached data instead of refetching, which is fine since real-time delivery via WebSocket is active.
-
-**Files touched**
-```
-apps/client/src/features/notification/  (notification query hook)
-```
-
----
-
-### PERF-6: QueryClient gcTime (memory cache for fast back-navigation)
-
-**Priority: P2 — 5 min, improves back-navigation feel**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-`gcTime` is not set in the global `QueryClient` config, so it uses React Query's default of 5 minutes. Once a page is unmounted, its cached data is garbage-collected after 5 minutes. Navigating back to a recently visited page within 5 minutes uses cached data (fast), but after that it refetches. For a knowledge-base app where users browse many pages, extending this window meaningfully reduces refetches.
-
-**Fix**
-
-In `apps/client/src/main.tsx`:
-```ts
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      retry: false,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,   // add: keep cache 30min after unmount
-    },
-  },
-});
-```
-
-**UX risk:** None. `gcTime` only affects when unused cache entries are garbage-collected from memory. It does not affect whether data is considered stale or triggers refetches. Slightly higher memory usage (cached pages stay in RAM longer), but negligible for a personal-use app with few open tabs.
-
-**Files touched**
-```
-apps/client/src/main.tsx
-```
-
----
-
-### PERF-7: Cache `hasRestrictedPagesInSpace` in PageService
-
-**Priority: P1 — 15 min backend change, eliminates a DB hit on every sidebar tree load**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-`PageService.getSidebarPages()` calls `pagePermissionRepo.hasRestrictedPagesInSpace(spaceId)` on every sidebar pagination request (`page.service.ts:334`). This fires an EXISTS query against the `page_access` table — one Neon round-trip per tree node expansion. For the common case (no restricted pages), it always returns `false` but still pays full query latency.
-
-`ws.service.ts` already solves the identical problem with a cached helper `spaceHasRestrictions()` (lines 163–177) using a `WS_SPACE_RESTRICTION_CACHE_PREFIX` Redis key. The page service needs the same treatment.
-
-**Implementation plan**
-
-1. Add `SPACE_RESTRICTION: (spaceId: string) => \`space:restriction:${spaceId}\`` and `SPACE_RESTRICTION_CACHE_TTL_MS = 60_000` to `cache-keys.ts`.
-2. In `page.service.ts`, before calling `pagePermissionRepo.hasRestrictedPagesInSpace()`, check and set the Redis cache via `withCache()`.
-3. Invalidate `SPACE_RESTRICTION` key whenever a `page_access` record is created or deleted (in `PageAccessService`).
-
-**Files touched**
-```
-apps/server/src/common/helpers/cache-keys.ts
-apps/server/src/core/page/services/page.service.ts
-apps/server/src/core/page/page-access/page-access.service.ts
-```
-
----
-
-### PERF-8: Vite Manual Chunk for @tiptap
-
-**Priority: P2 — 10 min, reduces initial bundle parse time**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-`vite.config.ts` only splits `@mantine` into its own chunk. TipTap and its extensions (`@tiptap/*`) are statically imported from `features/editor/` and end up in the main bundle alongside all app code. Splitting them out reduces the JS the browser has to parse on cold load.
-
-tldraw is already fine — `board-page.tsx` uses `lazy(() => import("./board-editor"))` so Rolldown auto-splits it.
-
-**Implementation plan**
-
-Add a `vendor-tiptap` group to `advancedChunks.groups` in `vite.config.ts`:
-```ts
-{ name: "vendor-tiptap", test: /[\\/]node_modules[\\/]@tiptap[\\/]/ },
-```
-
-**UX risk:** None. Code splitting is transparent to the user; the chunks are loaded in parallel with the main chunk.
-
-**Files touched**
-```
-apps/client/vite.config.ts
-```
-
----
-
-### BOARD-2: Whiteboard Slow Load on Every Visit
-
-**Priority: P1 — Medium effort, high UX impact**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-Every time a user navigates to a board page, `board-editor.tsx` tears down and rebuilds the entire collaboration stack:
-- `socket.destroy()` — closes the WebSocket connection
-- `provider.destroy()` — destroys the Hocuspocus provider
-- `yDoc.destroy()` — destroys the Yjs document
-
-On the next visit, all three are recreated from scratch: new WebSocket TCP handshake → TLS → Hocuspocus auth → Yjs sync from server. This adds 300–800ms of perceived loading every time, even though IndexedDB persistence (`IndexeddbPersistence`) already stores the board state locally.
-
-The tldraw lazy bundle is fine after first visit (browser caches it).
-
-**Root cause:** The cleanup in the `useEffect` return is correct for preventing memory leaks, but the WebSocket is destroyed even when navigating between non-board pages — there's no reason to hold it alive — but reconnecting it on every re-entry is expensive.
-
-**Chosen approach — Shared WebSocket singleton:**
-
-Lift the `HocuspocusProviderWebsocket` out of `BoardEditor` into a module-level singleton. The socket is created once on first board visit and stays alive for the app session. Only the per-board `HocuspocusProvider` (one per `pageId`) is created/destroyed per page. Eliminates the TCP reconnect + TLS + auth handshake on every board visit — the expensive part.
-
-Option A (IDB-first render) was rejected: it would hide the reconnect behind stale data but wouldn't actually remove the reconnect cost. The board would still flash stale content then re-sync.
-
-**Implementation plan**
-
-1. In `board-editor.tsx`, extract the `HocuspocusProviderWebsocket` instantiation into a module-level lazy singleton (created on first call, reused after):
-   ```ts
-   let _boardSocket: HocuspocusProviderWebsocket | null = null;
-   function getBoardSocket(url: string) {
-     if (!_boardSocket) _boardSocket = new HocuspocusProviderWebsocket({ url });
-     return _boardSocket;
-   }
-   ```
-2. Use `getBoardSocket(collaborationURL)` inside the `useEffect` instead of `new HocuspocusProviderWebsocket(...)`.
-3. Remove `socket.destroy()` from the effect cleanup — the socket must not be torn down on unmount.
-4. Keep `provider.destroy()` and `yDoc.destroy()` in the cleanup — per-board resources still get cleaned up.
-
-**Files touched**
-```
-apps/client/src/features/board/components/board-editor.tsx
-```
-
----
-
-### KANBAN-RT: Realtime Kanban Card/Column Movement
-
-**Priority: P2 — Significant effort, multi-user UX improvement**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-Card and column moves in the kanban board are persisted via HTTP PATCH to the backend (`POST /kanban/cards/move`, `POST /kanban/columns/move`). Other users viewing the same board see no update until they refresh the page.
-
-**Desired behaviour:** When user A moves a card or column, all other users viewing the same kanban page see the board update in real time within ~500ms — no refresh required.
-
-**Data model delta:** None. Position changes are already persisted in `kanban_tasks.position` and `kanban_columns.position`.
-
-**Implementation plan**
-
-1. **Backend:** After a successful `moveCard` or `moveColumn` call in `KanbanService`, emit a WebSocket event on the page's room (`page-${pageId}`):
-   - `kanbanCardMoved` — payload: `{ cardId, columnId, position, pageId }`
-   - `kanbanColumnMoved` — payload: `{ columnId, position, pageId }`
-   Use the existing `WsService.broadcastToPage()` (or equivalent) — do not add new infrastructure.
-
-2. **Frontend:** In the kanban board hook/component, subscribe to these two WS events for the current `pageId`. On receipt, call `queryClient.invalidateQueries(['kanban', pageId])` (or apply an optimistic update directly to the cached board state).
-
-**Edge cases:**
-- Ignore events emitted by the current user (use `userId` in payload and filter).
-- Debounce rapid successive moves (drag is fast; only apply the final position).
-
-**Files touched**
-```
-apps/server/src/core/kanban/kanban.service.ts
-apps/server/src/core/kanban/kanban.controller.ts
-apps/client/src/features/kanban/  (board hook + query)
-```
-
----
-
-### AUTH-SIGNUP: Re-enable Workspace Signup
-
-**Priority: P0 — ~20 min, blocked feature**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-New workspace signup was intentionally disabled for personal use. `SetupGuard` throws 403 if any workspace already exists. The frontend `setup-workspace.tsx` redirects to `/login` if workspace data loads.
-
-**Goal:** Allow new workspaces to be created again (multi-tenant or demo use).
-
-**Implementation plan**
-
-1. **Env var:** Add `ALLOW_SIGNUP` to `EnvironmentService` (`apps/server/src/integrations/environment/environment.service.ts`). Defaults to `false`.
-
-2. **Backend:** In `SetupGuard.canActivate()`, allow the route if the workspace count is zero (first-time setup) OR if `ALLOW_SIGNUP=true`. Keep the 403 behaviour when a workspace exists and the flag is off.
-
-3. **Frontend:** In `setup-workspace.tsx`, remove (or guard) the `useEffect` redirect so the form renders when `ALLOW_SIGNUP` is enabled. The env var needs to be surfaced to the client — either via an existing `/api/workspace/setup-status` response field or a new `GET /api/auth/setup-config` endpoint that returns `{ allowSignup: boolean }`.
-
-4. **`.env` on VPS:** Add `ALLOW_SIGNUP=true` when re-enabling; remove or set to `false` to lock it back down.
-
-**Files touched**
-```
-apps/server/src/integrations/environment/environment.service.ts
-apps/server/src/core/auth/guards/setup.guard.ts
-apps/client/src/pages/auth/setup-workspace.tsx
-```
-
----
-
-### LOGO-CACHE: Logo Not Updating After SVG Replacement
-
-**Priority: P0 — ~15 min, visual bug**
-**Status: DONE (2026-06-04)**
-
-**Problem**
-
-`logo-workion.svg` lived at the repo root and was not referenced by any app component — replacing it changed nothing visible in the browser. Additionally, static assets in `public/` are served without a content hash, so even if referenced, the browser would cache the old version indefinitely.
-
-**Fix**
-
-Copied `logo-workion.svg` → `apps/client/src/assets/logo-workion.svg`. Vite content-hashes assets imported as JS modules (e.g., `logo-Dab3kX9f.svg`), guaranteeing a cache miss whenever the file changes.
-
-Updated `auth-layout.tsx` to import the SVG via `import logoUrl from '@/assets/logo-workion.svg'` and render it instead of the old favicon PNG. Now updating `src/assets/logo-workion.svg` and redeploying will always show the new logo.
-
-To update the logo in the future: replace `apps/client/src/assets/logo-workion.svg` and redeploy.
-
-**Files touched**
-```
-apps/client/src/assets/logo-workion.svg  (new — copy of repo-root logo-workion.svg)
-apps/client/src/features/auth/components/auth-layout.tsx
-```
-
----
-
 ### DOMAIN: Apply Domain to VPS
 
-**Priority: P1 — Infrastructure change, enables HTTPS**
-**Status: TODO**
+**Priority: P1 — Infrastructure change, enables HTTPS | Status: TODO**
 
-**Context**
+Point a domain at `157.173.120.4`, terminate TLS with Caddy (Let's Encrypt), proxy to app on port 3000.
 
-App currently runs at `http://157.173.120.4` with no domain and no TLS. No Caddy or Nginx proxy is in place.
-
-**Goal**
-
-Point a domain at the VPS, terminate TLS with Caddy (auto-cert via Let's Encrypt), and proxy to the NestJS app on port 3000.
-
-**Implementation plan**
-
-1. **DNS:** Add an A record for the chosen domain pointing to `157.173.120.4`. Wait for propagation.
-
-2. **Caddy on VPS:** Add a `caddy` service to `docker-compose.prod.yml`:
+1. **DNS:** A record → `157.173.120.4`.
+2. **Caddy service** in `docker-compose.prod.yml`:
    ```yaml
    caddy:
      image: caddy:2-alpine
      restart: unless-stopped
-     ports:
-       - "80:80"
-       - "443:443"
+     ports: ["80:80", "443:443"]
      volumes:
        - ./Caddyfile:/etc/caddy/Caddyfile
        - caddy_data:/data
        - caddy_config:/config
    ```
-   Add `caddy_data` and `caddy_config` named volumes.
+3. **Caddyfile:** `yourdomain.com { reverse_proxy app:3000 }`
+4. Remove port 3000 from public exposure on `app` service.
+5. Update VPS `.env`: `APP_URL=https://yourdomain.com`. Check `COLLAB_URL` for `wss://` too.
+6. `./deploy.sh --no-cache`
 
-3. **Caddyfile** (repo root):
-   ```
-   yourdomain.com {
-     reverse_proxy app:3000
-   }
-   ```
-
-4. **Remove port 3000 exposure** from the `app` service in `docker-compose.prod.yml` (no need to expose it publicly once Caddy proxies it).
-
-5. **Update env on VPS:**
-   ```
-   APP_URL=https://yourdomain.com
-   ```
-
-6. **Redeploy:** `./deploy.sh --no-cache`
-
-**Notes**
-- Caddy auto-issues Let's Encrypt certs on first request. Port 80 must be reachable for the ACME HTTP-01 challenge.
-- `COLLAB_URL` (Hocuspocus WebSocket) may also need updating to `wss://yourdomain.com/collab` depending on how the frontend resolves it — check `environment.service.ts`.
-
-**Files touched** (all new or modified infra files)
-```
-docker-compose.prod.yml
-Caddyfile  (new)
-.env on VPS (manual edit — not committed)
-```
+**Files:** `docker-compose.prod.yml`, `Caddyfile` (new), `.env` on VPS.
