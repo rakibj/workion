@@ -382,35 +382,31 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Specs
 
-### MAIL: Configure Transactional Email
+_No pending specs._
 
-**Priority: P2 — Needed for invitations, password reset, notifications | Status: TODO**
+---
 
-The app uses `MailModule` for all transactional email (invites, forgot-password, notifications). Currently no mail provider is wired up, so those flows silently fail.
+## Completed Integrations
 
-**Options (pick one):**
+### MAIL: Transactional Email via Resend — DONE
 
-| Provider | SMTP vars | Notes |
-|---|---|---|
-| Resend | `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD=re_xxx` | Free 3k emails/month |
-| Brevo (Sendinblue) | same SMTP approach | Free 300/day |
+Provider: **Resend** (SMTP relay, free tier 3k emails/month). No code changes — existing `SmtpDriver` + `MailModule` handles it.
 
-**Required env vars (`.env` on VPS):**
+**Sending domain:** `workion.gameloops.io` — SPF + DKIM DNS records added (scoped to subdomain, does not affect root `gameloops.io`).
+
+**Env vars (both local `.env` and VPS):**
 ```
 MAIL_DRIVER=smtp
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
 SMTP_SECURE=true
 SMTP_USERNAME=resend
-SMTP_PASSWORD=<api-key>
+SMTP_PASSWORD=<resend-api-key>   # no inline comments — dotenv doesn't strip them
 MAIL_FROM_ADDRESS=noreply@workion.gameloops.io
 MAIL_FROM_NAME=Workion
 ```
 
-**Steps:**
-1. Sign up for Resend, add `workion.gameloops.io` as a sending domain, add the SPF + DKIM DNS records they provide.
-2. Add vars to VPS `.env`.
-3. `docker compose -f docker-compose.prod.yml restart app`
-4. Test: trigger "Forgot Password" from the login page and confirm email arrives.
-
-**Files:** `.env` on VPS only — no code changes needed.
+**To redeploy after env change (no rebuild):**
+```bash
+docker compose -f docker-compose.prod.yml restart app
+```
