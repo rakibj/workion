@@ -1,27 +1,15 @@
-import { CanActivate, ForbiddenException, Injectable } from '@nestjs/common';
-import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { CanActivate, Injectable } from '@nestjs/common';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 
 @Injectable()
 export class SetupGuard implements CanActivate {
-  constructor(
-    private workspaceRepo: WorkspaceRepo,
-    private environmentService: EnvironmentService,
-  ) {}
+  constructor(private environmentService: EnvironmentService) {}
 
-  async canActivate(): Promise<boolean> {
+  canActivate(): boolean {
     if (this.environmentService.isCloud()) {
       return false;
     }
 
-    if (this.environmentService.isSignupAllowed()) {
-      return true;
-    }
-
-    const workspaceCount = await this.workspaceRepo.count();
-    if (workspaceCount > 0) {
-      throw new ForbiddenException('Workspace setup already completed.');
-    }
     return true;
   }
 }

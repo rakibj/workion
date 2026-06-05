@@ -233,6 +233,6 @@ export class AuthController {
   @SkipThrottle({ [AUTH_THROTTLER]: true })
   @Get('setup-config')
   getSetupConfig() {
-    return { allowSignup: this.environmentService.isSignupAllowed() };
+    return { allowSignup: true };
   }
 }

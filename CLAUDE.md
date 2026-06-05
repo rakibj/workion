@@ -124,12 +124,12 @@ REDIS_URL=redis://localhost:6379
 
 | Service | Where | Notes |
 |---|---|---|
-| App (NestJS) | Contabo VPS — Docker | `http://157.173.120.4` |
+| App (NestJS) | Contabo VPS — Docker | `https://workion.gameloops.io` (Caddy + Let's Encrypt) |
 | Redis | Contabo VPS — Docker | `REDIS_URL=redis://redis:6379` |
 | Postgres | Neon (eu-central-1, pooler endpoint) | `&pgbouncer=true` required |
 | File storage | Cloudflare R2 | bucket: `workion`, uses `AWS_S3_*` prefix |
 
-**No domain in use.** Direct bare IP only. Do not suggest domain-based solutions until a domain is set up.
+**Domain:** `workion.gameloops.io` → `157.173.120.4`. TLS via Caddy (Let's Encrypt). `Caddyfile` + `docker-compose.prod.yml` already configured.
 
 **Upstash abandoned** — BullMQ exhausted the free tier in ~10 days. Now using local Redis.
 
@@ -286,12 +286,12 @@ New tables go in new migration files. Never alter existing migrations.
 
 ---
 
-## Personal-Use Restrictions
+## Signup Behaviour
 
-New workspace creation is gated by `ALLOW_SIGNUP` env var (default `false`):
-- **Backend**: `SetupGuard` allows if workspace count is zero (first-time) OR `ALLOW_SIGNUP=true`; 403 otherwise.
-- **Frontend**: `setup-workspace.tsx` fetches `allowSignup` via `GET /api/auth/setup-config`; redirects to `/login` if `false`.
-- Set `ALLOW_SIGNUP=true` in VPS `.env` to re-enable. Invitations and login always work.
+Workspace creation (signup) is **always enabled** — no env var gate.
+- **Backend**: `SetupGuard` always returns `true` (non-cloud). `GET /api/auth/setup-config` always returns `{ allowSignup: true }`.
+- **Frontend**: Default landing (`/`) redirects to `/setup/register`. Login page has a "Sign up" link. Signup page has a "Sign in" link.
+- Invitations and login always work regardless.
 
 ---
 
@@ -382,27 +382,35 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Specs
 
-### DOMAIN: Apply Domain to VPS
+### MAIL: Configure Transactional Email
 
-**Priority: P1 — Infrastructure change, enables HTTPS | Status: TODO**
+**Priority: P2 — Needed for invitations, password reset, notifications | Status: TODO**
 
-Point a domain at `157.173.120.4`, terminate TLS with Caddy (Let's Encrypt), proxy to app on port 3000.
+The app uses `MailModule` for all transactional email (invites, forgot-password, notifications). Currently no mail provider is wired up, so those flows silently fail.
 
-1. **DNS:** A record → `157.173.120.4`.
-2. **Caddy service** in `docker-compose.prod.yml`:
-   ```yaml
-   caddy:
-     image: caddy:2-alpine
-     restart: unless-stopped
-     ports: ["80:80", "443:443"]
-     volumes:
-       - ./Caddyfile:/etc/caddy/Caddyfile
-       - caddy_data:/data
-       - caddy_config:/config
-   ```
-3. **Caddyfile:** `yourdomain.com { reverse_proxy app:3000 }`
-4. Remove port 3000 from public exposure on `app` service.
-5. Update VPS `.env`: `APP_URL=https://yourdomain.com`. Check `COLLAB_URL` for `wss://` too.
-6. `./deploy.sh --no-cache`
+**Options (pick one):**
 
-**Files:** `docker-compose.prod.yml`, `Caddyfile` (new), `.env` on VPS.
+| Provider | SMTP vars | Notes |
+|---|---|---|
+| Resend | `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD=re_xxx` | Free 3k emails/month |
+| Brevo (Sendinblue) | same SMTP approach | Free 300/day |
+
+**Required env vars (`.env` on VPS):**
+```
+MAIL_DRIVER=smtp
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USERNAME=resend
+SMTP_PASSWORD=<api-key>
+MAIL_FROM_ADDRESS=noreply@workion.gameloops.io
+MAIL_FROM_NAME=Workion
+```
+
+**Steps:**
+1. Sign up for Resend, add `workion.gameloops.io` as a sending domain, add the SPF + DKIM DNS records they provide.
+2. Add vars to VPS `.env`.
+3. `docker compose -f docker-compose.prod.yml restart app`
+4. Test: trigger "Forgot Password" from the login page and confirm email arrives.
+
+**Files:** `.env` on VPS only — no code changes needed.

@@ -111,7 +111,7 @@ export function SetupWorkspaceForm() {
           </form>
         </Box>
       </Container>
-      {isCloud() && (
+      {isCloud() ? (
         <Text ta="center">
           {t("Already part of an existing workspace?")}{" "}
           <Anchor
@@ -120,6 +120,13 @@ export function SetupWorkspaceForm() {
             fw={500}
           >
             {t("Sign-in")}
+          </Anchor>
+        </Text>
+      ) : (
+        <Text ta="center" mt="sm" size="sm" c="dimmed">
+          {t("Already have an account?")}{" "}
+          <Anchor component={Link} to={APP_ROUTE.AUTH.LOGIN} fw={500}>
+            {t("Sign in")}
           </Anchor>
         </Text>
       )}

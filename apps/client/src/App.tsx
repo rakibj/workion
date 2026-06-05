@@ -55,7 +55,7 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route index element={<Navigate to="/home" />} />
+        <Route index element={<Navigate to="/setup/register" />} />
         <Route path={"/login"} element={<LoginPage />} />
         <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
         <Route path={"/forgot-password"} element={<ForgotPassword />} />
