@@ -382,7 +382,11 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Specs
 
-_No pending specs._
+### Export buttons on public share pages
+Publicly shared pages (`/share/:shareId/p/:pageSlug`) currently show no export options. Need to add PDF and Markdown export buttons to the share layout/view — same exports available on authenticated pages but accessible without login.
+
+### Email delivery — unverified / likely broken
+`POST /api/auth/forgot-password` (and any other queued mail) is not delivering to inboxes. The queue path: `AuthService.forgotPassword` → `MailService.sendToQueue` → BullMQ `EMAIL_QUEUE` → `EmailProcessor` → `SmtpDriver` (nodemailer → Resend SMTP). Default `MAIL_DRIVER` is `'log'` — if env var is missing on VPS, emails are silently swallowed. Diagnosis: run `docker compose -f docker-compose.prod.yml exec app printenv | grep -E "MAIL|SMTP"` and check logs for `EmailProcessor` errors.
 
 ---
 
