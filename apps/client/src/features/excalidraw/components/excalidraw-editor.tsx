@@ -190,6 +190,7 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
           syncedVersionsRef.current.set(el.id, (el as any).versionNonce);
         });
         excalidrawAPI.updateScene({ elements: initialElements });
+        excalidrawAPI.scrollToContent(undefined, { animate: false, fitToViewport: true });
       }
 
       setReady(true);

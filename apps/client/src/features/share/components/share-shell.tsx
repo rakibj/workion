@@ -16,6 +16,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useAtom } from "jotai";
 import {
   currentSharedPageIdAtom,
+  currentSharedPageTypeAtom,
   sharedPageFullWidthAtom,
   sharedPageTreeAtom,
   sharedTreeDataAtom,
@@ -68,6 +69,8 @@ export default function ShareShell({
   const [isResizing, setIsResizing] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const currentSharedPageId = useAtomValue(currentSharedPageIdAtom);
+  const currentSharedPageType = useAtomValue(currentSharedPageTypeAtom);
+  const isExcalidraw = currentSharedPageType === "excalidraw";
   const sidebarRef = useRef<HTMLElement | null>(null);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
@@ -145,8 +148,8 @@ export default function ShareShell({
         width: 300,
         breakpoint: "sm",
         collapsed: {
-          mobile: !mobileTocOpened,
-          desktop: !tocOpened,
+          mobile: !mobileTocOpened || !readOnlyEditor,
+          desktop: !tocOpened || !readOnlyEditor,
         },
       }}
       padding="md"
@@ -179,7 +182,7 @@ export default function ShareShell({
             )}
           </Group>
 
-          {shareId && (
+          {shareId && !isExcalidraw && (
             <Group visibleFrom="sm">
               <SearchControl onClick={shareSearchSpotlight.open} />
             </Group>
@@ -187,51 +190,57 @@ export default function ShareShell({
 
           <Group>
             <>
-              {shareId && (
+              {shareId && !isExcalidraw && (
                 <Group hiddenFrom="sm">
                   <SearchMobileControl onSearch={shareSearchSpotlight.open} />
                 </Group>
               )}
 
-              <Tooltip label={t("Table of contents")} withArrow>
-                <ActionIcon
-                  variant="default"
-                  style={{ border: "none" }}
-                  onClick={toggleTocMobile}
-                  hiddenFrom="sm"
-                  size="sm"
-                  aria-label={t("Table of contents")}
-                >
-                  <IconList size={20} stroke={2} />
-                </ActionIcon>
-              </Tooltip>
+              {!isExcalidraw && (
+                <Tooltip label={t("Table of contents")} withArrow>
+                  <ActionIcon
+                    variant="default"
+                    style={{ border: "none" }}
+                    onClick={toggleTocMobile}
+                    hiddenFrom="sm"
+                    size="sm"
+                    aria-label={t("Table of contents")}
+                  >
+                    <IconList size={20} stroke={2} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
 
-              <Tooltip label={t("Table of contents")} withArrow>
-                <ActionIcon
-                  variant="default"
-                  style={{ border: "none" }}
-                  aria-label={t("Table of contents")}
-                  onClick={toggleToc}
-                  visibleFrom="sm"
-                  size="sm"
-                >
-                  <IconList size={20} stroke={2} />
-                </ActionIcon>
-              </Tooltip>
+              {!isExcalidraw && (
+                <Tooltip label={t("Table of contents")} withArrow>
+                  <ActionIcon
+                    variant="default"
+                    style={{ border: "none" }}
+                    aria-label={t("Table of contents")}
+                    onClick={toggleToc}
+                    visibleFrom="sm"
+                    size="sm"
+                  >
+                    <IconList size={20} stroke={2} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
 
-              <Tooltip label={t("Full width")} withArrow>
-                <ActionIcon
-                  variant={fullWidth ? "light" : "default"}
-                  style={fullWidth ? undefined : { border: "none" }}
-                  aria-label={t("Full width")}
-                  aria-pressed={fullWidth}
-                  onClick={() => setFullWidth((v) => !v)}
-                  visibleFrom="sm"
-                  size="sm"
-                >
-                  <IconArrowsHorizontal size={20} stroke={2} />
-                </ActionIcon>
-              </Tooltip>
+              {!isExcalidraw && (
+                <Tooltip label={t("Full width")} withArrow>
+                  <ActionIcon
+                    variant={fullWidth ? "light" : "default"}
+                    style={fullWidth ? undefined : { border: "none" }}
+                    aria-label={t("Full width")}
+                    aria-pressed={fullWidth}
+                    onClick={() => setFullWidth((v) => !v)}
+                    visibleFrom="sm"
+                    size="sm"
+                  >
+                    <IconArrowsHorizontal size={20} stroke={2} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
 
               {currentSharedPageId && shareId && (
                 <>

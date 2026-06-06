@@ -26,6 +26,7 @@ import { validate as isValidUUID } from 'uuid';
 import { sql } from 'kysely';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
 import { TransclusionLookup } from '../page/transclusion/transclusion.types';
+import * as Y from 'yjs';
 
 @Injectable()
 export class ShareService {
@@ -118,6 +119,7 @@ export class ShareService {
 
     const page = await this.pageRepo.findById(dto.pageId, {
       includeContent: true,
+      includeYdoc: true,
       includeCreator: true,
     });
 
@@ -132,9 +134,33 @@ export class ShareService {
       throw new NotFoundException('Shared page not found');
     }
 
-    page.content = await this.updatePublicAttachments(page);
+    if (page.type === 'excalidraw') {
+      page.content = this.extractExcalidrawContent(page) as any;
+    } else {
+      page.content = await this.updatePublicAttachments(page);
+    }
+
+    // strip ydoc binary before sending over the wire
+    delete (page as any).ydoc;
 
     return { page, share };
+  }
+
+  private extractExcalidrawContent(page: Page): object | null {
+    if (!page.ydoc) return null;
+    try {
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, new Uint8Array(page.ydoc as Buffer));
+      const elements = doc.getMap('excalidraw');
+      const files = doc.getMap('excalidraw-files');
+      return {
+        elements: [...elements.values()],
+        files: Object.fromEntries(files.entries()),
+      };
+    } catch (err) {
+      this.logger.warn(`Failed to extract excalidraw content for page ${page.id}: ${err}`);
+      return null;
+    }
   }
 
   async getShareForPage(pageId: string, workspaceId: string) {

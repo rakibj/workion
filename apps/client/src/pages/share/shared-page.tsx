@@ -2,8 +2,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useSharePageQuery } from "@/features/share/queries/share-query.ts";
-import { Container } from "@mantine/core";
-import React, { useEffect } from "react";
+import { Container, Loader } from "@mantine/core";
+import React, { lazy, Suspense, useEffect } from "react";
 import ReadonlyPageEditor from "@/features/editor/readonly-page-editor.tsx";
 import { extractPageSlugId } from "@/lib";
 import { Error404 } from "@/components/ui/error-404.tsx";
@@ -11,10 +11,15 @@ import ShareBranding from "@/features/share/components/share-branding.tsx";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   currentSharedPageIdAtom,
+  currentSharedPageTypeAtom,
   sharedPageFullWidthAtom,
   sharedTreeDataAtom,
 } from "@/features/share/atoms/shared-page-atom.ts";
 import { isPageInTree } from "@/features/share/utils.ts";
+
+const SharedExcalidrawView = lazy(
+  () => import("@/features/excalidraw/components/shared-excalidraw-view"),
+);
 
 export default function SharedPage() {
   const { t } = useTranslation();
@@ -30,11 +35,18 @@ export default function SharedPage() {
   const fullWidth = useAtomValue(sharedPageFullWidthAtom);
   // @ts-ignore
   const setCurrentSharedPageId = useSetAtom(currentSharedPageIdAtom);
+  // @ts-ignore
+  const setCurrentSharedPageType = useSetAtom(currentSharedPageTypeAtom);
 
   useEffect(() => {
     if (data?.page?.id) setCurrentSharedPageId(data.page.id);
     return () => { setCurrentSharedPageId(null); };
   }, [data?.page?.id, setCurrentSharedPageId]);
+
+  useEffect(() => {
+    if (data?.page?.type) setCurrentSharedPageType(data.page.type);
+    return () => { setCurrentSharedPageType(null); };
+  }, [data?.page?.type, setCurrentSharedPageType]);
 
   useEffect(() => {
     if (shareId && data) {
@@ -62,8 +74,10 @@ export default function SharedPage() {
     return <div>{t("Error fetching page data.")}</div>;
   }
 
+  const isExcalidraw = data.page.type === "excalidraw";
+
   return (
-    <div>
+    <div style={isExcalidraw ? { height: "calc(100vh - 50px - 2 * var(--mantine-spacing-md))", display: "flex", flexDirection: "column" } : undefined}>
       <Helmet>
         <title>{`${data?.page?.title || t("untitled")}`}</title>
         {!data?.share.searchIndexing && (
@@ -71,17 +85,29 @@ export default function SharedPage() {
         )}
       </Helmet>
 
-      <Container fluid={fullWidth} size={fullWidth ? undefined : 900} p={0}>
-        <ReadonlyPageEditor
-          key={data.page.id}
-          title={data.page.title}
-          content={data.page.content}
-          pageId={data.page.id}
-          shareId={data.share.id}
-        />
-      </Container>
+      {isExcalidraw ? (
+        <Suspense fallback={<Loader size="sm" m="md" />}>
+          <SharedExcalidrawView
+            content={data.page.content as any}
+            title={data.page.title}
+            icon={data.page.icon}
+          />
+        </Suspense>
+      ) : (
+        <>
+          <Container fluid={fullWidth} size={fullWidth ? undefined : 900} p={0}>
+            <ReadonlyPageEditor
+              key={data.page.id}
+              title={data.page.title}
+              content={data.page.content}
+              pageId={data.page.id}
+              shareId={data.share.id}
+            />
+          </Container>
 
-      {data && !shareId && !(data.features?.length > 0) && <ShareBranding />}
+          {data && !shareId && !(data.features?.length > 0) && <ShareBranding />}
+        </>
+      )}
     </div>
   );
 }

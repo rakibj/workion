@@ -11,3 +11,5 @@ export const sharedPageFullWidthAtom = atomWithStorage<boolean>(
 );
 // Set by SharedPage on load so the shell can show an export button.
 export const currentSharedPageIdAtom = atom<string | null>(null);
+// Set by SharedPage on load so the shell can adjust toolbar for page type.
+export const currentSharedPageTypeAtom = atom<string | null>(null);

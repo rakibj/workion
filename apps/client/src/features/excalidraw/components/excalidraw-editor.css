@@ -22,10 +22,11 @@
   display: none !important;
 }
 
-/* Move drawing tools toolbar from top center to bottom center.
+/* Move drawing tools toolbar from top center to bottom center — edit mode only.
    .shapes-section is the 2nd child of the 3-col .App-menu_top grid;
-   pulling it out of flow and fixing the left panel's grid alignment. */
-.excalidraw-wrapper .excalidraw .shapes-section {
+   pulling it out of flow and fixing the left panel's grid alignment.
+   Scoped to :not(.excalidraw--view-mode) so view mode toolbar is untouched. */
+.excalidraw-wrapper .excalidraw:not(.excalidraw--view-mode) .shapes-section {
   position: absolute !important;
   bottom: 0 !important;
   top: auto !important;
@@ -35,7 +36,7 @@
 
 /* Without .shapes-section in the grid, .App-menu_top__left becomes the
    last-child and the CSS rule `> *:last-child { justify-self: flex-end }`
-   would push it to the right. Keep it left-aligned. */
-.excalidraw-wrapper .excalidraw .App-menu_top > .App-menu_top__left {
+   would push it to the right. Keep it left-aligned — edit mode only. */
+.excalidraw-wrapper .excalidraw:not(.excalidraw--view-mode) .App-menu_top > .App-menu_top__left {
   justify-self: start !important;
 }
