@@ -222,7 +222,6 @@ export class ExportService {
       ])
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
-      .where('type', '!=', 'board')
       .execute();
 
     if (!ignorePermissions && userId) {
@@ -296,9 +295,6 @@ export class ExportService {
       const children = tree[parentPageId] || [];
 
       for (const page of children) {
-        // Board pages are filtered before building the tree, but skip defensively.
-        if ((page as any).type === 'board') continue;
-
         const childPages = tree[page.id] || [];
         const pageTitle = getPageTitle(page.title);
         const currentPagePath = slugIdToPath[page.slugId];
@@ -597,7 +593,6 @@ export class ExportService {
       ])
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
-      .where('type', '!=', 'board')
       .execute();
 
     if (!ignorePermissions && userId) {

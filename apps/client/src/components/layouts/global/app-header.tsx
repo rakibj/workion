@@ -10,7 +10,7 @@ import {
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { IconSparkles } from "@tabler/icons-react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import APP_ROUTE from "@/lib/app-route.ts";
@@ -34,8 +34,6 @@ import {
 } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
-import { usePageQuery } from "@/features/page/queries/page-query";
-import { extractPageSlugId } from "@/lib";
 
 const links = [
   { link: APP_ROUTE.HOME, label: "Home" },
@@ -55,9 +53,6 @@ export function AppHeader() {
   const aiChatEnabled = workspace?.settings?.ai?.chat === true;
 
   const isPageRoute = location.pathname.includes("/p/");
-  const { pageSlug } = useParams<{ pageSlug?: string }>();
-  const { data: currentPage } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
-  const isBoardPage = isPageRoute && currentPage?.type === "board";
 
   const items = links.map((link) => (
     <Link key={link.label} to={link.link} className={classes.link}>
@@ -123,7 +118,7 @@ export function AppHeader() {
         </div>
 
         <Group px={"xl"} wrap="nowrap">
-          {aiChatEnabled && !isBoardPage && (
+          {aiChatEnabled && (
             <>
               <UnstyledButton
                 component={Link}

@@ -26,7 +26,7 @@ import { generateId } from "@/lib/utils.tsx";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
-  handleCreate: (parentId: string | null, type?: "document" | "kanban" | "board" | "excalidraw") => Promise<void>;
+  handleCreate: (parentId: string | null, type?: "document" | "kanban" | "excalidraw") => Promise<void>;
   handleRename: (id: string, name: string) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
 };
@@ -134,7 +134,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
   );
 
   const handleCreate = useCallback(
-    async (parentId: string | null, type: "document" | "kanban" | "board" | "excalidraw" = "document") => {
+    async (parentId: string | null, type: "document" | "kanban" | "excalidraw" = "document") => {
       const payload: { spaceId: string; parentPageId?: string; type?: string } = { spaceId };
       if (parentId) payload.parentPageId = parentId;
       if (type !== "document") payload.type = type;

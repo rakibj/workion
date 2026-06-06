@@ -57,7 +57,6 @@ docmost/
 | Build tool | Vite |
 | UI library | Mantine |
 | Editor | TipTap ← **BLACK BOX** |
-| Whiteboard | tldraw (board page type, real-time via Yjs) |
 | Auth | JWT sessions, CASL for RBAC |
 | Storage | S3-compatible or local (`StorageService`) |
 | Email | Configurable via `MailModule` |
@@ -270,7 +269,6 @@ New tables go in new migration files. Never alter existing migrations.
 | `features/user/` | User profile |
 | `features/group/` | Group management UI |
 | `features/home/` | Dashboard |
-| `features/page/board/` | tldraw whiteboard |
 | `features/page/kanban/` | Kanban board |
 | `features/ai-chat/` | AI chat panel + key settings |
 | `features/notification/` | Notification bell + popover |
@@ -299,9 +297,6 @@ Workspace creation (signup) is **always enabled** — no env var gate.
 
 ### AI Chat (BYOK via OpenRouter)
 OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backend: `core/ai-chat/` — streaming chat, page content injection, auto-title. Frontend: slide-over panel with thread list + model selector; key UI in workspace settings. All AI routes through OpenRouter only — no direct Anthropic/OpenAI calls.
-
-### Whiteboard Page (tldraw)
-`board` page type → full-screen tldraw canvas. Uses Hocuspocus/Yjs with `board.{pageId}` room prefix (additive-only touch on `collaboration/`). `HocuspocusProviderWebsocket` is a **module-level singleton** in `board-editor.tsx` — do not destroy it on unmount (expensive TCP reconnect). Only the per-board `HocuspocusProvider` is created/destroyed per page.
 
 ### Kanban Board Page
 `kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room; filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
@@ -471,9 +466,6 @@ Unread count = `notifications` rows where `user_id = $me AND page_id = $pageId A
 
 ### Favicon — DONE
 All favicon PNGs (16×16, 32×32, 192×192, 512×512) and `public/icons/logo.svg` regenerated from `logo-workion.svg` using `@resvg/resvg-js`. Files replaced in `apps/client/public/icons/`. No code changes — Vite bundles them as-is.
-
-### Whiteboard blank after interaction — DONE
-Root cause: timing race in `board-editor.tsx` — user could draw before `initialize()` ran, which then cleared their strokes when repopulating from Yjs. Fix: `ready` state + invisible overlay blocks interaction until `initialize()` completes; `setReady(true)` called at end of `initialize()`. Offline fallback timer reduced from 3000 ms → 1500 ms. Files: `apps/client/src/features/board/components/board-editor.tsx`.
 
 ### Share page export (Markdown / HTML / Print PDF) — DONE
 `POST /export/shared-page` — public endpoint (no JWT), validated by share key + page membership + restricted-ancestor check. Delegates to existing `ExportService`. Frontend: download icon + printer icon in `share-shell.tsx` header; `ShareExportModal` (Markdown/HTML picker); Print PDF calls `window.print()`. Key fix: `/api/export/shared-page` added to the exempt list in `api-client.ts` so the response interceptor preserves the full axios response (needed to read `Content-Disposition` header). Files: `export.controller.ts`, `export-dto.ts`, `share-shell.tsx`, `share-service.ts`, `share-export-modal.tsx`, `shared-page-atom.ts`, `shared-page.tsx`, `share.module.css`, `api-client.ts`.

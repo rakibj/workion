@@ -119,11 +119,11 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     <>
       <ConnectionWarning />
 
-      {!readOnly && page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && <PageEditModeToggle size="xs" />}
+      {!readOnly && page?.type !== "kanban" && page?.type !== "excalidraw" && <PageEditModeToggle size="xs" />}
 
       <PageShareModal readOnly={readOnly} />
 
-      {page?.type !== "board" && page?.type !== "excalidraw" && (
+      {page?.type !== "excalidraw" && (
         <Tooltip label={t("Comments")} openDelay={250} withArrow>
           <ActionIcon
             variant="subtle"
@@ -136,7 +136,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
         </Tooltip>
       )}
 
-      {page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && (
+      {page?.type !== "kanban" && page?.type !== "excalidraw" && (
         <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
           <ActionIcon
             variant="subtle"
@@ -371,7 +371,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             {t("Copy link")}
           </Menu.Item>
 
-          {page?.type !== "board" && page?.type !== "excalidraw" && (
+          {page?.type !== "excalidraw" && (
             <Menu.Item
               leftSection={<IconMarkdown size={16} />}
               onClick={handleCopyAsMarkdown}
@@ -460,7 +460,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </>
           )}
 
-          {page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && (
+          {page?.type !== "kanban" && page?.type !== "excalidraw" && (
             <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
               <Group wrap="nowrap">
                 <PageWidthToggle label={t("Full width")} />
@@ -493,7 +493,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </Menu.Item>
           )}
 
-          {page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && (
+          {page?.type !== "kanban" && page?.type !== "excalidraw" && (
             <>
               <Menu.Item
                 leftSection={<IconFileExport size={16} />}
@@ -536,7 +536,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
                 position="left-start"
               >
                 <div style={{ width: 210 }}>
-                  {page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && (
+                  {page?.type !== "kanban" && page?.type !== "excalidraw" && (
                     <Text size="xs" c="dimmed" truncate="end">
                       {t("Word count: {{wordCount}}", {
                         wordCount: pageEditor?.storage?.characterCount?.words(),

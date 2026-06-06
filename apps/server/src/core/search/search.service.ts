@@ -214,7 +214,7 @@ export class SearchService {
         )
         .where('deletedAt', 'is', null)
         .where('workspaceId', '=', workspaceId)
-        .where('type', '!=', 'board')
+
         .limit(limit);
 
       // search all spaces the user has access to, prioritizing the current space

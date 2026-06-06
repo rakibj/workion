@@ -77,8 +77,8 @@ export class PersistenceExtension implements Extension {
       return doc;
     }
 
-    // board and excalidraw pages use raw ydoc only — skip TipTap JSON→Ydoc conversion
-    if (page.type === 'board' || page.type === 'excalidraw') {
+    // excalidraw pages use raw ydoc only — skip TipTap JSON→Ydoc conversion
+    if (page.type === 'excalidraw') {
       this.logger.debug(`creating fresh ydoc for ${page.type} page: ${pageId}`);
       return new Y.Doc();
     }
@@ -125,8 +125,8 @@ export class PersistenceExtension implements Extension {
           return;
         }
 
-        // board and excalidraw pages: only store the ydoc binary, skip TipTap serialization
-        if (page.type === 'board' || page.type === 'excalidraw') {
+        // excalidraw pages: only store the ydoc binary, skip TipTap serialization
+        if (page.type === 'excalidraw') {
           let contributorIds = undefined;
           try {
             const existingContributors = page.contributorIds || [];

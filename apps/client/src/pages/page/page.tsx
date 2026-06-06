@@ -19,9 +19,6 @@ const MemoizedHistoryModal = React.memo(HistoryModal);
 const KanbanBoardPage = lazy(
   () => import("@/features/kanban/components/kanban-board-page"),
 );
-const BoardPage = lazy(
-  () => import("@/features/board/components/board-page"),
-);
 const ExcalidrawPage = lazy(
   () => import("@/features/excalidraw/components/excalidraw-page"),
 );
@@ -99,7 +96,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     return <></>;
   }
 
-  const isFullHeight = page.type === "kanban" || page.type === "board" || page.type === "excalidraw";
+  const isFullHeight = page.type === "kanban" || page.type === "excalidraw";
 
   return (
     page && (
@@ -116,16 +113,6 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               key={page.id}
               pageId={page.id}
               spaceId={space.id}
-              canEdit={canEdit}
-              title={page.title ?? ""}
-              spaceSlug={page?.space?.slug ?? ""}
-            />
-          </Suspense>
-        ) : page.type === "board" ? (
-          <Suspense fallback={<Loader size="sm" m="md" />}>
-            <BoardPage
-              key={page.id}
-              pageId={page.id}
               canEdit={canEdit}
               title={page.title ?? ""}
               spaceSlug={page?.space?.slug ?? ""}

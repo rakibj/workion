@@ -22,7 +22,6 @@ import {
   IconStarFilled,
   IconTemplate,
   IconTrash,
-  IconVectorBezier2,
 } from "@tabler/icons-react";
 import {
   useSpaceWatchStatusQuery,
@@ -88,10 +87,6 @@ export function SpaceSidebar() {
 
   function handleCreateKanban() {
     handleCreate(null, "kanban");
-  }
-
-  function handleCreateBoard() {
-    handleCreate(null, "board");
   }
 
   function handleCreateExcalidraw() {
@@ -234,9 +229,6 @@ export function SpaceSidebar() {
                     </Menu.Item>
                     <Menu.Item leftSection={<IconLayoutKanban size={14} />} onClick={handleCreateKanban}>
                       {t("Kanban board")}
-                    </Menu.Item>
-                    <Menu.Item leftSection={<IconVectorBezier2 size={14} />} onClick={handleCreateBoard}>
-                      {t("Whiteboard")}
                     </Menu.Item>
                     <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleCreateExcalidraw}>
                       {t("Excalidraw")}

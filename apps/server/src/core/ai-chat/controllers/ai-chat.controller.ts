@@ -381,9 +381,6 @@ export class AiChatController {
       await Promise.all(
         validPages.map(async (p) => {
           const title = p.title || 'Untitled';
-          if (p.type === 'board') {
-            return null;
-          }
           if (p.type === 'kanban') {
             const columns = await this.kanbanRepo.getBoardByPageId(p.id);
             return `## ${title} (Project Tracker)\n\n${this.formatKanbanAsText(columns)}`;
