@@ -1,6 +1,5 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ActionIcon, Group, Loader, Paper, Text, Tooltip } from "@mantine/core";
-import { IconPencil } from "@tabler/icons-react";
+import { Group, Loader, Paper, Text } from "@mantine/core";
 import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation";
 
 const ExcalidrawEditor = lazy(() => import("./excalidraw-editor"));
@@ -107,19 +106,6 @@ function FloatingTitle({ pageId, title, icon, spaceId, canEdit }: FloatingTitleP
           </Text>
         )}
 
-        {canEdit && !editing && (
-          <Tooltip label="Rename" openDelay={500} withArrow>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="xs"
-              onClick={() => setEditing(true)}
-              style={{ flexShrink: 0 }}
-            >
-              <IconPencil size={12} />
-            </ActionIcon>
-          </Tooltip>
-        )}
       </Group>
     </Paper>
   );

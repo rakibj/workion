@@ -7,7 +7,35 @@
   height: 100%;
 }
 
+/* Hide help dialog external links header (renders in a portal, outside .excalidraw-wrapper) */
+.excalidraw-modal-container .HelpDialog__header {
+  display: none !important;
+}
+
 /* Hide native Excalidraw hamburger menu — items are in the page header menu instead */
 .excalidraw-wrapper .excalidraw .main-menu-trigger {
   display: none !important;
+}
+
+/* Hide library sidebar button — not needed in this app */
+.excalidraw-wrapper .excalidraw .default-sidebar-trigger {
+  display: none !important;
+}
+
+/* Move drawing tools toolbar from top center to bottom center.
+   .shapes-section is the 2nd child of the 3-col .App-menu_top grid;
+   pulling it out of flow and fixing the left panel's grid alignment. */
+.excalidraw-wrapper .excalidraw .shapes-section {
+  position: absolute !important;
+  bottom: 0 !important;
+  top: auto !important;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Without .shapes-section in the grid, .App-menu_top__left becomes the
+   last-child and the CSS rule `> *:last-child { justify-self: flex-end }`
+   would push it to the right. Keep it left-aligned. */
+.excalidraw-wrapper .excalidraw .App-menu_top > .App-menu_top__left {
+  justify-self: start !important;
 }
