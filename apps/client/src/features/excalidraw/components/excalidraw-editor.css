@@ -6,3 +6,8 @@
 .excalidraw-wrapper .excalidraw {
   height: 100%;
 }
+
+/* Hide native Excalidraw hamburger menu — items are in the page header menu instead */
+.excalidraw-wrapper .excalidraw .main-menu-trigger {
+  display: none !important;
+}

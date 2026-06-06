@@ -1,25 +1,41 @@
-import { ActionIcon, Group, Menu, Text, ThemeIcon, Tooltip } from "@mantine/core";
+import { ActionIcon, Button, ColorPicker, Group, Menu, Modal, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import {
   IconArrowRight,
   IconArrowsHorizontal,
+  IconDeviceFloppy,
   IconDots,
+  IconEraser,
   IconEye,
   IconEyeOff,
   IconFileExport,
+  IconFolderOpen,
   IconHistory,
   IconLink,
   IconList,
   IconMarkdown,
   IconMessage,
+  IconPalette,
+  IconPhoto,
   IconPrinter,
+  IconSearch,
   IconStar,
   IconStarFilled,
   IconTrash,
+  IconVectorTriangle,
   IconWifiOff,
 } from "@tabler/icons-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAsideTriggerProps } from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
+import {
+  exportToBlob,
+  exportToSvg,
+  serializeAsJSON,
+} from "@excalidraw/excalidraw";
+import {
+  excalidrawAPIAtom,
+  excalidrawOpsAtom,
+} from "@/features/excalidraw/atoms/excalidraw-atom";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
@@ -174,6 +190,112 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   const watchPage = useWatchPageMutation();
   const unwatchPage = useUnwatchPageMutation();
 
+  // Excalidraw-specific state
+  const excalidrawAPI = useAtomValue(excalidrawAPIAtom);
+  const excalidrawOps = useAtomValue(excalidrawOpsAtom);
+  const openFileRef = useRef<HTMLInputElement>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [bgModalOpen, setBgModalOpen] = useState(false);
+  const [bgColor, setBgColor] = useState("#ffffff");
+  const [origBgColor, setOrigBgColor] = useState("#ffffff");
+
+  const handleExcalidrawOpen = useCallback(() => {
+    openFileRef.current?.click();
+  }, []);
+
+  const handleExcalidrawFileLoad = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !excalidrawOps) return;
+      try {
+        await excalidrawOps.openFile(file);
+      } catch {
+        notifications.show({ message: t("Failed to load file"), color: "red" });
+      }
+      e.target.value = "";
+    },
+    [excalidrawOps, t],
+  );
+
+  const handleExcalidrawSaveTo = useCallback(() => {
+    if (!excalidrawAPI) return;
+    const elements = excalidrawAPI.getSceneElements();
+    const appState = excalidrawAPI.getAppState();
+    const files = excalidrawAPI.getFiles();
+    const json = serializeAsJSON(elements, appState as any, files, "local");
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${page?.title || "Untitled"}.excalidraw`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [excalidrawAPI, page?.title]);
+
+  const handleExcalidrawExportPNG = useCallback(async () => {
+    if (!excalidrawAPI) return;
+    const elements = excalidrawAPI.getSceneElements();
+    const appState = excalidrawAPI.getAppState();
+    const files = excalidrawAPI.getFiles();
+    const blob = await exportToBlob({
+      elements,
+      appState: appState as any,
+      files,
+      mimeType: "image/png",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${page?.title || "Untitled"}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [excalidrawAPI, page?.title]);
+
+  const handleExcalidrawExportSVG = useCallback(async () => {
+    if (!excalidrawAPI) return;
+    const elements = excalidrawAPI.getSceneElements();
+    const appState = excalidrawAPI.getAppState();
+    const files = excalidrawAPI.getFiles();
+    const svg = await exportToSvg({ elements, appState: appState as any, files });
+    const svgStr = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${page?.title || "Untitled"}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [excalidrawAPI, page?.title]);
+
+  const handleFindOnCanvas = useCallback(() => {
+    setTimeout(() => {
+      const btn = document.querySelector<HTMLElement>(".excalidraw .search-menu-button");
+      btn?.click();
+    }, 50);
+  }, []);
+
+  const handleOpenBgModal = useCallback(() => {
+    const c = (excalidrawAPI?.getAppState() as any)?.viewBackgroundColor ?? "#ffffff";
+    setBgColor(c);
+    setOrigBgColor(c);
+    setBgModalOpen(true);
+  }, [excalidrawAPI]);
+
+  const handleCancelBg = useCallback(() => {
+    excalidrawAPI?.updateScene({ appState: { viewBackgroundColor: origBgColor } as any });
+    setBgModalOpen(false);
+  }, [excalidrawAPI, origBgColor]);
+
+  const handleApplyBg = useCallback(() => {
+    excalidrawAPI?.updateScene({ appState: { viewBackgroundColor: bgColor } as any });
+    setBgModalOpen(false);
+  }, [excalidrawAPI, bgColor]);
+
+  const handleResetCanvas = useCallback(() => {
+    excalidrawOps?.resetCanvas();
+    setResetConfirmOpen(false);
+  }, [excalidrawOps]);
+
   const handleCopyLink = () => {
     const pageUrl =
       getAppUrl() + buildPageUrl(spaceSlug, page.slugId, page.title);
@@ -289,6 +411,55 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
 
           <Menu.Divider />
 
+          {page?.type === "excalidraw" && (
+            <>
+              <Menu.Item
+                leftSection={<IconFolderOpen size={16} />}
+                onClick={handleExcalidrawOpen}
+              >
+                {t("Open")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconDeviceFloppy size={16} />}
+                onClick={handleExcalidrawSaveTo}
+              >
+                {t("Save to file")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconPhoto size={16} />}
+                onClick={handleExcalidrawExportPNG}
+              >
+                {t("Export as PNG")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconVectorTriangle size={16} />}
+                onClick={handleExcalidrawExportSVG}
+              >
+                {t("Export as SVG")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconSearch size={16} />}
+                onClick={handleFindOnCanvas}
+              >
+                {t("Find on canvas")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconPalette size={16} />}
+                onClick={handleOpenBgModal}
+              >
+                {t("Canvas background")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconEraser size={16} />}
+                color="red"
+                onClick={() => setResetConfirmOpen(true)}
+              >
+                {t("Reset canvas")}
+              </Menu.Item>
+              <Menu.Divider />
+            </>
+          )}
+
           {page?.type !== "board" && page?.type !== "kanban" && page?.type !== "excalidraw" && (
             <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
               <Group wrap="nowrap">
@@ -391,6 +562,60 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
           </>
         </Menu.Dropdown>
       </Menu>
+
+      {/* Hidden file input for excalidraw Open */}
+      <input
+        ref={openFileRef}
+        type="file"
+        accept=".excalidraw,application/json"
+        style={{ display: "none" }}
+        onChange={handleExcalidrawFileLoad}
+      />
+
+      {/* Excalidraw: Reset canvas confirmation */}
+      <Modal
+        opened={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        title={t("Reset canvas")}
+        size="sm"
+      >
+        <Text size="sm">
+          {t("This will clear all elements on the canvas. This action cannot be undone.")}
+        </Text>
+        <Group justify="flex-end" mt="md" gap="sm">
+          <Button variant="default" onClick={() => setResetConfirmOpen(false)}>
+            {t("Cancel")}
+          </Button>
+          <Button color="red" onClick={handleResetCanvas}>
+            {t("Reset")}
+          </Button>
+        </Group>
+      </Modal>
+
+      {/* Excalidraw: Canvas background color picker */}
+      <Modal
+        opened={bgModalOpen}
+        onClose={handleCancelBg}
+        title={t("Canvas background")}
+        size="sm"
+      >
+        <ColorPicker
+          value={bgColor}
+          onChange={setBgColor}
+          format="hex"
+          swatches={[
+            "#ffffff", "#f8f9fa", "#fff3bf", "#d3f9d8", "#d0ebff",
+            "#e5dbff", "#ffd6e7", "#ffe8cc", "#343a40", "#1c7ed6",
+          ]}
+          fullWidth
+        />
+        <Group justify="flex-end" mt="md" gap="sm">
+          <Button variant="default" onClick={handleCancelBg}>
+            {t("Cancel")}
+          </Button>
+          <Button onClick={handleApplyBg}>{t("Apply")}</Button>
+        </Group>
+      </Modal>
 
       <ExportModal
         type="page"

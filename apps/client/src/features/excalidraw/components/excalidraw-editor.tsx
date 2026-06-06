@@ -5,7 +5,7 @@ import {
   HocuspocusProvider,
   HocuspocusProviderWebsocket,
 } from "@hocuspocus/provider";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, loadFromBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./excalidraw-editor.css";
 import type {
@@ -20,11 +20,12 @@ import type {
   ExcalidrawElement,
   OrderedExcalidrawElement,
 } from "@excalidraw/excalidraw/element/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom";
 import { useCollabToken } from "@/features/auth/queries/auth-query";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 import { useComputedColorScheme } from "@mantine/core";
+import { excalidrawAPIAtom, excalidrawOpsAtom } from "../atoms/excalidraw-atom";
 
 const TX_ORIGIN = "excalidraw-collab";
 
@@ -68,6 +69,9 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   const [ready, setReady] = useState(false);
 
+  const setExcalidrawAPIAtom = useSetAtom(excalidrawAPIAtom);
+  const setExcalidrawOpsAtom = useSetAtom(excalidrawOpsAtom);
+
   // Always-fresh reference to appUser so pointer handler doesn't go stale.
   const appUserRef = useRef(appUser);
   appUserRef.current = appUser;
@@ -89,6 +93,65 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
     setReady(false);
     syncedVersionsRef.current.clear();
   }, [pageId]);
+
+  // Sync API reference to global atom; clear on unmount.
+  useEffect(() => {
+    setExcalidrawAPIAtom(excalidrawAPI);
+  }, [excalidrawAPI, setExcalidrawAPIAtom]);
+
+  useEffect(() => {
+    return () => {
+      setExcalidrawAPIAtom(null);
+      setExcalidrawOpsAtom(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Expose Yjs-aware canvas operations once the API is available.
+  // Callbacks read refs at call time so they always see the latest Yjs state.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+
+    const resetCanvas = () => {
+      const yDoc = yDocRef.current;
+      const yEl = yElementsRef.current;
+      if (yDoc && yEl) {
+        yDoc.transact(() => {
+          yEl.clear();
+          syncedVersionsRef.current.clear();
+        }, TX_ORIGIN);
+      }
+      excalidrawAPI.resetScene();
+    };
+
+    const openFile = async (file: File) => {
+      const data = await loadFromBlob(
+        file,
+        excalidrawAPI.getAppState() as AppState,
+        [...excalidrawAPI.getSceneElements()],
+      );
+      const yDoc = yDocRef.current;
+      const yEl = yElementsRef.current;
+      const yFl = yFilesRef.current;
+      if (yDoc && yEl) {
+        yDoc.transact(() => {
+          yEl.clear();
+          syncedVersionsRef.current.clear();
+        }, TX_ORIGIN);
+      }
+      if (data.elements) {
+        excalidrawAPI.updateScene({ elements: data.elements });
+      }
+      if (data.files && yFl && yDoc) {
+        yDoc.transact(() => {
+          Object.entries(data.files!).forEach(([id, f]) => yFl.set(id, f));
+        }, TX_ORIGIN);
+        excalidrawAPI.addFiles(Object.values(data.files) as BinaryFileData[]);
+      }
+    };
+
+    setExcalidrawOpsAtom({ resetCanvas, openFile });
+  }, [excalidrawAPI, setExcalidrawOpsAtom]);
 
   // ── Yjs + presence sync effect ──────────────────────────────────────────
   useEffect(() => {
