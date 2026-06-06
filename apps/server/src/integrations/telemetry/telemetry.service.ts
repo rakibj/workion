@@ -22,14 +22,8 @@ export class TelemetryService {
   @Interval('telemetry', 24 * 60 * 60 * 1000)
   async sendTelemetry() {
     try {
-      if (
-        this.environmentService.isDisableTelemetry() ||
-        this.environmentService.isCloud() ||
-        this.environmentService.getNodeEnv() !== 'production'
-      ) {
-        this.schedulerRegistry.deleteInterval('telemetry');
-        return;
-      }
+      this.schedulerRegistry.deleteInterval('telemetry');
+      return;
 
       const workspace = await this.workspaceRepo.findFirst();
       if (!workspace) {

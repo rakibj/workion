@@ -1,0 +1,8 @@
+.excalidraw-wrapper {
+  position: absolute;
+  inset: 0;
+}
+
+.excalidraw-wrapper .excalidraw {
+  height: 100%;
+}

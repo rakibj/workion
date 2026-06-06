@@ -14,6 +14,7 @@ import {
   IconFileExport,
   IconHome,
   IconLayoutKanban,
+  IconPencil,
   IconPlus,
   IconSearch,
   IconSettings,
@@ -91,6 +92,10 @@ export function SpaceSidebar() {
 
   function handleCreateBoard() {
     handleCreate(null, "board");
+  }
+
+  function handleCreateExcalidraw() {
+    handleCreate(null, "excalidraw");
   }
 
   return (
@@ -232,6 +237,9 @@ export function SpaceSidebar() {
                     </Menu.Item>
                     <Menu.Item leftSection={<IconVectorBezier2 size={14} />} onClick={handleCreateBoard}>
                       {t("Whiteboard")}
+                    </Menu.Item>
+                    <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleCreateExcalidraw}>
+                      {t("Excalidraw")}
                     </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>

@@ -22,6 +22,9 @@ const KanbanBoardPage = lazy(
 const BoardPage = lazy(
   () => import("@/features/board/components/board-page"),
 );
+const ExcalidrawPage = lazy(
+  () => import("@/features/excalidraw/components/excalidraw-page"),
+);
 
 export default function Page() {
   const { t } = useTranslation();
@@ -96,7 +99,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     return <></>;
   }
 
-  const isFullHeight = page.type === "kanban" || page.type === "board";
+  const isFullHeight = page.type === "kanban" || page.type === "board" || page.type === "excalidraw";
 
   return (
     page && (
@@ -126,6 +129,17 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               canEdit={canEdit}
               title={page.title ?? ""}
               spaceSlug={page?.space?.slug ?? ""}
+            />
+          </Suspense>
+        ) : page.type === "excalidraw" ? (
+          <Suspense fallback={<Loader size="sm" m="md" />}>
+            <ExcalidrawPage
+              key={page.id}
+              pageId={page.id}
+              title={page.title ?? ""}
+              icon={page.icon ?? ""}
+              spaceId={space.id}
+              canEdit={canEdit}
             />
           </Suspense>
         ) : (

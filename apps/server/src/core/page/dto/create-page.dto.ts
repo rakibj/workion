@@ -8,7 +8,7 @@ import {
 import { Transform } from 'class-transformer';
 
 export type ContentFormat = 'json' | 'markdown' | 'html';
-export type PageType = 'document' | 'kanban' | 'board';
+export type PageType = 'document' | 'kanban' | 'board' | 'excalidraw';
 
 export class CreatePageDto {
   @IsOptional()
@@ -27,7 +27,7 @@ export class CreatePageDto {
   spaceId: string;
 
   @IsOptional()
-  @IsIn(['document', 'kanban', 'board'])
+  @IsIn(['document', 'kanban', 'board', 'excalidraw'])
   type?: PageType;
 
   @IsOptional()

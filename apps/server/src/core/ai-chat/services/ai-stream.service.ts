@@ -33,7 +33,7 @@ export class AiStreamService {
       apiKey,
       headers: {
         'HTTP-Referer': this.environmentService.getAppUrl(),
-        'X-Title': 'Docmost',
+        'X-Title': 'Workion',
       },
     });
 
