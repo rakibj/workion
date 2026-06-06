@@ -380,17 +380,16 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ---
 
-## Pending Specs
-
-### Export buttons on public share pages
-Publicly shared pages (`/share/:shareId/p/:pageSlug`) currently show no export options. Need to add PDF and Markdown export buttons to the share layout/view — same exports available on authenticated pages but accessible without login.
-
-### Email delivery — unverified / likely broken
-`POST /api/auth/forgot-password` (and any other queued mail) is not delivering to inboxes. The queue path: `AuthService.forgotPassword` → `MailService.sendToQueue` → BullMQ `EMAIL_QUEUE` → `EmailProcessor` → `SmtpDriver` (nodemailer → Resend SMTP). Default `MAIL_DRIVER` is `'log'` — if env var is missing on VPS, emails are silently swallowed. Diagnosis: run `docker compose -f docker-compose.prod.yml exec app printenv | grep -E "MAIL|SMTP"` and check logs for `EmailProcessor` errors.
-
----
-
 ## Completed Integrations
+
+### Favicon — DONE
+All favicon PNGs (16×16, 32×32, 192×192, 512×512) and `public/icons/logo.svg` regenerated from `logo-workion.svg` using `@resvg/resvg-js`. Files replaced in `apps/client/public/icons/`. No code changes — Vite bundles them as-is.
+
+### Whiteboard blank after interaction — DONE
+Root cause: timing race in `board-editor.tsx` — user could draw before `initialize()` ran, which then cleared their strokes when repopulating from Yjs. Fix: `ready` state + invisible overlay blocks interaction until `initialize()` completes; `setReady(true)` called at end of `initialize()`. Offline fallback timer reduced from 3000 ms → 1500 ms. Files: `apps/client/src/features/board/components/board-editor.tsx`.
+
+### Share page export (Markdown / HTML / Print PDF) — DONE
+`POST /export/shared-page` — public endpoint (no JWT), validated by share key + page membership + restricted-ancestor check. Delegates to existing `ExportService`. Frontend: download icon + printer icon in `share-shell.tsx` header; `ShareExportModal` (Markdown/HTML picker); Print PDF calls `window.print()`. Key fix: `/api/export/shared-page` added to the exempt list in `api-client.ts` so the response interceptor preserves the full axios response (needed to read `Content-Disposition` header). Files: `export.controller.ts`, `export-dto.ts`, `share-shell.tsx`, `share-service.ts`, `share-export-modal.tsx`, `shared-page-atom.ts`, `shared-page.tsx`, `share.module.css`, `api-client.ts`.
 
 ### MAIL: Transactional Email via Resend — DONE
 

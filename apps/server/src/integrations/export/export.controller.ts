@@ -11,13 +11,22 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ExportService } from './export.service';
-import { ExportPageDto, ExportSpaceDto, ExportSpaceTextDto } from './dto/export-dto';
+import {
+  ExportPageDto,
+  ExportSharedPageDto,
+  ExportSpaceDto,
+  ExportSpaceTextDto,
+} from './dto/export-dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
-import { User } from '@docmost/db/types/entity.types';
+import { User, Workspace } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
+import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
+import { ShareRepo } from '@docmost/db/repos/share/share.repo';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
@@ -41,6 +50,8 @@ export class ExportController {
   constructor(
     private readonly exportService: ExportService,
     private readonly pageRepo: PageRepo,
+    private readonly shareRepo: ShareRepo,
+    private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly pageAccessService: PageAccessService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
@@ -178,5 +189,61 @@ export class ExportController {
     );
 
     return { text };
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('export/shared-page')
+  async exportSharedPage(
+    @Body() dto: ExportSharedPageDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res() res: FastifyReply,
+  ) {
+    const share = await this.shareRepo.findById(dto.shareId);
+    if (!share || share.workspaceId !== workspace.id) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const page = await this.pageRepo.findById(dto.pageId, {
+      includeContent: true,
+    });
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    // Page must belong to the share tree.
+    if (page.id !== share.pageId) {
+      if (!share.includeSubPages || page.spaceId !== share.spaceId) {
+        throw new ForbiddenException();
+      }
+    }
+
+    // Block restricted pages (same guard as the share page-info endpoint).
+    const isRestricted = await this.pagePermissionRepo.hasRestrictedAncestor(page.id);
+    if (isRestricted) {
+      throw new ForbiddenException();
+    }
+
+    const result = await this.exportService.exportPages(
+      dto.pageId,
+      dto.format,
+      false,
+      false,
+      null,
+      true,
+    );
+
+    const ext = getExportExtension(dto.format);
+    const fileName =
+      sanitizeFileName(page.title || 'untitled', { preserveSpaces: true }) + ext;
+    const contentType = getMimeType(path.extname(fileName));
+
+    res.headers({
+      'Content-Type': contentType,
+      'Content-Disposition':
+        'attachment; filename="' + encodeURIComponent(fileName) + '"',
+    });
+
+    res.send(result.content);
   }
 }

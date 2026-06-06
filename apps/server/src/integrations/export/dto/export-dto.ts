@@ -48,3 +48,17 @@ export class ExportSpaceTextDto {
   @IsNotEmpty()
   spaceId: string;
 }
+
+export class ExportSharedPageDto {
+  @IsString()
+  @IsNotEmpty()
+  shareId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  pageId: string;
+
+  @IsString()
+  @IsIn(['html', 'markdown'])
+  format: ExportFormat;
+}

@@ -9,3 +9,5 @@ export const sharedPageFullWidthAtom = atomWithStorage<boolean>(
   "sharedPageFullWidth",
   false,
 );
+// Set by SharedPage on load so the shell can show an export button.
+export const currentSharedPageIdAtom = atom<string | null>(null);

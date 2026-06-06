@@ -20,6 +20,14 @@
   }
 }
 
+@media print {
+  .shareHeader,
+  .navbar,
+  .aside {
+    display: none !important;
+  }
+}
+
 .resizeHandle {
   width: 3px;
   cursor: col-resize;

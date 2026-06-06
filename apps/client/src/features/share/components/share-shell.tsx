@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/theme-toggle.tsx";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useAtom } from "jotai";
 import {
+  currentSharedPageIdAtom,
   sharedPageFullWidthAtom,
   sharedPageTreeAtom,
   sharedTreeDataAtom,
@@ -32,7 +33,7 @@ import {
   mobileTableOfContentAsideAtom,
   tableOfContentAsideAtom,
 } from "@/features/share/atoms/sidebar-atom.ts";
-import { IconArrowsHorizontal, IconList } from "@tabler/icons-react";
+import { IconArrowsHorizontal, IconDownload, IconList, IconPrinter } from "@tabler/icons-react";
 import { useToggleToc } from "@/features/share/hooks/use-toggle-toc.ts";
 import classes from "./share.module.css";
 import {
@@ -42,6 +43,7 @@ import {
 import { ShareSearchSpotlight } from "@/features/search/components/share-search-spotlight.tsx";
 import { shareSearchSpotlight } from "@/features/search/constants";
 import ShareBranding from '@/features/share/components/share-branding.tsx';
+import ShareExportModal from "@/features/share/components/share-export-modal.tsx";
 import { MAIN_CONTENT_ID, SkipToMain } from "@/components/ui/skip-to-main.tsx";
 
 const MemoizedSharedTree = React.memo(SharedTree);
@@ -64,6 +66,8 @@ export default function ShareShell({
   const [fullWidth, setFullWidth] = useAtom(sharedPageFullWidthAtom);
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const currentSharedPageId = useAtomValue(currentSharedPageIdAtom);
   const sidebarRef = useRef<HTMLElement | null>(null);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
@@ -147,7 +151,7 @@ export default function ShareShell({
       }}
       padding="md"
     >
-      <AppShell.Header>
+      <AppShell.Header className={classes.shareHeader}>
         <Group wrap="nowrap" justify="space-between" py="sm" px="xl">
           <Group wrap="nowrap">
             {data?.pageTree?.length > 1 && (
@@ -228,6 +232,34 @@ export default function ShareShell({
                   <IconArrowsHorizontal size={20} stroke={2} />
                 </ActionIcon>
               </Tooltip>
+
+              {currentSharedPageId && shareId && (
+                <>
+                  <Tooltip label={t("Export page")} withArrow>
+                    <ActionIcon
+                      variant="default"
+                      style={{ border: "none" }}
+                      aria-label={t("Export page")}
+                      onClick={() => setExportOpen(true)}
+                      size="sm"
+                    >
+                      <IconDownload size={20} stroke={2} />
+                    </ActionIcon>
+                  </Tooltip>
+
+                  <Tooltip label={t("Print PDF")} withArrow>
+                    <ActionIcon
+                      variant="default"
+                      style={{ border: "none" }}
+                      aria-label={t("Print PDF")}
+                      onClick={() => setTimeout(() => window.print(), 250)}
+                      size="sm"
+                    >
+                      <IconPrinter size={20} stroke={2} />
+                    </ActionIcon>
+                  </Tooltip>
+                </>
+              )}
             </>
 
             <ThemeToggle />
@@ -267,6 +299,15 @@ export default function ShareShell({
 
       <ShareSearchSpotlight shareId={shareId} />
     </AppShell>
+
+    {currentSharedPageId && shareId && (
+      <ShareExportModal
+        shareId={shareId}
+        pageId={currentSharedPageId}
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
+    )}
     </>
   );
 }

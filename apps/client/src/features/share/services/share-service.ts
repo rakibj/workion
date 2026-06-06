@@ -1,5 +1,6 @@
 import api from "@/lib/api-client";
 import { IPage } from "@/features/page/types/page.types";
+import { saveAs } from "file-saver";
 
 import {
   ICreateShare,
@@ -56,4 +57,24 @@ export async function getSharedPageTree(
 ): Promise<ISharedPageTree> {
   const req = await api.post<ISharedPageTree>("/shares/tree", { shareId });
   return req.data;
+}
+
+export async function exportSharedPage(data: {
+  shareId: string;
+  pageId: string;
+  format: "markdown" | "html";
+}): Promise<void> {
+  const req = await api.post("/export/shared-page", data, {
+    responseType: "blob",
+  });
+
+  const disposition = req?.headers["content-disposition"] ?? "";
+  let fileName = disposition.split("filename=")[1]?.replace(/"/g, "") ?? "export";
+  try {
+    fileName = decodeURIComponent(fileName);
+  } catch {
+    // fallback to raw filename
+  }
+
+  saveAs(req.data, fileName);
 }

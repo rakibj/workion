@@ -73,6 +73,7 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
   const { data: collabQuery } = useCollabToken();
   const collaborationURL = useCollaborationUrl();
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [ready, setReady] = useState(false);
 
   // Always-fresh reference to appUser so the Yjs effect can read it
   // without becoming a dependency (which would tear down the WebSocket).
@@ -113,6 +114,9 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
     return createTLCurrentUser({ userPreferences: prefsAtom });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser?.id]);
+
+  // Reset ready when the page changes so the overlay re-engages.
+  useEffect(() => { setReady(false); }, [pageId]);
 
   // ── Yjs + presence sync effect ───────────────────────────────────────────
   useEffect(() => {
@@ -167,6 +171,10 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
         }, TX_ORIGIN);
       }
 
+      // Unblock the canvas now that the Yjs state is loaded. Any interaction
+      // before this point would have been wiped by the store clear above.
+      setReady(true);
+
       // Store → Yjs: forward user edits to the shared doc.
       unlistenStore = store.listen(
         ({ changes }) => {
@@ -215,7 +223,7 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
         offlineTimer = setTimeout(() => {
           providerSynced = true;
           tryInitialize();
-        }, 3000);
+        }, 1500);
       }
     });
 
@@ -367,6 +375,9 @@ export default function BoardEditor({ pageId, readOnly }: BoardEditorProps) {
           return () => setEditor(null);
         }}
       />
+      {!ready && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 9999 }} />
+      )}
     </div>
   );
 }

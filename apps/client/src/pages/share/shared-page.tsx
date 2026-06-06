@@ -8,8 +8,9 @@ import ReadonlyPageEditor from "@/features/editor/readonly-page-editor.tsx";
 import { extractPageSlugId } from "@/lib";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import ShareBranding from "@/features/share/components/share-branding.tsx";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import {
+  currentSharedPageIdAtom,
   sharedPageFullWidthAtom,
   sharedTreeDataAtom,
 } from "@/features/share/atoms/shared-page-atom.ts";
@@ -27,6 +28,13 @@ export default function SharedPage() {
 
   const sharedTreeData = useAtomValue(sharedTreeDataAtom);
   const fullWidth = useAtomValue(sharedPageFullWidthAtom);
+  // @ts-ignore
+  const setCurrentSharedPageId = useSetAtom(currentSharedPageIdAtom);
+
+  useEffect(() => {
+    if (data?.page?.id) setCurrentSharedPageId(data.page.id);
+    return () => { setCurrentSharedPageId(null); };
+  }, [data?.page?.id, setCurrentSharedPageId]);
 
   useEffect(() => {
     if (shareId && data) {
