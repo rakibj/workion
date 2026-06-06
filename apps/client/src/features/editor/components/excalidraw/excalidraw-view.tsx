@@ -249,7 +249,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
           </ActionIcon>
 
           <Text component="span" size="lg" c="dimmed">
-            {t("Double-click to edit Excalidraw diagram")}
+            {t("Double-click to edit diagram")}
           </Text>
         </div>
       </Card>

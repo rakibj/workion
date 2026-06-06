@@ -420,7 +420,7 @@ const TEMPLATE_EXCLUDED_SLASH_ITEMS = new Set([
   "Video",
   "File attachment",
   "Draw.io (diagrams.net)",
-  "Excalidraw (Whiteboard)",
+  "Board (Whiteboard)",
   "Audio",
   "Synced block"
 ]);

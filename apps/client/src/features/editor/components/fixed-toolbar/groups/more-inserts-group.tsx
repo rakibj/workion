@@ -131,7 +131,7 @@ export const MoreInsertsGroup: FC<Props> = ({ editor, templateMode }) => {
             leftSection={<IconExcalidraw size={16} />}
             onClick={() => editor.chain().focus().setExcalidraw().run()}
           >
-            Excalidraw
+            Board
           </Menu.Item>
         )}
 

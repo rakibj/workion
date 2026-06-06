@@ -228,10 +228,10 @@ export function SpaceSidebar() {
                       {t("Document")}
                     </Menu.Item>
                     <Menu.Item leftSection={<IconLayoutKanban size={14} />} onClick={handleCreateKanban}>
-                      {t("Kanban board")}
+                      {t("Kanban")}
                     </Menu.Item>
                     <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleCreateExcalidraw}>
-                      {t("Excalidraw")}
+                      {t("Board")}
                     </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>

@@ -456,9 +456,9 @@ const CommandGroups: SlashMenuGroupedItemsType = {
         editor.chain().focus().deleteRange(range).setDrawio().run(),
     },
     {
-      title: "Excalidraw (Whiteboard)",
-      description: "Draw and sketch excalidraw diagrams",
-      searchTerms: ["diagrams", "draw", "sketch", "whiteboard"],
+      title: "Board (Whiteboard)",
+      description: "Draw and sketch diagrams on a whiteboard",
+      searchTerms: ["diagrams", "draw", "sketch", "whiteboard", "board"],
       icon: IconExcalidraw,
       command: ({ editor, range }: CommandProps) =>
         editor.chain().focus().deleteRange(range).setExcalidraw().run(),
