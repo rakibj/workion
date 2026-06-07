@@ -497,7 +497,7 @@ function InlineAssigneePicker({ card, pageId, canEdit }: InlineAssigneePickerPro
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
 
-  const { data: membersData } = useWorkspaceMembersQuery({ limit: 200 });
+  const { data: membersData } = useWorkspaceMembersQuery({ limit: 100 });
   const members = membersData?.items ?? [];
 
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
@@ -726,7 +726,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const removeAssignee = useRemoveAssigneeMutation(pageId);
   const { data: milestones = [] } = useMilestonesQuery(pageId);
 
-  const { data: membersData } = useWorkspaceMembersQuery({ limit: 200 });
+  const { data: membersData } = useWorkspaceMembersQuery({ limit: 100 });
   const members = membersData?.items ?? [];
 
   useEffect(() => {

@@ -396,7 +396,7 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
-*(none)*
+- **GIF support in Kanban Board** — GIF images should render and animate (not show as broken/static) on Kanban cards. Needs spec before implementation.
 
 ---
 
