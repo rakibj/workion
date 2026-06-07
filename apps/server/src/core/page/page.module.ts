@@ -10,14 +10,17 @@ import { WatcherModule } from '../watcher/watcher.module';
 import { TransclusionModule } from './transclusion/transclusion.module';
 import { LabelModule } from '../label/label.module';
 import { KanbanModule } from '../kanban/kanban.module';
+import { PageVerificationController } from './page-verification.controller';
+import { PageVerificationService } from './services/page-verification.service';
 
 @Module({
-  controllers: [PageController],
+  controllers: [PageController, PageVerificationController],
   providers: [
     PageService,
     PageHistoryService,
     TrashCleanupService,
     BacklinkService,
+    PageVerificationService,
   ],
   exports: [PageService, PageHistoryService],
   imports: [

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import useCurrentUser from "@/features/user/hooks/use-current-user.ts";
 import SetupWorkspace from "@/pages/auth/setup-workspace.tsx";
 import LoginPage from "@/pages/auth/login";
 import Home from "@/pages/dashboard/home";
@@ -47,6 +48,13 @@ import AiChat from "@/ee/ai-chat/pages/ai-chat.tsx";
 import VerifyEmail from "@/ee/pages/verify-email.tsx";
 import LabelPage from "@/pages/label/label-page";
 
+function RootRedirect() {
+  const { data, isLoading } = useCurrentUser();
+  if (isLoading) return null;
+  if (data?.user) return <Navigate to="/home" replace />;
+  return <Navigate to="/setup/register" replace />;
+}
+
 export default function App() {
   const { t } = useTranslation();
   useRedirectToCloudSelect();
@@ -55,7 +63,7 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route index element={<Navigate to="/setup/register" />} />
+        <Route index element={<RootRedirect />} />
         <Route path={"/login"} element={<LoginPage />} />
         <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
         <Route path={"/forgot-password"} element={<ForgotPassword />} />

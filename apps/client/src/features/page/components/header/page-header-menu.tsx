@@ -468,19 +468,23 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </Menu.Item>
           )}
 
-          <Menu.Item
-            leftSection={<IconHistory size={16} />}
-            onClick={openHistoryModal}
-          >
-            {t("Page history")}
-          </Menu.Item>
-
-          {!readOnly && (
-            <PageVerificationMenuItem
-              pageId={page?.id}
-              onClick={openVerificationModal}
-            />
+          {page?.type !== "kanban" && page?.type !== "excalidraw" && (
+            <Menu.Item
+              leftSection={<IconHistory size={16} />}
+              onClick={openHistoryModal}
+            >
+              {t("Page history")}
+            </Menu.Item>
           )}
+
+          {!readOnly &&
+            page?.type !== "kanban" &&
+            page?.type !== "excalidraw" && (
+              <PageVerificationMenuItem
+                pageId={page?.id}
+                onClick={openVerificationModal}
+              />
+            )}
 
           <Menu.Divider />
 

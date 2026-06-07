@@ -13,6 +13,7 @@ import {
   Text,
 } from "@mantine/core";
 import useAuth from "@/features/auth/hooks/use-auth";
+import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated";
 import classes from "@/features/auth/components/auth.module.css";
 import { useTranslation } from "react-i18next";
 import SsoCloudSignup from "@/ee/components/sso-cloud-signup.tsx";
@@ -34,7 +35,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function SetupWorkspaceForm() {
   const { t } = useTranslation();
   const { setupWorkspace, isLoading } = useAuth();
-  // useRedirectIfAuthenticated();
+  useRedirectIfAuthenticated();
 
   const form = useForm<FormValues>({
     validate: zod4Resolver(formSchema),
