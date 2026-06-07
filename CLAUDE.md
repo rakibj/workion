@@ -252,8 +252,8 @@ New tables go in new migration files. Never alter existing migrations.
 | `integrations/storage/` | Use `StorageService`, don't re-implement |
 | `integrations/mail/` | Use `MailModule`, don't touch internals |
 | `integrations/queue/` | Add new jobs/queues, don't change infra |
-| `integrations/export/` | PDF/Markdown export |
-| `integrations/import/` | Confluence/DOCX import |
+| `integrations/export/` | HTML/Markdown/DOCX export — extend via `ExportService`; `docx-utils.ts` for DOCX preprocessing |
+| `integrations/import/` | MD/HTML/DOCX import — extend via `ImportService` |
 
 ---
 
@@ -396,61 +396,7 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
-### DOCX Export & Import — APPROVED
-
-**Goal:** Let users export a single page to `.docx` (for sharing with Word/Google Docs users) and import `.docx` files into a page (via mammoth). No round-trip fidelity guarantee — DOCX is an exchange format, not a backup format (use Markdown for backup).
-
-**Dependencies to add (server):** `html-to-docx`, `katex`, `mammoth`
-
-**Data model changes:** None.
-
-#### Export
-
-- Add `'docx'` to `ExportFormat` enum (`export-dto.ts`) and `@IsIn` validator.
-- `POST /export/page` with `{ pageId, format: "docx" }` — single page only; `includeChildren` ignored/rejected for docx.
-- Response: binary stream, `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
-- Pipeline: `pageJson → jsonToHtml() → preprocessHtmlForDocx() → html-to-docx → Buffer`
-
-**`preprocessHtmlForDocx(html, storageService, db)`** — cheerio-based, runs in order:
-1. **Inline image srcs** — every `<img src="/api/files/...">` (including inside excalidraw/drawio wrappers): look up `data-attachment-id` → `StorageService.read()` → replace src with `data:image/<mime>;base64,...`. On fetch failure: log warning, leave src as-is (don't abort).
-2. **Math → SVG image** — `<div data-type="mathBlock">` and `<span data-type="mathInline">`: inner text is raw LaTeX. Call `katex.renderToString(latex, { output: 'svg', throwOnError: false })`, base64-encode, replace node with `<img src="data:image/svg+xml;base64,...">`. On KaTeX failure: replace with `<code>` containing raw LaTeX.
-3. **Callout → blockquote** — `<div data-type="callout" ...>` → `<blockquote style="border-left:4px solid #888; padding:8px 12px; background:#f5f5f5; margin:8px 0">`. Keep inner content.
-4. **Columns → sequential** — unwrap `<div data-type="columns">` and `<div data-type="column">`, leaving children in document order.
-5. **Attachment → link** — unwrap `<div data-type="attachment">`, keep inner `<a>` child.
-6. **Strip unrenderable nodes** — remove `<div data-type="subpages">`, `data-type="transclusionReference"`, `data-type="transclusionSource">` entirely.
-7. **Strip data-* attrs** — clean remaining `data-type`, `data-katex`, `data-id` attributes.
-
-**Fidelity:** Headings/para/bold/italic/tables/lists → native Word. Task list → bullet (checkbox lost). Excalidraw/Drawio → embedded image. Math → SVG image. Callout → styled blockquote. Code block → monospace para. Attachment → hyperlink. Columns → sequential. Page mentions → hyperlinks (already handled by `turnPageMentionsToLinks`).
-
-**Controller:** When format is `docx`, set correct Content-Type and `.docx` filename. `content` will be a Buffer, not a string — adjust response handler.
-
-#### Import
-
-- `import.service.ts:processDocx()` already has the routing. Replace the EE dynamic-require body with:
-  ```ts
-  const result = await mammoth.convertToHtml({ buffer: fileBuffer }, { includeDefaultStyleMap: true });
-  return this.processHTML(result.value);
-  ```
-- Remove unused `workspaceId`, `spaceId`, `pageId`, `userId` params from `processDocx()` signature and its call site.
-- Images in imported DOCX: mammoth emits base64 data URIs inline — acceptable for v1 (stored in page content, not as attachments).
-- Log mammoth `messages` at debug level only.
-
-#### Frontend
-
-- Export modal: add **Word (.docx)** option wherever HTML/Markdown options appear (`ShareExportModal` + page export flow). POST `format: "docx"`, trigger binary file download.
-- Import: verify file picker already accepts `.docx`; add if missing.
-
-#### Implementation order
-
-```
-[ ] 1. Add dependencies: html-to-docx, katex, mammoth
-[ ] 2. Implement preprocessHtmlForDocx() with unit tests
-[ ] 3. Add 'docx' to ExportFormat enum + DTO validator
-[ ] 4. Wire exportPage() docx branch + controller response handling
-[ ] 5. Replace processDocx() body with mammoth call + signature cleanup
-[ ] 6. Frontend: add .docx option to export modal
-[ ] 7. Manual smoke test: export page with each block type, open in Word, re-import
-```
+*(none)*
 
 ---
 
