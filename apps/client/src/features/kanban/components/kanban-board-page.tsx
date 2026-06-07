@@ -72,7 +72,7 @@ import {
   useUpdateColumnMutation,
   useUpdateMilestoneMutation,
 } from "../queries/kanban-query";
-import { useSpaceMembersInfiniteQuery } from "@/features/space/queries/space-query";
+import { useWorkspaceMembersQuery } from "@/features/workspace/queries/workspace-query";
 import {
   updatePageData,
   useUpdateTitlePageMutation,
@@ -488,26 +488,23 @@ function PriorityPicker({ priority, cardId, pageId, canEdit }: PriorityPickerPro
 interface InlineAssigneePickerProps {
   card: IKanbanCard;
   pageId: string;
-  spaceId: string;
   canEdit: boolean;
 }
 
-function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssigneePickerProps) {
+function InlineAssigneePicker({ card, pageId, canEdit }: InlineAssigneePickerProps) {
   const [opened, setOpened] = useState(false);
   const [search, setSearch] = useState("");
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
 
-  const { data: membersData } = useSpaceMembersInfiniteQuery(spaceId);
-  const members = (membersData?.pages.flatMap((p) => p.items) ?? []).filter(
-    (m) => m.type === "user",
-  );
+  const { data: membersData } = useWorkspaceMembersQuery({ limit: 200 });
+  const members = membersData?.items ?? [];
 
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filtered = members.filter(
     (m) =>
       m.name?.toLowerCase().includes(search.toLowerCase()) ||
-      ("email" in m && (m.email as string)?.toLowerCase().includes(search.toLowerCase())),
+      m.email?.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -553,7 +550,6 @@ function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssignee
               <Stack gap={2}>
                 {filtered.map((m) => {
                   const isAssigned = assignedIds.has(m.id);
-                  const avatarUrl = "avatarUrl" in m ? (m.avatarUrl as string | null) : null;
                   return (
                     <Group
                       key={m.id}
@@ -565,7 +561,7 @@ function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssignee
                           : addAssignee.mutate({ cardId: card.id, userId: m.id })
                       }
                     >
-                      <Avatar src={avatarUrl} size={20} radius="xl" name={m.name} />
+                      <Avatar src={m.avatarUrl} size={20} radius="xl" name={m.name} />
                       <Text size="xs" style={{ flex: 1 }} truncate>{m.name}</Text>
                       {isAssigned && <IconCheck size={12} />}
                     </Group>
@@ -683,7 +679,6 @@ function KanbanCardItem({
             <InlineAssigneePicker
               card={card}
               pageId={pageId}
-              spaceId={spaceId}
               canEdit={canEdit}
             />
           </div>
@@ -731,10 +726,8 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const removeAssignee = useRemoveAssigneeMutation(pageId);
   const { data: milestones = [] } = useMilestonesQuery(pageId);
 
-  const { data: membersData } = useSpaceMembersInfiniteQuery(spaceId);
-  const members = (membersData?.pages.flatMap((p) => p.items) ?? []).filter(
-    (m) => m.type === "user",
-  );
+  const { data: membersData } = useWorkspaceMembersQuery({ limit: 200 });
+  const members = membersData?.items ?? [];
 
   useEffect(() => {
     if (card) {
@@ -770,7 +763,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const filteredMembers = members.filter(
     (m) =>
       m.name?.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      ("email" in m && (m.email as string)?.toLowerCase().includes(memberSearch.toLowerCase())),
+      m.email?.toLowerCase().includes(memberSearch.toLowerCase()),
   );
 
   return (
@@ -959,7 +952,6 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
               <Stack gap={2}>
                 {filteredMembers.map((m) => {
                   const isAssigned = assignedIds.has(m.id);
-                  const avatarUrl = "avatarUrl" in m ? (m.avatarUrl as string | null) : null;
                   return (
                     <Group
                       key={m.id}
@@ -971,7 +963,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
                           : addAssignee.mutate({ cardId: card.id, userId: m.id })
                       }
                     >
-                      <Avatar src={avatarUrl} size={24} radius="xl" name={m.name} />
+                      <Avatar src={m.avatarUrl} size={24} radius="xl" name={m.name} />
                       <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
                       {isAssigned && <IconCheck size={14} />}
                     </Group>
