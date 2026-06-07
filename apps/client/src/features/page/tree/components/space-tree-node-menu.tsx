@@ -10,6 +10,7 @@ import {
   IconDotsVertical,
   IconFileExport,
   IconLink,
+  IconPencil,
   IconStar,
   IconStarFilled,
   IconTrash,
@@ -38,9 +39,10 @@ import type { SpaceTreeNode } from "@/features/page/tree/types.ts";
 export interface NodeMenuProps {
   node: SpaceTreeNode;
   canEdit: boolean;
+  onRename?: () => void;
 }
 
-export function NodeMenu({ node, canEdit }: NodeMenuProps) {
+export function NodeMenu({ node, canEdit, onRename }: NodeMenuProps) {
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
   const { spaceSlug } = useParams();
@@ -120,7 +122,7 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
 
   return (
     <>
-      <Menu shadow="md" width={200}>
+      <Menu shadow="md" width={200} returnFocus={false}>
         <Menu.Target>
           <ActionIcon
             variant="transparent"
@@ -181,6 +183,17 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
 
           {canEdit && (
             <>
+              <Menu.Item
+                leftSection={<IconPencil size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRename?.();
+                }}
+              >
+                {t("Rename")}
+              </Menu.Item>
+
               <Menu.Item
                 leftSection={<IconCopy size={16} />}
                 onClick={(e) => {

@@ -1,8 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useTranslation } from "react-i18next";
-import { ActionIcon, rem } from "@mantine/core";
+import { ActionIcon, Badge, rem } from "@mantine/core";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -31,6 +31,7 @@ import type { RenderRowProps } from "./doc-tree";
 import { NodeMenu } from "./space-tree-node-menu";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { updateTreeNodeIcon } from "@/features/page/tree/utils/utils.ts";
+import { pageUnreadCountsAtom } from "@/features/page/atoms/page-unread-atom";
 
 type SpaceTreeRowProps = RenderRowProps<SpaceTreeNode> & {
   readOnly: boolean;
@@ -54,6 +55,40 @@ export function SpaceTreeRow({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const pageUnreadCounts = useAtomValue(pageUnreadCountsAtom);
+  const unreadCount = pageUnreadCounts[node.id] ?? 0;
+
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
+  const { handleRename } = useTreeMutation(node.spaceId);
+
+  // Focus + select-all after the input appears in the DOM
+  useEffect(() => {
+    if (isRenaming) {
+      committedRef.current = false;
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      });
+    }
+  }, [isRenaming]);
+
+  const startRename = () => {
+    // Set value before flipping isRenaming so first render shows the correct text
+    setRenameValue(node.name || '');
+    setIsRenaming(true);
+  };
+
+  const commitRename = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = renameValue.trim();
+    setIsRenaming(false);
+    if (!trimmed || trimmed === (node.name || '')) return;
+    handleRename(node.id, trimmed);
+  };
 
   const canEdit = !readOnly && node.canEdit !== false;
   const pageUrl = buildPageUrl(spaceSlug, node.slugId, node.name);
@@ -173,10 +208,39 @@ export function SpaceTreeRow({
         />
       </div>
 
-      <span className={classes.text}>{node.name || t("untitled")}</span>
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          className={classes.renameInput}
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              committedRef.current = true;
+              setIsRenaming(false);
+            }
+          }}
+          onBlur={commitRename}
+        />
+      ) : (
+        <span className={classes.text}>{node.name || t("untitled")}</span>
+      )}
+
+      {unreadCount > 0 && !isRenaming && (
+        <Badge size="xs" variant="filled" color="blue" className={classes.unreadBadge}>
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </Badge>
+      )}
 
       <div className={classes.actions}>
-        <NodeMenu node={node} canEdit={canEdit} />
+        <NodeMenu node={node} canEdit={canEdit} onRename={startRename} />
 
         {canEdit && (
           <CreateNode

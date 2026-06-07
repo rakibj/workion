@@ -6,6 +6,7 @@ import { Helmet } from "react-helmet-async";
 import PageHeader from "@/features/page/components/header/page-header.tsx";
 import { extractPageSlugId } from "@/lib";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import { useMarkPageRead } from "@/features/page/hooks/use-mark-page-read";
 import { useTranslation } from "react-i18next";
 import React, { lazy, Suspense } from "react";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
@@ -57,6 +58,8 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     error,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
   const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
+
+  useMarkPageRead(page?.id);
 
   const canEdit = !page?.deletedAt && (page?.permissions?.canEdit ?? false);
   const canComment =

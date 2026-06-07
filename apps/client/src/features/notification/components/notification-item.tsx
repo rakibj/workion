@@ -17,10 +17,19 @@ import { INotification } from "../types/notification.types";
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useSetAtom } from "jotai";
 import { useMarkReadMutation } from "../queries/notification-query";
 import { buildPageUrl } from "@/features/page/page.utils";
 import { formatRelativeTime } from "../notification.utils";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
+import { focusCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 import classes from "../notification.module.css";
+
+const COMMENT_NOTIFICATION_TYPES = new Set([
+  "comment.user_mention",
+  "comment.created",
+  "comment.resolved",
+]);
 
 type NotificationItemProps = {
   notification: INotification;
@@ -33,6 +42,8 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const { t } = useTranslation();
   const markRead = useMarkReadMutation();
+  const setAsideState = useSetAtom(asideStateAtom);
+  const setFocusCommentId = useSetAtom(focusCommentIdAtom);
   const [hovered, setHovered] = useState(false);
 
   const isUnread = !notification.readAt;
@@ -85,6 +96,12 @@ export function NotificationItem({
 
   const handleClick = () => {
     markReadIfNeeded();
+    if (COMMENT_NOTIFICATION_TYPES.has(notification.type)) {
+      setAsideState({ tab: "comments", isAsideOpen: true });
+      if (notification.commentId) {
+        setFocusCommentId(notification.commentId);
+      }
+    }
     onNavigate();
   };
 

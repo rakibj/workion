@@ -3,7 +3,12 @@
 }
 
 .focused-thread {
-    border: 2px solid #8d7249;
+    animation: commentFocus 2s ease-out forwards;
+}
+
+@keyframes commentFocus {
+    0%, 60% { box-shadow: 0 0 0 2px var(--mantine-color-blue-5); }
+    100% { box-shadow: 0 0 0 0 transparent; }
 }
 
 .textSelection {

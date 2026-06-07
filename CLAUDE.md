@@ -213,6 +213,7 @@ Generated types: `apps/server/src/database/types/db.d.ts` (auto-generated, do no
 | `kanban_tasks` / `kanban_columns` | Kanban board data |
 | `templates` | Page templates |
 | `workspace_ai_config` | OpenRouter API key (encrypted) |
+| `page_reads` | Last-read timestamp per (user, page) — drives unread badge |
 
 New tables go in new migration files. Never alter existing migrations.
 
@@ -322,6 +323,15 @@ Bell icon with unread badge. Backend: `core/notification/` — BullMQ processor 
 ### Logo
 SVG at `apps/client/src/assets/logo-workion.svg`, imported in `auth-layout.tsx` as a JS module (Vite content-hashes it). To update: replace the SVG and redeploy.
 
+### Sidebar Inline Page Rename — DONE
+`...` context menu on sidebar page items includes a "Rename" option (canEdit only). Clicking it replaces the page title `<span>` with an inline `<input>` pre-filled and auto-focused. Enter/blur → saves via existing `handleRename()` (skips API if unchanged or empty). Escape → reverts. Files: `space-tree-node-menu.tsx`, `space-tree-row.tsx`, `tree.module.css`.
+
+### Unread Page Notification Badge — DONE
+Blue number badge on sidebar page items for pages with unread notifications directed at the current user. Clears when the user navigates to the page.
+- **DB**: new `page_reads` table (migration `20260607T000000-page-reads.ts`). `page_id` was already on `notifications`.
+- **Backend**: `PageReadsRepo` — `upsert`, `getUnreadCounts`, `getUnreadCount`. `NotificationService.create()` emits `pageUnreadCountChanged` WS event after inserting a page-scoped notification. Two new endpoints: `POST /pages/unread-counts` and `POST /pages/mark-read`.
+- **Frontend**: `pageUnreadCountsAtom` (Jotai). Initial fetch + WS subscription in `use-notification-socket.ts`. Badge in `SpaceTreeRow`. `useMarkPageRead` called in `PageContent` on page ID change.
+
 ---
 
 ## Adding a New Feature — Checklist
@@ -377,88 +387,7 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
-### Spec A: Sidebar Inline Page Rename
-
-**Problem:** Renaming requires opening the page and editing the title in the editor. Should be doable from the sidebar context menu.
-
-**Data model delta:** None. Uses existing `PATCH /pages/:id` with `{ title }`.
-
-**API contract:** No changes.
-
-**UI behaviour:**
-1. Add **"Rename"** to the existing `...` context menu on sidebar page items
-2. On click: page title becomes an inline `<input>`, pre-filled and auto-focused with text selected
-3. `Enter` or blur → calls `PATCH /pages/:id` → sidebar title updates
-4. `Escape` → revert, no API call
-
-**Edge cases:** Empty string → disallow, revert. Unchanged title → skip API call. API failure → toast + revert. Suppress sidebar keyboard nav while input is focused.
-
-**Files to touch:** Sidebar page item + context menu component (locate in `features/space/` or `features/page/`). No backend changes.
-
----
-
-### Spec B: Unread Page Notification Badge
-
-**Problem:** Users miss @mentions and kanban assignments on pages they haven't visited. Sidebar should show a badge (like Slack's unread channel indicator) on pages with unread activity directed at the current user.
-
-**Triggers (sets badge):**
-- @mention in page body
-- @mention in a comment on the page
-- Kanban card assigned to user on that board page
-
-**Clears:** User navigates to the page.
-
-**Data model delta:**
-
-New table `page_reads`:
-```sql
-CREATE TABLE page_reads (
-  user_id      UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
-  page_id      UUID NOT NULL REFERENCES pages(id)  ON DELETE CASCADE,
-  last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (user_id, page_id)
-);
-```
-
-Add nullable column to `notifications`:
-```sql
-ALTER TABLE notifications ADD COLUMN page_id UUID REFERENCES pages(id) ON DELETE CASCADE;
-```
-
-Unread count = `notifications` rows where `user_id = $me AND page_id = $pageId AND created_at > last_read_at` (joined to `page_reads`).
-
-**API contract:**
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/pages/unread-counts` | JWT | Returns `{ [pageId]: number }` for pages where count > 0 |
-| `POST` | `/pages/:id/mark-read` | JWT | Upserts `page_reads` for current user; returns `204` |
-
-**WS event:** When a page-scoped notification is created, emit on `user-${userId}`:
-```ts
-{ event: 'pageUnreadCountChanged', data: { pageId: string, count: number } }
-```
-
-**Frontend:**
-1. On space load → fetch `GET /pages/unread-counts` → store in atom
-2. Subscribe to `pageUnreadCountChanged` → update atom live
-3. Sidebar page item: blue dot / number badge when count > 0 (show `9+` beyond 9)
-4. On page navigation → call `POST /pages/:id/mark-read` → clear that page's count in atom
-
-**Trigger wiring (backend):** Set `page_id` when calling `notificationService.create(...)`:
-- @mention in comment → `CommentService`, use `comment.pageId`
-- @mention in page body → investigate if event path exists; may need to add a dedicated endpoint called from the editor
-- Kanban assignment → `KanbanService`, use `task.pageId`
-
-**Edge cases:** New mention after read → badge reappears. Page deleted → cascade cleans `page_reads` + scoped notifications. No `page_reads` row → treat `last_read_at` as epoch (all notifications unread). Count = 0 → no badge.
-
-**Files to touch:**
-- Migration (new file)
-- Regenerate DB types after migration
-- New `PageReadsRepo` or extend `NotificationRepo`
-- `NotificationService` — add `page_id` param; add `getUnreadCounts`, `markRead` methods
-- New endpoints in `PageController` or `NotificationController`
-- Frontend: sidebar page item, page view (mark-read on mount), WS handler, atom
+*(none)*
 
 ---
 

@@ -41,6 +41,7 @@ import {
   KanbanCards,
   KanbanCardAssignees,
   KanbanMilestones,
+  PageReads as _PageReads,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
@@ -117,6 +118,10 @@ export type KanbanCardAssignee = Selectable<KanbanCardAssignees>;
 export type KanbanMilestone = Selectable<KanbanMilestones>;
 export type InsertableKanbanMilestone = Insertable<KanbanMilestones>;
 export type UpdatableKanbanMilestone = Updateable<Omit<KanbanMilestones, 'id'>>;
+
+// PageReads
+export type PageRead = Selectable<_PageReads>;
+export type InsertablePageRead = Insertable<_PageReads>;
 
 // PageHistory
 export type PageHistory = Selectable<History>;

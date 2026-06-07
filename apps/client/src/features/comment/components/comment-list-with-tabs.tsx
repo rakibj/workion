@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, memo, useMemo } from "react";
+import React, { useState, useRef, useCallback, memo, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import {
   ActionIcon,
@@ -29,6 +29,8 @@ import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts"
 import { IconArrowUp, IconMessageOff } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
+import { focusCommentIdAtom } from "@/features/comment/atoms/comment-atom";
+import classes from "./comment.module.css";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 
 function CommentListWithTabs() {
@@ -42,6 +44,8 @@ function CommentListWithTabs() {
   } = useCommentsQuery({ pageId: page?.id });
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("open");
+  const [focusCommentId, setFocusCommentId] = useAtom(focusCommentIdAtom);
   const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
 
   const canComment =
@@ -67,6 +71,38 @@ function CommentListWithTabs() {
 
     return { activeComments: active, resolvedComments: resolved };
   }, [comments]);
+
+  useEffect(() => {
+    if (!focusCommentId || !comments?.items) return;
+
+    const commentId = focusCommentId;
+    const target = comments.items.find((c: IComment) => c.id === commentId);
+    setFocusCommentId(null);
+    if (!target) return;
+
+    const rootId = target.parentCommentId ?? target.id;
+    const rootComment = comments.items.find((c: IComment) => c.id === rootId);
+
+    setActiveTab(rootComment?.resolvedAt ? "resolved" : "open");
+
+    setTimeout(() => {
+      const panelEl = document.querySelector(`[data-comment-id="${rootId}"]`);
+      if (panelEl) {
+        panelEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        panelEl.classList.remove(classes.focusedThread);
+        void (panelEl as HTMLElement).offsetWidth; // restart animation if already set
+        panelEl.classList.add(classes.focusedThread);
+        setTimeout(() => panelEl.classList.remove(classes.focusedThread), 2200);
+      }
+
+      const editorMark = document.querySelector(
+        `.comment-mark[data-comment-id="${commentId}"]`,
+      );
+      if (editorMark) {
+        editorMark.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+  }, [focusCommentId, comments?.items]);
 
   const [isPageCommentLoading, setIsPageCommentLoading] = useState(false);
 
@@ -185,7 +221,8 @@ function CommentListWithTabs() {
       }}
     >
       <Tabs
-        defaultValue="open"
+        value={activeTab}
+        onChange={(v) => setActiveTab(v ?? "open")}
         variant="default"
         style={{
           flex: "1 1 auto",

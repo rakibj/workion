@@ -11,6 +11,7 @@ import { TokenService } from '../core/auth/services/token.service';
 import { JwtPayload, JwtType } from '../core/auth/dto/jwt-payload';
 import { OnModuleDestroy } from '@nestjs/common';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { PageReadsRepo } from '@docmost/db/repos/page/page-reads.repo';
 import { WsService } from './ws.service';
 import { getSpaceRoomName, getUserRoomName } from './ws.utils';
 import * as cookie from 'cookie';
@@ -28,6 +29,7 @@ export class WsGateway
   constructor(
     private tokenService: TokenService,
     private spaceMemberRepo: SpaceMemberRepo,
+    private pageReadsRepo: PageReadsRepo,
     private wsService: WsService,
   ) {}
 
@@ -55,6 +57,9 @@ export class WsGateway
       const spaceRooms = userSpaceIds.map((id) => getSpaceRoomName(id));
 
       client.join([userRoom, workspaceRoom, ...spaceRooms]);
+
+      const unreadCounts = await this.pageReadsRepo.getUnreadCounts(userId);
+      client.emit('pageUnreadCountsInit', unreadCounts);
     } catch (err) {
       client.emit('Unauthorized');
       client.disconnect();

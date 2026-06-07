@@ -194,3 +194,12 @@ export async function uploadFile(
 
   return req as unknown as IAttachment;
 }
+
+export async function fetchPageUnreadCounts(): Promise<Record<string, number>> {
+  const req = await api.post<Record<string, number>>("/pages/unread-counts");
+  return req.data;
+}
+
+export async function markPageRead(pageId: string): Promise<void> {
+  await api.post("/pages/mark-read", { pageId });
+}

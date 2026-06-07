@@ -8,6 +8,7 @@ import { WsGateway } from '../../ws/ws.gateway';
 import { MailService } from '../../integrations/mail/mail.service';
 import { NotificationTab, NotificationType, NotificationTypeToSettingKey } from './notification.constants';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
+import { PageReadsRepo } from '@docmost/db/repos/page/page-reads.repo';
 
 @Injectable()
 export class NotificationService {
@@ -16,6 +17,7 @@ export class NotificationService {
   constructor(
     private readonly notificationRepo: NotificationRepo,
     private readonly pagePermissionRepo: PagePermissionRepo,
+    private readonly pageReadsRepo: PageReadsRepo,
     private readonly wsGateway: WsGateway,
     private readonly mailService: MailService,
     @InjectKysely() private readonly db: KyselyDB,
@@ -37,6 +39,13 @@ export class NotificationService {
     this.wsGateway.server
       .to(`user-${data.userId}`)
       .emit('notification', { id: notification.id, type: notification.type });
+
+    if (data.pageId) {
+      const count = await this.pageReadsRepo.getUnreadCount(data.userId, data.pageId);
+      this.wsGateway.server
+        .to(`user-${data.userId}`)
+        .emit('pageUnreadCountChanged', { pageId: data.pageId, count });
+    }
 
     return notification;
   }

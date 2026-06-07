@@ -626,6 +626,12 @@ export interface UserSessions {
   createdAt: Generated<Timestamp>;
 }
 
+export interface PageReads {
+  userId: string;
+  pageId: string;
+  lastReadAt: Generated<Timestamp>;
+}
+
 export interface DB {
   aiChats: AiChats;
   aiChatMessages: AiChatMessages;
@@ -653,6 +659,7 @@ export interface DB {
   pagePermissions: PagePermissions;
   pageHistory: PageHistory;
   pageLabels: PageLabels;
+  pageReads: PageReads;
   pageVerifications: PageVerifications;
   pageVerifiers: PageVerifiers;
   pages: Pages;

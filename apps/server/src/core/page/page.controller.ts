@@ -40,6 +40,7 @@ import {
 } from '../casl/interfaces/space-ability.type';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { PageReadsRepo } from '@docmost/db/repos/page/page-reads.repo';
 import { RecentPageDto } from './dto/recent-page.dto';
 import { CreatedByUserDto } from './dto/created-by-user.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
@@ -70,6 +71,7 @@ export class PageController {
     private readonly backlinkService: BacklinkService,
     private readonly labelService: LabelService,
     private readonly pagePermissionRepo: PagePermissionRepo,
+    private readonly pageReadsRepo: PageReadsRepo,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -939,5 +941,17 @@ export class PageController {
       dto.role,
       { userId: dto.userId, groupId: dto.groupId },
     );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('/unread-counts')
+  async getPageUnreadCounts(@AuthUser() user: User) {
+    return this.pageReadsRepo.getUnreadCounts(user.id);
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('/mark-read')
+  async markPageRead(@Body() dto: PageIdDto, @AuthUser() user: User) {
+    await this.pageReadsRepo.upsert(user.id, dto.pageId);
   }
 }
