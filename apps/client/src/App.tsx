@@ -52,7 +52,7 @@ function RootRedirect() {
   const { data, isLoading } = useCurrentUser();
   if (isLoading) return null;
   if (data?.user) return <Navigate to="/home" replace />;
-  return <Navigate to="/setup/register" replace />;
+  return <Navigate to="/login" replace />;
 }
 
 export default function App() {

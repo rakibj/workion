@@ -121,12 +121,16 @@ export default function useAuth() {
           );
         }
       } else {
-        const res = await setupWorkspace(data);
+        await setupWorkspace(data);
         setIsLoading(false);
         navigate(APP_ROUTE.HOME);
       }
     } catch (err) {
       setIsLoading(false);
+      if (err.response?.status === 403) {
+        navigate(APP_ROUTE.AUTH.LOGIN);
+        return;
+      }
       notifications.show({
         message: err.response?.data.message,
         color: "red",

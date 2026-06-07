@@ -1,15 +1,20 @@
 import { CanActivate, Injectable } from '@nestjs/common';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
+import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 
 @Injectable()
 export class SetupGuard implements CanActivate {
-  constructor(private environmentService: EnvironmentService) {}
+  constructor(
+    private environmentService: EnvironmentService,
+    private workspaceRepo: WorkspaceRepo,
+  ) {}
 
-  canActivate(): boolean {
+  async canActivate(): Promise<boolean> {
     if (this.environmentService.isCloud()) {
       return false;
     }
 
-    return true;
+    const count = await this.workspaceRepo.count();
+    return count === 0;
   }
 }
