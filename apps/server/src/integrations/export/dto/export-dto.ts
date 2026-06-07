@@ -9,6 +9,7 @@ import {
 export enum ExportFormat {
   HTML = 'html',
   Markdown = 'markdown',
+  Docx = 'docx',
 }
 
 export class ExportPageDto {
@@ -17,7 +18,7 @@ export class ExportPageDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['html', 'markdown'])
+  @IsIn(['html', 'markdown', 'docx'])
   format: ExportFormat;
 
   @IsOptional()
@@ -59,6 +60,6 @@ export class ExportSharedPageDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['html', 'markdown'])
+  @IsIn(['html', 'markdown', 'docx'])
   format: ExportFormat;
 }

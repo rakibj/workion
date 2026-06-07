@@ -18,7 +18,7 @@ export default function ShareExportModal({
   onClose,
 }: ShareExportModalProps) {
   const { t } = useTranslation();
-  const [format, setFormat] = useState<"markdown" | "html">("markdown");
+  const [format, setFormat] = useState<"markdown" | "html" | "docx">("markdown");
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
@@ -69,11 +69,14 @@ export default function ShareExportModal({
               data={[
                 { value: "markdown", label: "Markdown" },
                 { value: "html", label: "HTML" },
+                { value: "docx", label: "Word (.docx)" },
               ]}
               value={format}
-              onChange={(v) => setFormat((v as "markdown" | "html") ?? "markdown")}
-              styles={{ wrapper: { maxWidth: 120 } }}
-              comboboxProps={{ width: "120" }}
+              onChange={(v) =>
+                setFormat((v as "markdown" | "html" | "docx") ?? "markdown")
+              }
+              styles={{ wrapper: { maxWidth: 140 } }}
+              comboboxProps={{ width: "140" }}
               allowDeselect={false}
               withCheckIcon={false}
               aria-label={t("Select export format")}

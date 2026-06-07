@@ -82,6 +82,8 @@ export default function ExportModal({
     }
   };
 
+  const isDocx = format === ExportFormat.Docx;
+
   const handleChange = (format: ExportFormat) => {
     setFormat(format);
   };
@@ -108,10 +110,14 @@ export default function ExportModal({
             <div>
               <Text size="md">{t("Format")}</Text>
             </div>
-            <ExportFormatSelection format={format} onChange={handleChange} />
+            <ExportFormatSelection
+              format={format}
+              onChange={handleChange}
+              includeDocx={type === "page"}
+            />
           </Group>
 
-          {type === "page" && (
+          {type === "page" && !isDocx && (
             <>
               <Divider my="sm" />
 
@@ -183,20 +189,28 @@ export default function ExportModal({
 interface ExportFormatSelection {
   format: ExportFormat;
   onChange: (value: string) => void;
+  includeDocx?: boolean;
 }
-function ExportFormatSelection({ format, onChange }: ExportFormatSelection) {
+function ExportFormatSelection({
+  format,
+  onChange,
+  includeDocx,
+}: ExportFormatSelection) {
   const { t } = useTranslation();
+
+  const data = [
+    { value: "markdown", label: "Markdown" },
+    { value: "html", label: "HTML" },
+    ...(includeDocx ? [{ value: "docx", label: "Word (.docx)" }] : []),
+  ];
 
   return (
     <Select
-      data={[
-        { value: "markdown", label: "Markdown" },
-        { value: "html", label: "HTML" },
-      ]}
+      data={data}
       defaultValue={format}
       onChange={onChange}
-      styles={{ wrapper: { maxWidth: 120 } }}
-      comboboxProps={{ width: "120" }}
+      styles={{ wrapper: { maxWidth: 140 } }}
+      comboboxProps={{ width: "140" }}
       allowDeselect={false}
       withCheckIcon={false}
       aria-label={t("Select export format")}

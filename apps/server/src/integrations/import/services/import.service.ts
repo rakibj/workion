@@ -62,11 +62,8 @@ export class ImportService {
     let prosemirrorState = null;
     let createdPage = null;
 
-    // For DOCX, we need the page ID upfront so images can reference it
-    const pageId =
-      fileExtension === '.docx' || fileExtension === '.pdf'
-        ? uuid7()
-        : undefined;
+    // For PDF (EE), we need the page ID upfront so images can reference it
+    const pageId = fileExtension === '.pdf' ? uuid7() : undefined;
 
     try {
       if (fileExtension.endsWith('.md')) {
@@ -74,13 +71,7 @@ export class ImportService {
       } else if (fileExtension.endsWith('.html')) {
         prosemirrorState = await this.processHTML(fileContent);
       } else if (fileExtension.endsWith('.docx')) {
-        prosemirrorState = await this.processDocx(
-          fileBuffer,
-          workspaceId,
-          spaceId,
-          pageId,
-          userId,
-        );
+        prosemirrorState = await this.processDocx(fileBuffer);
       } else if (fileExtension.endsWith('.pdf')) {
         prosemirrorState = await this.processPdf(
           fileBuffer,
@@ -157,40 +148,17 @@ export class ImportService {
     }
   }
 
-  async processDocx(
-    fileBuffer: Buffer,
-    workspaceId: string,
-    spaceId: string,
-    pageId: string,
-    userId: string,
-  ): Promise<any> {
-    let DocxImportModule: any;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      DocxImportModule = require('./../../../ee/document-import/docx-import.service');
-    } catch (err) {
-      this.logger.error(
-        'DOCX import requested but EE module not bundled in this build',
-      );
-      throw new BadRequestException(
-        'This feature requires a valid enterprise license.',
-      );
+  async processDocx(fileBuffer: Buffer): Promise<any> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mammoth = require('mammoth');
+    const result = await mammoth.convertToHtml(
+      { buffer: fileBuffer },
+      { includeDefaultStyleMap: true },
+    );
+    if (result.messages?.length) {
+      this.logger.debug('mammoth messages: %o', result.messages);
     }
-
-    const docxImportService = this.moduleRef.get(
-      DocxImportModule.DocxImportService,
-      { strict: false },
-    );
-
-    const html = await docxImportService.convertDocxToHtml(
-      fileBuffer,
-      workspaceId,
-      spaceId,
-      pageId,
-      userId,
-    );
-
-    return this.processHTML(html);
+    return this.processHTML(result.value);
   }
 
   async processPdf(

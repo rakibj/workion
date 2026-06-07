@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { jsonToHtml, jsonToNode } from '../../collaboration/collaboration.util';
 import { ExportFormat } from './dto/export-dto';
+import {
+  preprocessHtmlForDocx,
+  htmlToDocxBuffer,
+} from './docx-utils';
 import { Page } from '@docmost/db/types/entity.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -59,7 +63,11 @@ export class ExportService {
     private readonly domainService: DomainService,
   ) {}
 
-  async exportPage(format: string, page: Page, singlePage?: boolean) {
+  async exportPage(
+    format: string,
+    page: Page,
+    singlePage?: boolean,
+  ): Promise<string | Buffer | undefined> {
     const titleNode = {
       type: 'heading',
       attrs: { level: 1 },
@@ -102,6 +110,15 @@ export class ExportService {
         '',
       );
       return htmlToMarkdown(newPageHtml);
+    }
+
+    if (format === ExportFormat.Docx) {
+      const preprocessed = await preprocessHtmlForDocx(
+        pageHtml,
+        this.storageService,
+        this.db,
+      );
+      return htmlToDocxBuffer(preprocessed, getPageTitle(page.title));
     }
 
     return;
@@ -157,7 +174,10 @@ export class ExportService {
     // set to null to make export of pages with parentId work
     pages[parentPageIndex].parentPageId = null;
 
-    const isSinglePage = pages.length === 1 && !includeAttachments;
+    // DOCX format is always single-page (no ZIP); ignore includeChildren/includeAttachments
+    const isSinglePage =
+      format === ExportFormat.Docx ||
+      (pages.length === 1 && !includeAttachments);
 
     if (isSinglePage) {
       const pageContent = await this.exportPage(format, pages[0], true);
@@ -324,10 +344,10 @@ export class ExportService {
             updatedJsonContent = updateAttachmentUrlsToLocalPaths(updatedJsonContent);
           }
 
-          pageExportContent = await this.exportPage(format, {
+          pageExportContent = (await this.exportPage(format, {
             ...page,
             content: updatedJsonContent,
-          });
+          })) as string;
         }
 
         folder.file(
@@ -632,10 +652,10 @@ export class ExportService {
             userId,
             ignorePermissions,
           );
-          content = await this.exportPage(ExportFormat.Markdown, {
+          content = (await this.exportPage(ExportFormat.Markdown, {
             ...page,
             content: prosemirrorJson,
-          });
+          })) as string;
         }
 
         if (content) sections.push(content);

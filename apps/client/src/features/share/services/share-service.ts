@@ -62,7 +62,7 @@ export async function getSharedPageTree(
 export async function exportSharedPage(data: {
   shareId: string;
   pageId: string;
-  format: "markdown" | "html";
+  format: "markdown" | "html" | "docx";
 }): Promise<void> {
   const req = await api.post("/export/shared-page", data, {
     responseType: "blob",
