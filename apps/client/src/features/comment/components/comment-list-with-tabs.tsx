@@ -77,7 +77,7 @@ function CommentListWithTabs() {
 
     const commentId = focusCommentId;
     const target = comments.items.find((c: IComment) => c.id === commentId);
-    setFocusCommentId(null);
+    setFocusCommentId('');
     if (!target) return;
 
     const rootId = target.parentCommentId ?? target.id;
