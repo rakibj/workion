@@ -62,9 +62,14 @@ export default function HtmlArtifactView({
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
 
+  // Local zoom state for read-only views — never persisted.
+  const [localWidth, setLocalWidth] = useState<number | null>(null);
+
   const isLarge = html && html.length > SIZE_WARN_BYTES;
   const isEditable = editor.isEditable;
   const effectiveMode: Mode = isEditable ? mode : "preview";
+  // In read-only mode, zoom lives in local state; in editable mode it comes from attrs.
+  const effectiveWidth = isEditable ? persistedWidth : (localWidth ?? persistedWidth);
 
   // The NodeViewWrapper is always full-width — observe it to track naturalWidth.
   useEffect(() => {
@@ -129,15 +134,21 @@ export default function HtmlArtifactView({
   };
 
   // Zoom via +/- buttons. Snaps to the nearest 10 % step.
+  // In editable mode, persists to attrs. In read-only mode, stays local.
   const applyZoom = (delta: number) => {
     const natWidth = naturalWidthRef.current;
     if (!natWidth) return;
-    const currentScale = persistedWidth ? persistedWidth / natWidth : 1;
+    const currentScale = effectiveWidth ? effectiveWidth / natWidth : 1;
     const newScale = Math.max(
       0.1,
       Math.min(1, Math.round((currentScale + delta) * 10) / 10),
     );
-    updateAttributes({ width: newScale >= 0.99 ? null : Math.round(natWidth * newScale) });
+    const newWidth = newScale >= 0.99 ? null : Math.round(natWidth * newScale);
+    if (isEditable) {
+      updateAttributes({ width: newWidth });
+    } else {
+      setLocalWidth(newWidth);
+    }
   };
 
   const enrichedHtml = html
@@ -157,17 +168,17 @@ export default function HtmlArtifactView({
       ? Math.max(iframeHeight, EDITOR_HEIGHT)
       : Math.max(iframeHeight, MIN_HEIGHT));
 
-  // Derive scale from persisted attribute vs measured natural width.
+  // Derive scale from effective width (persisted in editable, local in read-only).
   const natWidth = naturalWidthRef.current || 800;
   const scale =
-    persistedWidth && natWidth > 0 ? persistedWidth / natWidth : 1;
+    effectiveWidth && natWidth > 0 ? effectiveWidth / natWidth : 1;
   const isScaled = scale < 0.995;
   const zoomPercent = Math.round(scale * 100);
 
   // Applied by React after each render; the drag bypasses this via direct DOM.
   const scaledContainerStyle: React.CSSProperties | undefined = isScaled
     ? {
-        width: persistedWidth!,
+        width: effectiveWidth!,
         height: innerHeight > 0 ? Math.round(innerHeight * scale) : undefined,
         overflow: "hidden",
         maxWidth: "100%",
@@ -200,61 +211,60 @@ export default function HtmlArtifactView({
           )}
         </Group>
 
-        {isEditable && (
+        {!isMobile && (
           <Group gap="xs">
-            {!isMobile && (
-              <>
-                {/* Zoom controls */}
-                <Group gap={2} align="center" className={classes.zoomControls}>
-                  <Tooltip label="Zoom out" withArrow>
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      onClick={() => applyZoom(-ZOOM_STEP)}
-                      disabled={zoomPercent <= 10}
-                    >
-                      <IconMinus size={11} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Text size="xs" c="dimmed" className={classes.zoomLabel}>
-                    {zoomPercent}%
-                  </Text>
-                  <Tooltip label="Zoom in" withArrow>
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      onClick={() => applyZoom(ZOOM_STEP)}
-                      disabled={zoomPercent >= 100}
-                    >
-                      <IconPlus size={11} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-
-                <SegmentedControl
+            {/* Zoom controls — always visible on desktop */}
+            <Group gap={2} align="center" className={classes.zoomControls}>
+              <Tooltip label="Zoom out" withArrow>
+                <ActionIcon
                   size="xs"
-                  value={effectiveMode}
-                  onChange={(v) => setMode(v as Mode)}
-                  data={[
-                    { label: "Edit", value: "edit" },
-                    { label: "Split", value: "split" },
-                    { label: "Preview", value: "preview" },
-                  ]}
-                />
-              </>
-            )}
+                  variant="subtle"
+                  onClick={() => applyZoom(-ZOOM_STEP)}
+                  disabled={zoomPercent <= 10}
+                >
+                  <IconMinus size={11} />
+                </ActionIcon>
+              </Tooltip>
+              <Text size="xs" c="dimmed" className={classes.zoomLabel}>
+                {zoomPercent}%
+              </Text>
+              <Tooltip label="Zoom in" withArrow>
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  onClick={() => applyZoom(ZOOM_STEP)}
+                  disabled={zoomPercent >= 100}
+                >
+                  <IconPlus size={11} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
 
-            {isMobile && (
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                onClick={() => setMobileEditOpen(true)}
-                aria-label="Edit HTML"
-              >
-                <IconPencil size={14} />
-              </ActionIcon>
+            {/* Edit/Split/Preview switcher — editable mode only */}
+            {isEditable && (
+              <SegmentedControl
+                size="xs"
+                value={effectiveMode}
+                onChange={(v) => setMode(v as Mode)}
+                data={[
+                  { label: "Edit", value: "edit" },
+                  { label: "Split", value: "split" },
+                  { label: "Preview", value: "preview" },
+                ]}
+              />
             )}
           </Group>
+        )}
+
+        {isMobile && isEditable && (
+          <ActionIcon
+            variant="subtle"
+            size="sm"
+            onClick={() => setMobileEditOpen(true)}
+            aria-label="Edit HTML"
+          >
+            <IconPencil size={14} />
+          </ActionIcon>
         )}
       </div>
 

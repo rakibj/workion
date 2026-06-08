@@ -45,7 +45,7 @@ import {
   TransclusionSource,
   TransclusionReference,
 } from '@docmost/editor-ext';
-import { generateText, getSchema, JSONContent } from '@tiptap/core';
+import { generateText, getSchema, JSONContent, Node as TiptapExtNode } from '@tiptap/core';
 import { generateHTML, generateJSON } from '../common/helpers/prosemirror/html';
 // @tiptap/html library works best for generating prosemirror json state but not HTML
 // see: https://github.com/ueberdosis/tiptap/issues/5352
@@ -54,6 +54,30 @@ import { generateHTML, generateJSON } from '../common/helpers/prosemirror/html';
 import { Node, Schema } from '@tiptap/pm/model';
 import * as Y from 'yjs';
 import { Logger } from '@nestjs/common';
+
+const HtmlArtifact = TiptapExtNode.create({
+  name: 'htmlArtifact',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      html: { default: '' },
+      height: { default: null },
+      width: { default: null },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'pre[data-type="html-artifact"]' }];
+  },
+  renderHTML({ node }) {
+    return [
+      'pre',
+      { 'data-type': 'html-artifact' },
+      ['code', { class: 'language-html' }, node.attrs.html || ''],
+    ];
+  },
+});
 
 export const tiptapExtensions = [
   StarterKit.configure({
@@ -109,6 +133,7 @@ export const tiptapExtensions = [
   Status,
   TransclusionSource,
   TransclusionReference,
+  HtmlArtifact,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {
