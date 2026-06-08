@@ -16,6 +16,7 @@ import SpaceHome from "@/pages/space/space-home.tsx";
 import PageRedirect from "@/pages/page/page-redirect.tsx";
 import Layout from "@/components/layouts/global/layout.tsx";
 import InviteSignup from "@/pages/auth/invite-signup.tsx";
+import InviteLinkPage from "@/features/auth/components/invite-link-page.tsx";
 import ForgotPassword from "@/pages/auth/forgot-password.tsx";
 import PasswordReset from "./pages/auth/password-reset";
 import Billing from "@/ee/billing/pages/billing.tsx";
@@ -66,6 +67,7 @@ export default function App() {
         <Route index element={<RootRedirect />} />
         <Route path={"/login"} element={<LoginPage />} />
         <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
+        <Route path={"/invite/:token"} element={<InviteLinkPage />} />
         <Route path={"/forgot-password"} element={<ForgotPassword />} />
         <Route path={"/password-reset"} element={<PasswordReset />} />
         <Route path={"/login/mfa"} element={<MfaChallengePage />} />

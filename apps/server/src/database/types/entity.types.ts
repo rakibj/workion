@@ -21,6 +21,7 @@ import {
   PageHistory as History,
   GroupUsers,
   SpaceMembers,
+  SpaceInviteLinks,
   WorkspaceInvitations,
   UserTokens,
   Backlinks,
@@ -122,6 +123,11 @@ export type UpdatableKanbanMilestone = Updateable<Omit<KanbanMilestones, 'id'>>;
 // PageReads
 export type PageRead = Selectable<_PageReads>;
 export type InsertablePageRead = Insertable<_PageReads>;
+
+// SpaceInviteLink
+export type SpaceInviteLink = Selectable<SpaceInviteLinks>;
+export type InsertableSpaceInviteLink = Insertable<SpaceInviteLinks>;
+export type UpdatableSpaceInviteLink = Updateable<Omit<SpaceInviteLinks, 'id'>>;
 
 // PageHistory
 export type PageHistory = Selectable<History>;

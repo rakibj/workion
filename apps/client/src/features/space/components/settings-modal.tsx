@@ -4,6 +4,7 @@ import AddSpaceMembersModal from "@/features/space/components/add-space-members-
 import React from "react";
 import SpaceDetails from "@/features/space/components/space-details.tsx";
 import SpaceSecuritySettings from "@/features/space/components/space-security-settings.tsx";
+import SpaceInviteLinks from "@/features/space/components/space-invite-links.tsx";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
@@ -68,6 +69,14 @@ export default function SpaceSettingsModal({
                       {t("Security")}
                     </Tabs.Tab>
                   )}
+                  {spaceAbility.can(
+                    SpaceCaslAction.Manage,
+                    SpaceCaslSubject.Member,
+                  ) && (
+                    <Tabs.Tab fw={500} value="invite-links">
+                      {t("Invite Links")}
+                    </Tabs.Tab>
+                  )}
                 </Tabs.List>
 
                 <Tabs.Panel value="general">
@@ -113,6 +122,10 @@ export default function SpaceSettingsModal({
                       />
                     </div>
                   </ScrollArea>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="invite-links">
+                  <SpaceInviteLinks spaceId={space?.id} />
                 </Tabs.Panel>
               </Tabs>
             </div>

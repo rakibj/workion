@@ -632,6 +632,21 @@ export interface PageReads {
   lastReadAt: Generated<Timestamp>;
 }
 
+export interface SpaceInviteLinks {
+  id: Generated<string>;
+  workspaceId: string;
+  spaceId: string;
+  createdBy: string;
+  token: string;
+  spaceRole: Generated<string>;
+  expiresAt: Timestamp | null;
+  maxUses: number | null;
+  useCount: Generated<number>;
+  disabled: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface DB {
   aiChats: AiChats;
   aiChatMessages: AiChatMessages;
@@ -665,6 +680,7 @@ export interface DB {
   pages: Pages;
   scimTokens: ScimTokens;
   shares: Shares;
+  spaceInviteLinks: SpaceInviteLinks;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   templates: Templates;

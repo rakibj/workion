@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Param,
   Post,
   Req,
   Res,
@@ -38,6 +39,8 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../integrations/audit/audit.service';
+import { SpaceInviteLinkService } from '../space/services/space-invite-link.service';
+import { GuestJoinDto, GuestSignupDto } from '../space/dto/space-invite-link.dto';
 
 @SkipThrottle({ [AI_CHAT_THROTTLER]: true })
 @UseGuards(ThrottlerGuard)
@@ -50,6 +53,7 @@ export class AuthController {
     private sessionService: SessionService,
     private environmentService: EnvironmentService,
     private moduleRef: ModuleRef,
+    private spaceInviteLinkService: SpaceInviteLinkService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -234,5 +238,35 @@ export class AuthController {
   @Get('setup-config')
   getSetupConfig() {
     return { allowSignup: true };
+  }
+
+  @SkipThrottle({ [AUTH_THROTTLER]: true })
+  @HttpCode(HttpStatus.OK)
+  @Get('invite-link/:token')
+  async getInviteLinkInfo(@Param('token') token: string) {
+    return this.spaceInviteLinkService.getPublicLinkInfo(token);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('invite-link/signup')
+  async guestSignup(
+    @Body() dto: GuestSignupDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const authToken = await this.authService.guestSignup(dto, workspace.id);
+    this.setAuthCookie(res, authToken);
+  }
+
+  @SkipThrottle({ [AUTH_THROTTLER]: true })
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('invite-link/join')
+  async guestJoin(
+    @Body() dto: GuestJoinDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.authService.guestJoin(dto.token, user.id, workspace.id);
   }
 }

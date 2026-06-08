@@ -72,6 +72,7 @@ function redirectToLogin() {
     APP_ROUTE.AUTH.MFA_CHALLENGE,
     APP_ROUTE.AUTH.MFA_SETUP_REQUIRED,
     "/invites",
+    "/invite",
   ];
   if (!exemptPaths.some((path) => window.location.pathname.startsWith(path))) {
     const redirectTo = window.location.pathname;

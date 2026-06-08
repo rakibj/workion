@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { LoginDto } from '../dto/login.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { GuestSignupDto } from '../../space/dto/space-invite-link.dto';
 import { TokenService } from './token.service';
 import { SessionService } from '../../session/session.service';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
@@ -100,6 +101,15 @@ export class AuthService {
   async register(createUserDto: CreateUserDto, workspaceId: string) {
     const user = await this.signupService.signup(createUserDto, workspaceId);
     return this.sessionService.createSessionAndToken(user);
+  }
+
+  async guestSignup(dto: GuestSignupDto, workspaceId: string): Promise<string> {
+    const user = await this.signupService.guestSignup(dto, workspaceId);
+    return this.sessionService.createSessionAndToken(user);
+  }
+
+  async guestJoin(token: string, userId: string, workspaceId: string): Promise<void> {
+    await this.signupService.guestJoin(token, userId, workspaceId);
   }
 
   async setup(createAdminUserDto: CreateAdminUserDto) {

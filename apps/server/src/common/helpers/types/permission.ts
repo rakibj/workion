@@ -2,6 +2,7 @@ export enum UserRole {
   OWNER = 'owner',
   ADMIN = 'admin', // can have owner permissions but cannot delete workspace
   MEMBER = 'member',
+  GUEST = 'guest', // space-scoped user, invited via invite link, cannot access workspace settings
 }
 
 export enum InviteUserRole {

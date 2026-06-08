@@ -24,6 +24,7 @@ import { AvatarIconType } from "@/features/attachments/types/attachment.types";
 import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { useUpgradeLabel } from "@/ee/hooks/use-upgrade-label";
+import useCurrentUser from "@/features/user/hooks/use-current-user";
 
 export default function GlobalSidebar() {
   const { t } = useTranslation();
@@ -33,16 +34,21 @@ export default function GlobalSidebar() {
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const hasTemplates = useHasFeature(Feature.TEMPLATES);
   const upgradeLabel = useUpgradeLabel();
+  const { data: currentUserData } = useCurrentUser();
+  const isGuest = currentUserData?.user?.role === "guest";
+
   const mainNavItems = [
     { label: "Home", icon: IconHome, path: "/home" },
     { label: "Favorites", icon: IconStar, path: "/favorites" },
-    { label: "Spaces", icon: IconLayoutGrid, path: "/spaces" },
-    {
-      label: "Templates",
-      icon: IconTemplate,
-      path: "/templates",
-      disabled: !hasTemplates,
-    },
+    ...(!isGuest ? [
+      { label: "Spaces", icon: IconLayoutGrid, path: "/spaces" },
+      {
+        label: "Templates",
+        icon: IconTemplate,
+        path: "/templates",
+        disabled: !hasTemplates,
+      },
+    ] : []),
   ];
   const { data: favoriteSpacesData, isPending: isFavoritesPending } = useFavoritesQuery("space");
   const favoriteSpaces = favoriteSpacesData?.pages.flatMap((p) => p.items) ?? [];
@@ -150,13 +156,15 @@ export default function GlobalSidebar() {
       </ScrollArea>
 
       <div className={classes.bottomSection}>
-        <UnstyledButton
-          className={classes.link}
-          onClick={openInvite}
-        >
-          <IconUserPlus className={classes.linkIcon} stroke={2} />
-          <span>{t("Invite People")}</span>
-        </UnstyledButton>
+        {!isGuest && (
+          <UnstyledButton
+            className={classes.link}
+            onClick={openInvite}
+          >
+            <IconUserPlus className={classes.linkIcon} stroke={2} />
+            <span>{t("Invite People")}</span>
+          </UnstyledButton>
+        )}
         <Link
           className={classes.link}
           data-active={active.startsWith("/settings") || undefined}

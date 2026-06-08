@@ -7,6 +7,7 @@ const envPath = path.resolve(process.cwd(), "..", "..");
 export default defineConfig(({ mode }) => {
   const {
     APP_URL,
+    SERVER_URL,
     FILE_UPLOAD_SIZE_LIMIT,
     FILE_IMPORT_SIZE_LIMIT,
     DRAWIO_URL,
@@ -17,6 +18,10 @@ export default defineConfig(({ mode }) => {
     POSTHOG_HOST,
     POSTHOG_KEY,
   } = loadEnv(mode, envPath, "");
+
+  // In dev, SERVER_URL points to the NestJS backend while APP_URL is the Vite
+  // frontend URL. In production both are the same, so SERVER_URL is optional.
+  const backendUrl = SERVER_URL || APP_URL;
 
   return {
     define: {
@@ -61,16 +66,16 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         "/api": {
-          target: APP_URL,
+          target: backendUrl,
           changeOrigin: false,
         },
         "/socket.io": {
-          target: APP_URL,
+          target: backendUrl,
           ws: true,
           rewriteWsOrigin: true,
         },
         "/collab": {
-          target: APP_URL,
+          target: backendUrl,
           ws: true,
           rewriteWsOrigin: true,
         },

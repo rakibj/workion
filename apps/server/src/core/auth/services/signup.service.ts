@@ -15,6 +15,9 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../../integrations/audit/audit.service';
+import { SpaceInviteLinkService } from '../../space/services/space-invite-link.service';
+import { SpaceMemberService } from '../../space/services/space-member.service';
+import { GuestSignupDto } from '../../../core/space/dto/space-invite-link.dto';
 
 @Injectable()
 export class SignupService {
@@ -22,6 +25,8 @@ export class SignupService {
     private userRepo: UserRepo,
     private workspaceService: WorkspaceService,
     private groupUserRepo: GroupUserRepo,
+    private spaceInviteLinkService: SpaceInviteLinkService,
+    private spaceMemberService: SpaceMemberService,
     @InjectKysely() private readonly db: KyselyDB,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -90,6 +95,90 @@ export class SignupService {
     });
 
     return user;
+  }
+
+  async guestSignup(
+    dto: GuestSignupDto,
+    workspaceId: string,
+  ): Promise<User> {
+    const link = await this.spaceInviteLinkService.validateToken(dto.token);
+
+    const existing = await this.userRepo.findByEmail(dto.email, workspaceId);
+    if (existing) {
+      throw new BadRequestException(
+        'An account with this email already exists in this workspace',
+      );
+    }
+
+    const user = await executeTx(this.db, async (trx) => {
+      const newUser = await this.userRepo.insertUser(
+        {
+          name: dto.name ?? dto.email.split('@')[0],
+          email: dto.email,
+          password: dto.password,
+          workspaceId,
+          emailVerifiedAt: new Date(),
+        },
+        trx,
+      );
+
+      await this.workspaceService.addUserToWorkspace(
+        newUser.id,
+        workspaceId,
+        UserRole.GUEST,
+        trx,
+      );
+
+      if (link.spaceRole !== 'none') {
+        await this.spaceMemberService.addUserToSpace(
+          newUser.id,
+          link.spaceId,
+          link.spaceRole,
+          workspaceId,
+          trx,
+        );
+      }
+
+      await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
+
+      return newUser;
+    });
+
+    this.auditService.log({
+      event: AuditEvent.USER_CREATED,
+      resourceType: AuditResource.USER,
+      resourceId: user.id,
+      changes: {
+        after: { name: user.name, email: user.email, role: UserRole.GUEST },
+      },
+      metadata: { source: 'guest-invite' },
+    });
+
+    return user;
+  }
+
+  async guestJoin(
+    token: string,
+    userId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const link = await this.spaceInviteLinkService.validateToken(token);
+
+    await this.spaceInviteLinkService.checkAlreadyMember(userId, link.spaceId);
+
+    await executeTx(this.db, async (trx) => {
+      if (link.spaceRole !== 'none') {
+        await this.spaceMemberService.addUserToSpace(
+          userId,
+          link.spaceId,
+          link.spaceRole,
+          workspaceId,
+          trx,
+        );
+      }
+
+      await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
+    });
   }
 
   async initialSetup(

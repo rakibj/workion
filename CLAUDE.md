@@ -109,7 +109,8 @@ pnpm --filter client run test               # Vitest (frontend)
 
 **Required env vars** (`.env` at repo root):
 ```
-APP_URL=http://localhost:3000
+APP_URL=http://localhost:5173   # Vite frontend dev URL — used for invite links, emails, etc.
+SERVER_URL=http://localhost:3000  # NestJS backend — Vite proxies /api here; omit in production
 APP_SECRET=<long-random-string>
 DATABASE_URL=postgresql://docmost:docmost_dev_pass@localhost:5432/docmost
 REDIS_URL=redis://localhost:6379
@@ -296,6 +297,9 @@ Workspace creation (signup) is **always enabled** — no env var gate.
 
 ## Implemented Custom Features
 
+### Space Invite Links (Guest Access)
+Shareable invite links for spaces. Backend: `core/space/services/space-invite-link.service.ts`, controller at `spaces/invite-links/*`, `space_invite_links` table (token, spaceRole, expiresAt, maxUses, useCount). Auth endpoints: `GET /auth/invite-link/:token` (public info), `POST /auth/invite-link/signup` (new guest account), `POST /auth/invite-link/join` (existing user). `spaceRole` is `none | reader | writer` — `none` (default) adds the user to the workspace as `UserRole.GUEST` without space membership so an admin can grant page-level access manually. Frontend: `SpaceInviteLinks` component in space settings, `InviteLinkPage` at `/invite/:token`.
+
 ### AI Chat (BYOK via OpenRouter)
 OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backend: `core/ai-chat/` — streaming chat, page content injection, auto-title. Frontend: slide-over panel with thread list + model selector; key UI in workspace settings. All AI routes through OpenRouter only — no direct Anthropic/OpenAI calls.
 
@@ -396,23 +400,12 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
-- **GIF support in Kanban Board** — GIF images should render and animate (not show as broken/static) on Kanban cards. Needs spec before implementation.
 
 ---
 
 ## Completed Integrations
 
-### Favicon — DONE
-All favicon PNGs (16×16, 32×32, 192×192, 512×512) and `public/icons/logo.svg` regenerated from `logo-workion.svg` using `@resvg/resvg-js`. Files replaced in `apps/client/public/icons/`. No code changes — Vite bundles them as-is.
 
-### Share page export (Markdown / HTML / Print PDF) — DONE
-`POST /export/shared-page` — public endpoint (no JWT), validated by share key + page membership + restricted-ancestor check. Delegates to existing `ExportService`. Frontend: download icon + printer icon in `share-shell.tsx` header; `ShareExportModal` (Markdown/HTML picker); Print PDF calls `window.print()`. Key fix: `/api/export/shared-page` added to the exempt list in `api-client.ts` so the response interceptor preserves the full axios response (needed to read `Content-Disposition` header). Files: `export.controller.ts`, `export-dto.ts`, `share-shell.tsx`, `share-service.ts`, `share-export-modal.tsx`, `shared-page-atom.ts`, `shared-page.tsx`, `share.module.css`, `api-client.ts`.
-
-### MAIL: Transactional Email via Resend — DONE
-
-Provider: **Resend** (SMTP relay, free tier 3k emails/month). No code changes — existing `SmtpDriver` + `MailModule` handles it.
-
-**Sending domain:** `workion.gameloops.io` — SPF + DKIM DNS records added (scoped to subdomain, does not affect root `gameloops.io`).
 
 **Env vars (both local `.env` and VPS):**
 ```

@@ -14,6 +14,7 @@ const APP_ROUTE = {
     MFA_CHALLENGE: "/login/mfa",
     MFA_SETUP_REQUIRED: "/login/mfa/setup",
     VERIFY_EMAIL: "/verify-email",
+    INVITE_LINK: (token: string) => `/invite/${token}`,
   },
   SETTINGS: {
     ACCOUNT: {

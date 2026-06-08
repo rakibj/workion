@@ -24,6 +24,8 @@ export default class WorkspaceAbilityFactory {
         return buildWorkspaceAdminAbility();
       case UserRole.MEMBER:
         return buildWorkspaceMemberAbility();
+      case UserRole.GUEST:
+        return buildWorkspaceGuestAbility();
       default:
         throw new NotFoundException('Workspace permissions not found');
     }
@@ -72,6 +74,16 @@ function buildWorkspaceMemberAbility() {
   can(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group);
   can(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Attachment);
   can(WorkspaceCaslAction.Create, WorkspaceCaslSubject.API);
+
+  return build();
+}
+
+function buildWorkspaceGuestAbility() {
+  const { can, build } = new AbilityBuilder<MongoAbility<IWorkspaceAbility>>(
+    createMongoAbility,
+  );
+  // Guests can manage attachments within their allowed spaces (page/kanban images etc.)
+  can(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Attachment);
 
   return build();
 }
