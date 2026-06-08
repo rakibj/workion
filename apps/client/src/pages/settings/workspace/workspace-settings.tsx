@@ -7,9 +7,14 @@ import { Helmet } from "react-helmet-async";
 import ManageHostname from "@/ee/components/manage-hostname.tsx";
 import { Divider } from "@mantine/core";
 import AllowMemberTemplates from "@/ee/security/components/allow-member-templates.tsx";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export default function WorkspaceSettings() {
   const { t } = useTranslation();
+  const { isAdmin } = useUserRole();
+
+  if (!isAdmin) return null;
+
   return (
     <>
       <Helmet>

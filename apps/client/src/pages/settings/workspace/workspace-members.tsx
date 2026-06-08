@@ -36,6 +36,8 @@ export default function WorkspaceMembers() {
     }
   };
 
+  if (!isAdmin) return null;
+
   return (
     <>
       <Helmet>

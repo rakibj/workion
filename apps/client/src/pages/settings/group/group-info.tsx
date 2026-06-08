@@ -4,9 +4,13 @@ import GroupDetails from "@/features/group/components/group-details";
 import { getAppName } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export default function GroupInfo() {
   const { t } = useTranslation();
+  const { isAdmin } = useUserRole();
+
+  if (!isAdmin) return null;
 
   return (
     <>

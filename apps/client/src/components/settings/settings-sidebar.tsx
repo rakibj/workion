@@ -73,14 +73,15 @@ const groupedData: DataGroup[] = [
         icon: IconKey,
         path: "/settings/account/api-keys",
         feature: Feature.API_KEYS,
+        role: "admin",
       },
     ],
   },
   {
     heading: "Workspace",
     items: [
-      { label: "General", icon: IconSettings, path: "/settings/workspace" },
-      { label: "Members", icon: IconUsers, path: "/settings/members" },
+      { label: "General", icon: IconSettings, path: "/settings/workspace", role: "admin" },
+      { label: "Members", icon: IconUsers, path: "/settings/members", role: "admin" },
       {
         label: "Billing",
         icon: IconCoin,
@@ -95,7 +96,7 @@ const groupedData: DataGroup[] = [
         feature: Feature.SECURITY_SETTINGS,
         role: "admin",
       },
-      { label: "Groups", icon: IconUsersGroup, path: "/settings/groups" },
+      { label: "Groups", icon: IconUsersGroup, path: "/settings/groups", role: "admin" },
       { label: "Spaces", icon: IconSpaces, path: "/settings/spaces" },
       { label: "Public sharing", icon: IconWorld, path: "/settings/sharing" },
       {

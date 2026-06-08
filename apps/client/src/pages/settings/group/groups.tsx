@@ -11,6 +11,8 @@ export default function Groups() {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
 
+  if (!isAdmin) return null;
+
   return (
     <>
         <Helmet>

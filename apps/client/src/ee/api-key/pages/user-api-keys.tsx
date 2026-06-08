@@ -29,6 +29,9 @@ export default function UserApiKeys() {
   const { data, isLoading } = useGetApiKeysQuery({ cursor });
   const [workspace] = useAtom(workspaceAtom);
   const { isAdmin } = useUserRole();
+
+  if (!isAdmin) return null;
+
   const mcpEnabled = workspace?.settings?.ai?.mcp === true;
   const restrictToAdmins = workspace?.settings?.api?.restrictToAdmins === true;
   const canCreate = !restrictToAdmins || isAdmin;
