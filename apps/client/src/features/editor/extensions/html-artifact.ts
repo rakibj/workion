@@ -20,6 +20,7 @@ export const HtmlArtifact = Node.create({
     return {
       html: { default: "" },
       height: { default: null },
+      width: { default: null },
     };
   },
 
