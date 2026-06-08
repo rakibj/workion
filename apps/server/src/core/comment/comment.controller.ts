@@ -59,7 +59,7 @@ export class CommentController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+    await this.pageAccessService.validateCanComment(page, user);
 
     const comment = await this.commentService.create(
       {
@@ -135,7 +135,7 @@ export class CommentController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+    await this.pageAccessService.validateCanComment(page, user);
 
     return this.commentService.update(comment, dto, user);
   }
@@ -157,7 +157,7 @@ export class CommentController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+    await this.pageAccessService.validateCanComment(page, user);
 
     return this.commentService.resolve(comment, dto.resolved, user, workspace.id);
   }
@@ -175,7 +175,7 @@ export class CommentController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+    await this.pageAccessService.validateCanComment(page, user);
 
     // Check if user is the comment owner
     const isOwner = comment.creatorId === user.id;

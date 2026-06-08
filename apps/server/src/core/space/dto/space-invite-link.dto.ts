@@ -14,7 +14,7 @@ export class CreateSpaceInviteLinkDto {
   @IsUUID()
   spaceId: string;
 
-  @IsIn(['none', 'reader', 'writer'])
+  @IsIn(['reader', 'commenter', 'writer'])
   spaceRole: string;
 
   @IsOptional()

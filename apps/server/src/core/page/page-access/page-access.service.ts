@@ -6,14 +6,11 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../../casl/interfaces/space-ability.type';
-import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
-
 @Injectable()
 export class PageAccessService {
   constructor(
     private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
-    private readonly spaceRepo: SpaceRepo,
   ) {}
 
   /**
@@ -46,14 +43,14 @@ export class PageAccessService {
   async validateCanViewWithPermissions(
     page: Page,
     user: User,
-  ): Promise<{ canEdit: boolean; hasRestriction: boolean }> {
+  ): Promise<{ canEdit: boolean; canComment: boolean; hasRestriction: boolean }> {
     const ability = await this.spaceAbility.createForUser(user, page.spaceId);
 
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
 
-    const { hasAnyRestriction, canAccess, canEdit } =
+    const { hasAnyRestriction, canAccess, canEdit, canComment } =
       await this.pagePermissionRepo.canUserEditPage(user.id, page.id);
 
     if (hasAnyRestriction && !canAccess) {
@@ -64,6 +61,9 @@ export class PageAccessService {
       canEdit: hasAnyRestriction
         ? canEdit
         : ability.can(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
+      canComment: hasAnyRestriction
+        ? canComment
+        : ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Comment),
       hasRestriction: hasAnyRestriction,
     };
   }
@@ -102,24 +102,22 @@ export class PageAccessService {
     return { hasRestriction: hasAnyRestriction };
   }
 
-  async validateCanComment(
-    page: Page,
-    user: User,
-    workspaceId: string,
-  ): Promise<void> {
-    try {
-      await this.validateCanEdit(page, user);
-      return;
-    } catch {
-      // User cannot edit — check if reader commenting is enabled
+  async validateCanComment(page: Page, user: User): Promise<void> {
+    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
+
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
     }
 
-    await this.validateCanView(page, user);
+    const { hasAnyRestriction, canAccess, canComment } =
+      await this.pagePermissionRepo.canUserEditPage(user.id, page.id);
 
-    const space = await this.spaceRepo.findById(page.spaceId, workspaceId);
-    const settings = space?.settings as Record<string, any> | null;
-    if (!settings?.comments?.allowViewerComments) {
-      throw new ForbiddenException();
+    if (hasAnyRestriction) {
+      if (!canAccess || !canComment) throw new ForbiddenException();
+    } else {
+      if (ability.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Comment)) {
+        throw new ForbiddenException();
+      }
     }
   }
 }

@@ -79,12 +79,7 @@ export default function InviteLinkPage() {
       await guestJoin(token!);
       await queryClient.invalidateQueries({ queryKey: ["currentUser"] });
       navigate("/home");
-      notifications.show({
-        message:
-          info?.spaceRole === "none"
-            ? t("You've joined the workspace. A space admin will grant you access.")
-            : t("You've joined the space!"),
-      });
+      notifications.show({ message: t("You've joined the space!") });
     } catch (err) {
       notifications.show({
         message: err.response?.data?.message ?? t("Something went wrong"),
@@ -152,15 +147,9 @@ export default function InviteLinkPage() {
             <Text size="sm" c="dimmed" ta="center">
               {info.workspaceName}
             </Text>
-            {info.spaceRole === "none" ? (
-              <Badge variant="light" size="sm" color="orange">
-                {t("Workspace guest — no space access yet")}
-              </Badge>
-            ) : (
-              <Badge variant="light" size="sm">
-                {t("Join as")} {info.spaceRole}
-              </Badge>
-            )}
+            <Badge variant="light" size="sm" color={info.spaceRole === "commenter" ? "teal" : undefined}>
+              {info.spaceRole === "commenter" ? t("Can comment") : `${t("Join as")} ${info.spaceRole}`}
+            </Badge>
           </Stack>
 
           <Divider mb="md" />

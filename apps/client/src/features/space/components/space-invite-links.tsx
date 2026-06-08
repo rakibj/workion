@@ -40,18 +40,18 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
 
   const [createOpened, { open: openCreate, close: closeCreate }] =
     useDisclosure(false);
-  const [role, setRole] = useState<string>("none");
+  const [role, setRole] = useState<string>("reader");
   const [expiresAt, setExpiresAt] = useState<Date | null | string>(null);
   const [maxUses, setMaxUses] = useState<number | string>("");
 
   const handleCreate = async () => {
     await createMutation.mutateAsync({
       spaceId,
-      spaceRole: role as "none" | "reader" | "writer",
+      spaceRole: role as "reader" | "commenter" | "writer",
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       maxUses: maxUses !== "" ? Number(maxUses) : undefined,
     });
-    setRole("none");
+    setRole("reader");
     setExpiresAt(null);
     setMaxUses("");
     closeCreate();
@@ -76,7 +76,7 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
   };
 
   const getRoleBadgeColor = (role: string) =>
-    role === "writer" ? "blue" : role === "reader" ? "gray" : "orange";
+    role === "writer" ? "blue" : role === "commenter" ? "teal" : "gray";
 
   const isExpired = (link: ISpaceInviteLink) =>
     link.expiresAt ? new Date() > new Date(link.expiresAt) : false;
@@ -205,14 +205,14 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
         <Stack gap="md">
           <Select
             label={t("Access")}
-            description={t("The space role granted when joining via this link. \"No access\" lets you grant page-level access manually after they join.")}
+            description={t("The space role granted when joining via this link")}
             data={[
-              { value: "none", label: t("No access (guest)") },
-              { value: "reader", label: t("Reader") },
-              { value: "writer", label: t("Writer") },
+              { value: "reader", label: t("Can view") },
+              { value: "commenter", label: t("Can comment") },
+              { value: "writer", label: t("Can edit") },
             ]}
             value={role}
-            onChange={(v) => setRole(v ?? "none")}
+            onChange={(v) => setRole(v ?? "reader")}
           />
 
           <DatePickerInput

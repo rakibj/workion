@@ -29,6 +29,7 @@ export interface IPage {
   space: Partial<ISpace>;
   permissions?: {
     canEdit: boolean;
+    canComment: boolean;
     hasRestriction: boolean;
   };
 }

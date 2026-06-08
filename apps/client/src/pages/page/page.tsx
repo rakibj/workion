@@ -62,9 +62,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
   useMarkPageRead(page?.id);
 
   const canEdit = !page?.deletedAt && (page?.permissions?.canEdit ?? false);
-  const canComment =
-    canEdit ||
-    (space?.settings?.comments?.allowViewerComments === true);
+  const canComment = !page?.deletedAt && (page?.permissions?.canComment ?? false);
 
   if (isLoading) {
     return <></>;

@@ -129,15 +129,13 @@ export class SignupService {
         trx,
       );
 
-      if (link.spaceRole !== 'none') {
-        await this.spaceMemberService.addUserToSpace(
-          newUser.id,
-          link.spaceId,
-          link.spaceRole,
-          workspaceId,
-          trx,
-        );
-      }
+      await this.spaceMemberService.addUserToSpace(
+        newUser.id,
+        link.spaceId,
+        link.spaceRole,
+        workspaceId,
+        trx,
+      );
 
       await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
 
@@ -167,15 +165,13 @@ export class SignupService {
     await this.spaceInviteLinkService.checkAlreadyMember(userId, link.spaceId);
 
     await executeTx(this.db, async (trx) => {
-      if (link.spaceRole !== 'none') {
-        await this.spaceMemberService.addUserToSpace(
-          userId,
-          link.spaceId,
-          link.spaceRole,
-          workspaceId,
-          trx,
-        );
-      }
+      await this.spaceMemberService.addUserToSpace(
+        userId,
+        link.spaceId,
+        link.spaceRole,
+        workspaceId,
+        trx,
+      );
 
       await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
     });

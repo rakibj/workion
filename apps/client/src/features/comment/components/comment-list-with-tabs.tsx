@@ -48,9 +48,7 @@ function CommentListWithTabs() {
   const [focusCommentId, setFocusCommentId] = useAtom(focusCommentIdAtom);
   const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
 
-  const canComment =
-    (page?.permissions?.canEdit ?? false) ||
-    (space?.settings?.comments?.allowViewerComments === true);
+  const canComment = page?.permissions?.canComment ?? false;
 
   // Separate active and resolved comments
   const { activeComments, resolvedComments } = useMemo(() => {

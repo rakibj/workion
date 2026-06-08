@@ -1,5 +1,6 @@
 export enum PagePermissionRole {
   READER = "reader",
+  COMMENTER = "commenter",
   WRITER = "writer",
 }
 

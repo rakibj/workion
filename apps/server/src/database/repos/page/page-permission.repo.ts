@@ -392,6 +392,7 @@ export class PagePermissionRepo {
     hasAnyRestriction: boolean;
     canAccess: boolean;
     canEdit: boolean;
+    canComment: boolean;
   }> {
     return withCache(
       this.cacheManager,
@@ -401,6 +402,7 @@ export class PagePermissionRepo {
         const result = await sql<{
           canAccess: boolean | null;
           canEdit: boolean | null;
+          canComment: boolean | null;
         }>`
           WITH RECURSIVE ancestors AS (
             SELECT id AS ancestor_id, parent_page_id, 0 AS depth
@@ -413,8 +415,9 @@ export class PagePermissionRepo {
           )
           SELECT
             bool_and(pp.id IS NOT NULL) AS "canAccess",
-            -- nearest restricted ancestor's highest role wins (DESC: 'writer' > 'reader', NULLS LAST: no-permission after real roles)
-            (array_agg(pp.role ORDER BY a.depth ASC, pp.role DESC NULLS LAST))[1] = 'writer' AS "canEdit"
+            -- nearest restricted ancestor's highest role wins (role ordering: writer > commenter > reader)
+            (array_agg(pp.role ORDER BY a.depth ASC, CASE pp.role WHEN 'writer' THEN 3 WHEN 'commenter' THEN 2 WHEN 'reader' THEN 1 ELSE 0 END DESC NULLS LAST))[1] = 'writer' AS "canEdit",
+            (array_agg(pp.role ORDER BY a.depth ASC, CASE pp.role WHEN 'writer' THEN 3 WHEN 'commenter' THEN 2 WHEN 'reader' THEN 1 ELSE 0 END DESC NULLS LAST))[1] IN ('writer', 'commenter') AS "canComment"
           FROM ancestors a
           JOIN page_access pa ON pa.page_id = a.ancestor_id
           LEFT JOIN page_permissions pp ON pp.page_access_id = pa.id
@@ -428,12 +431,13 @@ export class PagePermissionRepo {
 
         const row = result.rows[0];
         if (!row || row.canAccess === null) {
-          return { hasAnyRestriction: false, canAccess: true, canEdit: true };
+          return { hasAnyRestriction: false, canAccess: true, canEdit: true, canComment: true };
         }
         return {
           hasAnyRestriction: true,
           canAccess: row.canAccess,
           canEdit: row.canAccess && (row.canEdit ?? false),
+          canComment: row.canAccess && (row.canComment ?? false),
         };
       },
     );

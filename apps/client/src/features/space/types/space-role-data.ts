@@ -16,6 +16,11 @@ export const spaceRoleData: IRoleData[] = [
     value: SpaceRole.READER,
     description: "Can view pages in space but not edit.",
   },
+  {
+    label: "Can comment",
+    value: SpaceRole.COMMENTER,
+    description: "Can view pages and post comments.",
+  },
 ];
 
 export function getSpaceRoleLabel(value: string) {

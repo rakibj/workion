@@ -11,6 +11,11 @@ import {
   VisuallyHidden,
 } from "@mantine/core";
 import { IconDots, IconSettings, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { createMongoAbility } from "@casl/ability";
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from "@/features/space/permissions/permissions.type";
 import StarButton from "@/features/favorite/components/star-button";
 import {
   useWatchedSpaceIds,
@@ -187,12 +192,14 @@ export default function AllSpacesList({
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconSettings size={16} />}
-                            onClick={() => handleOpenSettings(space.id)}
-                          >
-                            {t("Space settings")}
-                          </Menu.Item>
+                          {createMongoAbility(space.membership?.permissions ?? []).can(SpaceCaslAction.Read, SpaceCaslSubject.Settings) && (
+                            <Menu.Item
+                              leftSection={<IconSettings size={16} />}
+                              onClick={() => handleOpenSettings(space.id)}
+                            >
+                              {t("Space settings")}
+                            </Menu.Item>
+                          )}
                         </Menu.Dropdown>
                       </Menu>
                     </Group>

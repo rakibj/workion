@@ -16,7 +16,7 @@ export interface ISpaceInviteLink {
 
 export interface ICreateSpaceInviteLink {
   spaceId: string;
-  spaceRole: "none" | "reader" | "writer";
+  spaceRole: "reader" | "commenter" | "writer";
   expiresAt?: string;
   maxUses?: number;
 }

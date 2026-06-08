@@ -8,6 +8,11 @@ export const pagePermissionRoleData: IRoleData[] = [
     description: "Can edit page and manage access",
   },
   {
+    label: "Can comment",
+    value: PagePermissionRole.COMMENTER,
+    description: "Can view page and post comments",
+  },
+  {
     label: "Can view",
     value: PagePermissionRole.READER,
     description: "Can only view page",

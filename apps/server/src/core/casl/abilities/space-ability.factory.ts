@@ -32,6 +32,8 @@ export default class SpaceAbilityFactory {
         return buildSpaceWriterAbility();
       case SpaceRole.READER:
         return buildSpaceReaderAbility();
+      case SpaceRole.COMMENTER:
+        return buildSpaceCommenterAbility();
       default:
         throw new NotFoundException('Space permissions not found');
     }
@@ -46,6 +48,7 @@ function buildSpaceAdminAbility() {
   can(SpaceCaslAction.Manage, SpaceCaslSubject.Member);
   can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
   can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
+  can(SpaceCaslAction.Create, SpaceCaslSubject.Comment);
   return build();
 }
 
@@ -57,6 +60,7 @@ function buildSpaceWriterAbility() {
   can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
   can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
   can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
+  can(SpaceCaslAction.Create, SpaceCaslSubject.Comment);
   return build();
 }
 
@@ -68,5 +72,17 @@ function buildSpaceReaderAbility() {
   can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
   can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
   can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+  // readers cannot comment
+  return build();
+}
+
+function buildSpaceCommenterAbility() {
+  const { can, build } = new AbilityBuilder<MongoAbility<ISpaceAbility>>(
+    createMongoAbility,
+  );
+  can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
+  can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
+  can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+  can(SpaceCaslAction.Create, SpaceCaslSubject.Comment);
   return build();
 }

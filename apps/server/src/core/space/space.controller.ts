@@ -107,7 +107,7 @@ export class SpaceController {
     }
 
     const ability = await this.spaceAbility.createForUser(user, space.id);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Settings)) {
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
 

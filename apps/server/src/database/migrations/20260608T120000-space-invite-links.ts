@@ -17,7 +17,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     )
     .addColumn('token', 'varchar', (col) => col.notNull())
     .addColumn('space_role', 'varchar', (col) =>
-      col.notNull().defaultTo('none'),
+      col.notNull().defaultTo('reader'),
     )
     .addColumn('expires_at', 'timestamptz', (col) => col)
     .addColumn('max_uses', 'integer', (col) => col)

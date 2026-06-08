@@ -76,6 +76,7 @@ import {
   useWatchPageMutation,
   useUnwatchPageMutation,
 } from "@/features/page/queries/watcher-query";
+import useCurrentUser from "@/features/user/hooks/use-current-user";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -88,6 +89,8 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { data: page } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+  const { data: currentUserData } = useCurrentUser();
+  const isGuest = currentUserData?.user?.role === "guest";
   const isDeleted = !!page?.deletedAt;
 
   useHotkeys(
@@ -121,7 +124,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       {!readOnly && page?.type !== "kanban" && page?.type !== "excalidraw" && <PageEditModeToggle size="xs" />}
 
-      <PageShareModal readOnly={readOnly} />
+      {!isGuest && <PageShareModal readOnly={readOnly} />}
 
       {page?.type !== "excalidraw" && (
         <Tooltip label={t("Comments")} openDelay={250} withArrow>

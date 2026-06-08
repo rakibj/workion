@@ -54,7 +54,7 @@ export class AddPagePermissionDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['reader', 'writer'])
+  @IsIn(['reader', 'commenter', 'writer'])
   role: string;
 
   @IsOptional()
@@ -90,7 +90,7 @@ export class UpdatePagePermissionRoleDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['reader', 'writer'])
+  @IsIn(['reader', 'commenter', 'writer'])
   role: string;
 
   @IsOptional()
