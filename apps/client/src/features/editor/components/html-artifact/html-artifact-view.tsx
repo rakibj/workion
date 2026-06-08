@@ -22,7 +22,6 @@ type Mode = "edit" | "split" | "preview";
 const SIZE_WARN_BYTES = 500 * 1024;
 const MIN_HEIGHT = 50;
 const EDITOR_HEIGHT = 300;
-const MIN_WIDTH = 200;
 const ZOOM_STEP = 0.1;
 
 // Appended after user HTML so the cascade reset wins over their styles.
@@ -62,10 +61,6 @@ export default function HtmlArtifactView({
   const naturalWidthRef = useRef<number>(0);
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(0);
-  // Final dragged width, written by mousemove and read by mouseup.
-  const dragCurrentWidthRef = useRef(0);
 
   const isLarge = html && html.length > SIZE_WARN_BYTES;
   const isEditable = editor.isEditable;
@@ -128,65 +123,6 @@ export default function HtmlArtifactView({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    e.preventDefault();
-  };
-
-  // Right handle: zooms by changing width. Uses direct DOM manipulation during
-  // the drag to skip React re-renders entirely — this is what makes it smooth.
-  const handleSideResizeDragStart = (e: React.MouseEvent) => {
-    const natWidth = naturalWidthRef.current;
-    if (!natWidth) return;
-
-    const startWidth = persistedWidth ?? natWidth;
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = startWidth;
-    dragCurrentWidthRef.current = startWidth;
-
-    const containerEl = scaledContainerRef.current;
-    const innerEl = innerRef.current;
-    // Snapshot current innerHeight so the closure doesn't read stale state.
-    const snapInnerHeight = innerHeight;
-
-    const onMove = (ev: MouseEvent) => {
-      const newWidth = Math.max(
-        MIN_WIDTH,
-        Math.min(natWidth, dragStartWidth.current + ev.clientX - dragStartX.current),
-      );
-      const newScale = newWidth / natWidth;
-      dragCurrentWidthRef.current = newWidth;
-
-      // Write styles directly — zero React re-renders during drag.
-      if (containerEl) {
-        containerEl.style.width = `${newWidth}px`;
-        containerEl.style.maxWidth = "100%";
-        if (snapInnerHeight > 0) {
-          containerEl.style.height = `${Math.round(snapInnerHeight * newScale)}px`;
-        }
-        containerEl.style.overflow = "hidden";
-      }
-      if (innerEl) {
-        innerEl.style.transform = `scale(${newScale})`;
-        innerEl.style.transformOrigin = "top left";
-        innerEl.style.width = `${natWidth}px`;
-      }
-    };
-
-    const onUp = () => {
-      const finalWidth = dragCurrentWidthRef.current;
-      const isFullWidth = finalWidth >= natWidth - 5;
-
-      // Clear the inline styles we set directly — React will re-apply the
-      // correct derived styles on the next render triggered by updateAttributes.
-      if (containerEl) containerEl.style.cssText = "";
-      if (innerEl) innerEl.style.cssText = "";
-
-      updateAttributes({ width: isFullWidth ? null : finalWidth });
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     e.preventDefault();
@@ -365,15 +301,6 @@ export default function HtmlArtifactView({
           />
         </div>
 
-        {/* Right handle: drag to zoom · double-click to reset to 100% */}
-        {isEditable && (
-          <div
-            className={classes.resizeHandleRight}
-            onMouseDown={handleSideResizeDragStart}
-            onDoubleClick={() => updateAttributes({ width: null })}
-            title="Drag to zoom · Double-click to reset"
-          />
-        )}
       </div>
 
       {isMobile && (

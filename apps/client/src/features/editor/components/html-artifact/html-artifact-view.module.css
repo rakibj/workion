@@ -86,33 +86,6 @@
   background: var(--mantine-color-primary-filled);
 }
 
-.resizeHandleRight {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 10px;
-  cursor: ew-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-  z-index: 1;
-}
-
-.resizeHandleRight::after {
-  content: '';
-  width: 3px;
-  height: 36px;
-  border-radius: 2px;
-  background: var(--mantine-color-default-border);
-  transition: background 0.15s;
-}
-
-.resizeHandleRight:hover::after {
-  background: var(--mantine-color-primary-filled);
-}
-
 .mobileEditor {
   display: block;
   width: 100%;
