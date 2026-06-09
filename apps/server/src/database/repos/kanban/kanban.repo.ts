@@ -223,6 +223,45 @@ export class KanbanRepo {
       .execute();
   }
 
+  async removeAssigneesByUsersAndPage(
+    userIds: string[],
+    pageId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    await dbOrTx(this.db, trx)
+      .deleteFrom('kanbanCardAssignees')
+      .where('userId', 'in', userIds)
+      .where('cardId', 'in', (qb) =>
+        qb
+          .selectFrom('kanbanCards')
+          .select('kanbanCards.id')
+          .innerJoin('kanbanColumns', 'kanbanColumns.id', 'kanbanCards.columnId')
+          .where('kanbanColumns.pageId', '=', pageId),
+      )
+      .execute();
+  }
+
+  async removeAssigneesByUsersAndSpace(
+    userIds: string[],
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    await dbOrTx(this.db, trx)
+      .deleteFrom('kanbanCardAssignees')
+      .where('userId', 'in', userIds)
+      .where('cardId', 'in', (qb) =>
+        qb
+          .selectFrom('kanbanCards')
+          .select('kanbanCards.id')
+          .innerJoin('kanbanColumns', 'kanbanColumns.id', 'kanbanCards.columnId')
+          .innerJoin('pages', 'pages.id', 'kanbanColumns.pageId')
+          .where('pages.spaceId', '=', spaceId),
+      )
+      .execute();
+  }
+
   async getAssignees(
     cardId: string,
   ): Promise<{ userId: string; name: string; avatarUrl: string | null }[]> {

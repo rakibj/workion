@@ -116,3 +116,22 @@ export async function updateMilestone(data: {
 export async function deleteMilestone(milestoneId: string): Promise<void> {
   await api.post("/kanban/milestones/delete", { milestoneId });
 }
+
+// ─── Assignable members ───────────────────────────────────────────────────────
+
+export interface KanbanAssignableMember {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export async function getAssignableMembers(
+  pageId: string,
+): Promise<KanbanAssignableMember[]> {
+  const res = await api.post<KanbanAssignableMember[]>(
+    "/kanban/assignable-members",
+    { pageId },
+  );
+  return res.data;
+}

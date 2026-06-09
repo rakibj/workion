@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, UseQueryResult } from "@tanstack/react-query";
 import * as kanbanService from "../services/kanban-service";
+import type { KanbanAssignableMember } from "../services/kanban-service";
 import type { IKanbanCard, IKanbanColumn, IKanbanMilestone } from "../types/kanban.types";
 
 const boardKey = (pageId: string) => ["kanban-board", pageId];
@@ -248,3 +249,17 @@ export function useDeleteMilestoneMutation(pageId: string) {
     },
   });
 }
+
+// ─── Assignable members ───────────────────────────────────────────────────────
+
+export function useKanbanAssignableMembersQuery(
+  pageId: string,
+): UseQueryResult<KanbanAssignableMember[], Error> {
+  return useQuery({
+    queryKey: ["kanban-assignable-members", pageId],
+    queryFn: () => kanbanService.getAssignableMembers(pageId),
+    enabled: !!pageId,
+    staleTime: 60 * 1000,
+  });
+}
+

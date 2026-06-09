@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 interface MultiMemberSelectProps {
   value?: string[];
   onChange: (value: string[]) => void;
+  spaceId?: string;
 }
 
 const renderMultiSelectOption: MultiSelectProps["renderOption"] = ({
@@ -34,7 +35,7 @@ const renderMultiSelectOption: MultiSelectProps["renderOption"] = ({
   </Group>
 );
 
-export function MultiMemberSelect({ value, onChange }: MultiMemberSelectProps) {
+export function MultiMemberSelect({ value, onChange, spaceId }: MultiMemberSelectProps) {
   const { t } = useTranslation();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedQuery] = useDebouncedValue(searchValue, 500);
@@ -42,6 +43,7 @@ export function MultiMemberSelect({ value, onChange }: MultiMemberSelectProps) {
     query: debouncedQuery,
     includeUsers: true,
     includeGroups: true,
+    ...(spaceId && { spaceId }),
   });
   const [data, setData] = useState([]);
 

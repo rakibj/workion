@@ -18,6 +18,7 @@ import { SpaceRole } from '../../../common/helpers/types/permission';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { FavoriteRepo } from '@docmost/db/repos/favorite/favorite.repo';
+import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
 import { executeTx } from '@docmost/db/utils';
 import { AuditEvent, AuditResource } from '../../../common/events/audit-events';
 import {
@@ -33,6 +34,7 @@ export class SpaceMemberService {
     private spaceRepo: SpaceRepo,
     private watcherRepo: WatcherRepo,
     private favoriteRepo: FavoriteRepo,
+    private kanbanRepo: KanbanRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -290,6 +292,12 @@ export class SpaceMemberService {
         affectedUserIds,
         dto.spaceId,
         { trx },
+      );
+
+      await this.kanbanRepo.removeAssigneesByUsersAndSpace(
+        affectedUserIds,
+        dto.spaceId,
+        trx,
       );
     });
 

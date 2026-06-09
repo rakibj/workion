@@ -121,6 +121,7 @@ export function PageShareModal({ readOnly }: PageShareModalProps) {
             ) : (
               <PagePermissionTab
                 pageId={pageId}
+                spaceId={page?.spaceId}
                 restrictionInfo={restrictionInfo}
               />
             )}

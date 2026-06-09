@@ -164,7 +164,7 @@ export class SearchService {
     const query = suggestion.query.toLowerCase().trim();
 
     if (suggestion.includeUsers) {
-      const userQuery = this.db
+      let userQuery = this.db
         .selectFrom('users')
         .select(['id', 'name', 'email', 'avatarUrl'])
         .where('workspaceId', '=', workspaceId)
@@ -181,11 +181,37 @@ export class SearchService {
         )
         .limit(limit);
 
+      if (suggestion.spaceId) {
+        userQuery = userQuery.where((eb) =>
+          eb.or([
+            eb.exists(
+              eb
+                .selectFrom('spaceMembers')
+                .select('spaceMembers.id')
+                .where('spaceMembers.spaceId', '=', suggestion.spaceId)
+                .whereRef('spaceMembers.userId', '=', 'users.id'),
+            ),
+            eb.exists(
+              eb
+                .selectFrom('spaceMembers')
+                .innerJoin(
+                  'groupUsers',
+                  'groupUsers.groupId',
+                  'spaceMembers.groupId',
+                )
+                .select('spaceMembers.id')
+                .where('spaceMembers.spaceId', '=', suggestion.spaceId)
+                .whereRef('groupUsers.userId', '=', 'users.id'),
+            ),
+          ]),
+        );
+      }
+
       users = await userQuery.execute();
     }
 
     if (suggestion.includeGroups) {
-      groups = await this.db
+      let groupQuery = this.db
         .selectFrom('groups')
         .select(['id', 'name', 'description'])
         .where((eb) =>
@@ -196,8 +222,21 @@ export class SearchService {
           ),
         )
         .where('workspaceId', '=', workspaceId)
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+      if (suggestion.spaceId) {
+        groupQuery = groupQuery.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('spaceMembers')
+              .select('spaceMembers.id')
+              .where('spaceMembers.spaceId', '=', suggestion.spaceId)
+              .whereRef('spaceMembers.groupId', '=', 'groups.id'),
+          ),
+        );
+      }
+
+      groups = await groupQuery.execute();
     }
 
     if (suggestion.includePages) {

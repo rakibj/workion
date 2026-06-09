@@ -6,6 +6,7 @@ import {
 import { KanbanRepo, KanbanColumnWithCards } from '@docmost/db/repos/kanban/kanban.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
@@ -23,6 +24,7 @@ export class KanbanService {
     private readonly kanbanRepo: KanbanRepo,
     private readonly pageRepo: PageRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pagePermissionRepo: PagePermissionRepo,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -194,6 +196,48 @@ export class KanbanService {
     const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
     if (!milestone) throw new NotFoundException('Milestone not found');
     await this.kanbanRepo.deleteMilestone(milestoneId);
+  }
+
+  // ─── Assignable members ────────────────────────────────────────────────────
+
+  async getAssignableMembers(
+    pageId: string,
+  ): Promise<{ id: string; name: string; email: string; avatarUrl: string | null }[]> {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page) throw new NotFoundException('Page not found');
+
+    const pageAccess = await this.pagePermissionRepo.findPageAccessByPageId(pageId);
+
+    if (!pageAccess) {
+      return this.spaceMemberRepo.getSpaceUsersWithEditAccess(page.spaceId);
+    }
+
+    // Page is restricted — return only users who have an explicit page permission
+    const directUsers = await this.db
+      .selectFrom('pagePermissions')
+      .innerJoin('users', 'users.id', 'pagePermissions.userId')
+      .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('pagePermissions.pageAccessId', '=', pageAccess.id)
+      .where('pagePermissions.userId', 'is not', null)
+      .where('users.deletedAt', 'is', null)
+      .execute();
+
+    const viaGroupUsers = await this.db
+      .selectFrom('pagePermissions')
+      .innerJoin('groupUsers', 'groupUsers.groupId', 'pagePermissions.groupId')
+      .innerJoin('users', 'users.id', 'groupUsers.userId')
+      .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('pagePermissions.pageAccessId', '=', pageAccess.id)
+      .where('pagePermissions.groupId', 'is not', null)
+      .where('users.deletedAt', 'is', null)
+      .execute();
+
+    const seen = new Set<string>();
+    return [...directUsers, ...viaGroupUsers].filter((u) => {
+      if (seen.has(u.id)) return false;
+      seen.add(u.id);
+      return true;
+    });
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────

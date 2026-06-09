@@ -63,6 +63,7 @@ import {
   useDeleteCardMutation,
   useDeleteColumnMutation,
   useDeleteMilestoneMutation,
+  useKanbanAssignableMembersQuery,
   useKanbanBoardQuery,
   useMilestonesQuery,
   useMoveCardMutation,
@@ -72,7 +73,6 @@ import {
   useUpdateColumnMutation,
   useUpdateMilestoneMutation,
 } from "../queries/kanban-query";
-import { useSpaceEditableUsersQuery } from "@/features/space/queries/space-query";
 import {
   updatePageData,
   useUpdateTitlePageMutation,
@@ -498,7 +498,7 @@ function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssignee
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
 
-  const { data: members = [] } = useSpaceEditableUsersQuery(spaceId);
+  const { data: members = [] } = useKanbanAssignableMembersQuery(pageId);
 
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filtered = members.filter(
@@ -727,7 +727,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const removeAssignee = useRemoveAssigneeMutation(pageId);
   const { data: milestones = [] } = useMilestonesQuery(pageId);
 
-  const { data: members = [] } = useSpaceEditableUsersQuery(spaceId);
+  const { data: members = [] } = useKanbanAssignableMembersQuery(pageId);
 
   useEffect(() => {
     if (card) {

@@ -19,6 +19,7 @@ import {
   DeleteCardDto,
   DeleteColumnDto,
   DeleteMilestoneDto,
+  GetAssignableMembersDto,
   GetBoardDto,
   ListMilestonesDto,
   MoveCardDto,
@@ -48,6 +49,18 @@ export class KanbanController {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly wsService: WsService,
   ) {}
+
+  // ─── Assignable members ───────────────────────────────────────────────────
+
+  @HttpCode(HttpStatus.OK)
+  @Post('assignable-members')
+  async getAssignableMembers(
+    @Body() dto: GetAssignableMembersDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanRead(user, dto.pageId);
+    return this.kanbanService.getAssignableMembers(dto.pageId);
+  }
 
   // ─── Board ────────────────────────────────────────────────────────────────
 

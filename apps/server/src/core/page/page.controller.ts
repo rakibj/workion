@@ -41,6 +41,9 @@ import {
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageReadsRepo } from '@docmost/db/repos/page/page-reads.repo';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
+import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { RecentPageDto } from './dto/recent-page.dto';
 import { CreatedByUserDto } from './dto/created-by-user.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
@@ -72,6 +75,9 @@ export class PageController {
     private readonly labelService: LabelService,
     private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly pageReadsRepo: PageReadsRepo,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly kanbanRepo: KanbanRepo,
+    private readonly groupUserRepo: GroupUserRepo,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -881,14 +887,26 @@ export class PageController {
 
     const permissions: Array<{ pageAccessId: string; userId: string | null; groupId: string | null; role: string; addedById: string }> = [];
 
-    for (const userId of dto.userIds ?? []) {
+    let validUserIds = dto.userIds ?? [];
+    if (validUserIds.length > 0) {
+      const spaceMemberSet = await this.spaceMemberRepo.getUserIdsWithSpaceAccess(validUserIds, page.spaceId);
+      validUserIds = validUserIds.filter((id) => spaceMemberSet.has(id));
+    }
+
+    let validGroupIds = dto.groupIds ?? [];
+    if (validGroupIds.length > 0) {
+      const spaceGroupSet = await this.spaceMemberRepo.getGroupIdsWithSpaceAccess(validGroupIds, page.spaceId);
+      validGroupIds = validGroupIds.filter((id) => spaceGroupSet.has(id));
+    }
+
+    for (const userId of validUserIds) {
       const existing = await this.pagePermissionRepo.findPagePermissionByUserId(pageAccess.id, userId);
       if (!existing) {
         permissions.push({ pageAccessId: pageAccess.id, userId, groupId: null, role: dto.role, addedById: user.id });
       }
     }
 
-    for (const groupId of dto.groupIds ?? []) {
+    for (const groupId of validGroupIds) {
       const existing = await this.pagePermissionRepo.findPagePermissionByGroupId(pageAccess.id, groupId);
       if (!existing) {
         permissions.push({ pageAccessId: pageAccess.id, userId: null, groupId, role: dto.role, addedById: user.id });
@@ -914,11 +932,24 @@ export class PageController {
     const pageAccess = await this.pagePermissionRepo.findPageAccessByPageId(page.id);
     if (!pageAccess) throw new BadRequestException('Page is not restricted');
 
+    const removedUserIds: string[] = [...(dto.userIds ?? [])];
+
     if (dto.userIds?.length) {
       await this.pagePermissionRepo.deletePagePermissionsByUserIds(pageAccess.id, dto.userIds);
     }
     if (dto.groupIds?.length) {
       await this.pagePermissionRepo.deletePagePermissionsByGroupIds(pageAccess.id, dto.groupIds);
+      for (const groupId of dto.groupIds) {
+        const memberIds = await this.groupUserRepo.getUserIdsByGroupId(groupId);
+        removedUserIds.push(...memberIds);
+      }
+    }
+
+    if (removedUserIds.length > 0) {
+      await this.kanbanRepo.removeAssigneesByUsersAndPage(
+        [...new Set(removedUserIds)],
+        page.id,
+      );
     }
   }
 

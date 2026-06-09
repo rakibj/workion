@@ -31,11 +31,13 @@ import { buildPageUrl } from "@/features/page/page.utils";
 
 type PagePermissionTabProps = {
   pageId: string;
+  spaceId: string;
   restrictionInfo: IPageRestrictionInfo;
 };
 
 export function PagePermissionTab({
   pageId,
+  spaceId,
   restrictionInfo,
 }: PagePermissionTabProps) {
   const { t } = useTranslation();
@@ -154,7 +156,7 @@ export function PagePermissionTab({
           {canManage && (
             <Group gap="xs" align="flex-end">
               <Box style={{ flex: 1 }}>
-                <MultiMemberSelect value={memberIds} onChange={setMemberIds} />
+                <MultiMemberSelect value={memberIds} onChange={setMemberIds} spaceId={spaceId} />
               </Box>
               <Select
                 data={pagePermissionRoleData.map((r) => ({

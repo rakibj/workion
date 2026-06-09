@@ -255,6 +255,22 @@ export class SpaceMemberRepo {
     );
   }
 
+  async getGroupIdsWithSpaceAccess(
+    groupIds: string[],
+    spaceId: string,
+  ): Promise<Set<string>> {
+    if (groupIds.length === 0) return new Set();
+
+    const rows = await this.db
+      .selectFrom('spaceMembers')
+      .select('groupId')
+      .where('groupId', 'in', groupIds)
+      .where('spaceId', '=', spaceId)
+      .execute();
+
+    return new Set(rows.map((r) => r.groupId));
+  }
+
   async getUserIdsWithSpaceAccess(
     userIds: string[],
     spaceId: string,

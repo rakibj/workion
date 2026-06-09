@@ -141,3 +141,8 @@ export class DeleteMilestoneDto {
   @IsUUID()
   milestoneId: string;
 }
+
+export class GetAssignableMembersDto {
+  @IsUUID()
+  pageId: string;
+}
