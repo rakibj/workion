@@ -20,6 +20,7 @@ import {
   CacheKey,
   PERMISSION_CACHE_TTL_MS,
 } from '../../../common/helpers/cache-keys';
+import { SpaceRole } from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class SpaceMemberRepo {
@@ -333,6 +334,41 @@ export class SpaceMemberRepo {
           .where('spaceMembers.spaceId', 'in', spaceIds),
       )
       .execute();
+  }
+
+  async getSpaceUsersWithEditAccess(
+    spaceId: string,
+  ): Promise<{ id: string; name: string; email: string; avatarUrl: string | null }[]> {
+    const editRoles = [SpaceRole.ADMIN, SpaceRole.WRITER];
+
+    // direct user members with admin/writer role
+    const directMembers = this.db
+      .selectFrom('spaceMembers')
+      .innerJoin('users', 'users.id', 'spaceMembers.userId')
+      .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('spaceMembers.spaceId', '=', spaceId)
+      .where('spaceMembers.role', 'in', editRoles)
+      .where('users.deletedAt', 'is', null);
+
+    // users who belong to a group that has admin/writer role in the space
+    const groupMembers = this.db
+      .selectFrom('spaceMembers')
+      .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
+      .innerJoin('users', 'users.id', 'groupUsers.userId')
+      .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('spaceMembers.spaceId', '=', spaceId)
+      .where('spaceMembers.role', 'in', editRoles)
+      .where('users.deletedAt', 'is', null);
+
+    const rows = await directMembers.union(groupMembers).execute();
+
+    // union handles SQL-level deduplication; keep JS-side safety net
+    const seen = new Set<string>();
+    return rows.filter((u) => {
+      if (seen.has(u.id)) return false;
+      seen.add(u.id);
+      return true;
+    });
   }
 
   async getUserSpaces(userId: string, pagination: PaginationOptions) {

@@ -94,6 +94,17 @@ export class SpaceMemberService {
     );
   }
 
+  async getSpaceEditableUsers(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<{ id: string; name: string; email: string; avatarUrl: string | null }[]> {
+    const space = await this.spaceRepo.findById(spaceId, workspaceId);
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+    return this.spaceMemberRepo.getSpaceUsersWithEditAccess(spaceId);
+  }
+
   async addMembersToSpaceBatch(
     dto: AddSpaceMembersDto,
     authUser: User,

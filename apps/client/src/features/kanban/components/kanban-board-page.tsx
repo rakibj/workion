@@ -72,7 +72,7 @@ import {
   useUpdateColumnMutation,
   useUpdateMilestoneMutation,
 } from "../queries/kanban-query";
-import { useWorkspaceMembersQuery } from "@/features/workspace/queries/workspace-query";
+import { useSpaceEditableUsersQuery } from "@/features/space/queries/space-query";
 import {
   updatePageData,
   useUpdateTitlePageMutation,
@@ -488,17 +488,17 @@ function PriorityPicker({ priority, cardId, pageId, canEdit }: PriorityPickerPro
 interface InlineAssigneePickerProps {
   card: IKanbanCard;
   pageId: string;
+  spaceId: string;
   canEdit: boolean;
 }
 
-function InlineAssigneePicker({ card, pageId, canEdit }: InlineAssigneePickerProps) {
+function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssigneePickerProps) {
   const [opened, setOpened] = useState(false);
   const [search, setSearch] = useState("");
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
 
-  const { data: membersData } = useWorkspaceMembersQuery({ limit: 100 });
-  const members = membersData?.items ?? [];
+  const { data: members = [] } = useSpaceEditableUsersQuery(spaceId);
 
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filtered = members.filter(
@@ -679,6 +679,7 @@ function KanbanCardItem({
             <InlineAssigneePicker
               card={card}
               pageId={pageId}
+              spaceId={spaceId}
               canEdit={canEdit}
             />
           </div>
@@ -726,8 +727,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const removeAssignee = useRemoveAssigneeMutation(pageId);
   const { data: milestones = [] } = useMilestonesQuery(pageId);
 
-  const { data: membersData } = useWorkspaceMembersQuery({ limit: 100 });
-  const members = membersData?.items ?? [];
+  const { data: members = [] } = useSpaceEditableUsersQuery(spaceId);
 
   useEffect(() => {
     if (card) {

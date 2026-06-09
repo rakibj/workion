@@ -203,6 +203,26 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('members/writers')
+  async getSpaceEditableUsers(
+    @Body() spaceIdDto: SpaceIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      spaceIdDto.spaceId,
+    );
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+    return this.spaceMemberService.getSpaceEditableUsers(
+      spaceIdDto.spaceId,
+      workspace.id,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('members/add')
   async addSpaceMember(
     @Body() dto: AddSpaceMembersDto,

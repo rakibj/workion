@@ -11,12 +11,14 @@ import {
   IChangeSpaceMemberRole,
   IRemoveSpaceMember,
   ISpace,
+  SpaceUserInfo,
 } from "@/features/space/types/space.types";
 import {
   addSpaceMember,
   changeMemberRole,
   getSpaceById,
   getSpaceMembers,
+  getSpaceEditableUsers,
   getSpaces,
   removeSpaceMember,
   createSpace,
@@ -262,5 +264,15 @@ export function useChangeSpaceMemberRoleMutation() {
       const errorMessage = error["response"]?.data?.message;
       notifications.show({ message: errorMessage, color: "red" });
     },
+  });
+}
+
+export function useSpaceEditableUsersQuery(
+  spaceId: string,
+): UseQueryResult<SpaceUserInfo[], Error> {
+  return useQuery({
+    queryKey: ["spaceEditableUsers", spaceId],
+    queryFn: () => getSpaceEditableUsers(spaceId),
+    enabled: !!spaceId,
   });
 }

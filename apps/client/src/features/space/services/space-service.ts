@@ -6,6 +6,7 @@ import {
   IRemoveSpaceMember,
   ISpace,
   ISpaceMember,
+  SpaceUserInfo,
 } from "@/features/space/types/space.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { saveAs } from "file-saver";
@@ -41,6 +42,13 @@ export async function getSpaceMembers(
   params?: QueryParams,
 ): Promise<IPagination<ISpaceMember>> {
   const req = await api.post<any>("/spaces/members", { spaceId, ...params });
+  return req.data;
+}
+
+export async function getSpaceEditableUsers(
+  spaceId: string,
+): Promise<SpaceUserInfo[]> {
+  const req = await api.post<SpaceUserInfo[]>("/spaces/members/writers", { spaceId });
   return req.data;
 }
 
