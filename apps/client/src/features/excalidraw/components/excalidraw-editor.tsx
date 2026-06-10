@@ -26,6 +26,7 @@ import { useCollabToken } from "@/features/auth/queries/auth-query";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 import { useComputedColorScheme } from "@mantine/core";
 import { excalidrawAPIAtom, excalidrawOpsAtom } from "../atoms/excalidraw-atom";
+import { getAvatarUrl } from "@/lib/config";
 
 const TX_ORIGIN = "excalidraw-collab";
 
@@ -93,6 +94,12 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
     setReady(false);
     syncedVersionsRef.current.clear();
   }, [pageId]);
+
+  // Show the canvas as soon as Excalidraw is ready, without waiting for Yjs/token.
+  // Yjs sync loads actual elements in the background via initialize().
+  useEffect(() => {
+    if (excalidrawAPI) setReady(true);
+  }, [excalidrawAPI]);
 
   // Sync API reference to global atom; clear on unmount.
   useEffect(() => {
@@ -258,6 +265,7 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
               button: p.button,
               username: p.username ?? undefined,
               color: { background: p.color, stroke: p.color },
+              avatarUrl: p.avatarUrl ?? undefined,
             });
           }
         });
@@ -335,6 +343,7 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
         button: payload.button,
         username: user?.name ?? "Anonymous",
         color: getPresenceColor(user?.id ?? "anon"),
+        avatarUrl: getAvatarUrl(user?.avatarUrl as string) ?? undefined,
       });
     },
     [],

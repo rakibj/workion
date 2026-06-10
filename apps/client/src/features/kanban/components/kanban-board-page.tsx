@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { getAvatarUrl } from "@/lib/config";
 import {
   ActionIcon,
   Avatar,
@@ -511,7 +512,7 @@ function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssignee
     <Group gap={2} align="center" wrap="nowrap">
       {card.assignees.slice(0, 3).map((a) => (
         <Tooltip key={a.userId} label={a.name} withArrow>
-          <Avatar src={a.avatarUrl} size={20} radius="xl" name={a.name} />
+          <Avatar src={getAvatarUrl(a.avatarUrl as string)} size={20} radius="xl" name={a.name} />
         </Tooltip>
       ))}
       {card.assignees.length > 3 && (
@@ -561,7 +562,7 @@ function InlineAssigneePicker({ card, pageId, spaceId, canEdit }: InlineAssignee
                           : addAssignee.mutate({ cardId: card.id, userId: m.id })
                       }
                     >
-                      <Avatar src={m.avatarUrl} size={20} radius="xl" name={m.name} />
+                      <Avatar src={getAvatarUrl(m.avatarUrl as string)} size={20} radius="xl" name={m.name} />
                       <Text size="xs" style={{ flex: 1 }} truncate>{m.name}</Text>
                       {isAssigned && <IconCheck size={12} />}
                     </Group>
@@ -917,7 +918,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
                   {card.assignees.slice(0, 6).map((a) => (
                     <Tooltip key={a.userId} label={a.name} withArrow>
                       <Avatar
-                        src={a.avatarUrl}
+                        src={getAvatarUrl(a.avatarUrl as string)}
                         size={24}
                         radius="xl"
                         name={a.name}
@@ -963,7 +964,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
                           : addAssignee.mutate({ cardId: card.id, userId: m.id })
                       }
                     >
-                      <Avatar src={m.avatarUrl} size={24} radius="xl" name={m.name} />
+                      <Avatar src={getAvatarUrl(m.avatarUrl as string)} size={24} radius="xl" name={m.name} />
                       <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
                       {isAssigned && <IconCheck size={14} />}
                     </Group>

@@ -40,3 +40,10 @@
 .excalidraw-wrapper .excalidraw:not(.excalidraw--view-mode) .App-menu_top > .App-menu_top__left {
   justify-self: start !important;
 }
+
+/* Collaborator avatar images: activate the ::before ring with the primary
+   color so the photo is clearly a user indicator, not a canvas element.
+   Scoped to :has(.Avatar-img) so initials-only avatars are unchanged. */
+.excalidraw-wrapper .excalidraw .Avatar:has(.Avatar-img)::before {
+  box-shadow: 0 0 0 2.5px var(--color-primary);
+}
