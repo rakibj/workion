@@ -15,6 +15,7 @@ import type {
   AppState,
   BinaryFiles,
   BinaryFileData,
+  OnUserFollowedPayload,
 } from "@excalidraw/excalidraw/types";
 import type {
   ExcalidrawElement,
@@ -83,6 +84,10 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
   const yDocRef = useRef<Y.Doc | null>(null);
   const initializedRef = useRef(false);
   const awarenessRef = useRef<any>(null);
+  // Accumulated local presence — merged on every broadcast so all fields are always current.
+  const localPresenceRef = useRef<Record<string, any>>({});
+  // SocketId of the collaborator we are currently following (null = not following).
+  const userToFollowRef = useRef<SocketId | null>(null);
   // Tracks the last versionNonce we pushed to Yjs per element id.
   // We cannot read this back from Yjs because Yjs stores the same object
   // reference that Excalidraw mutates in-place — so yEl.get(id).versionNonce
@@ -247,35 +252,77 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
 
     provider.attach();
 
-    // ── Presence (remote cursors + laser trails) ──────────────────────────
+    // ── Presence (remote cursors + laser trails + viewport follow) ────────
     const awareness = provider.awareness;
     awarenessRef.current = awareness;
     let cleanupPresence: (() => void) | null = null;
 
     if (awareness) {
+      // Broadcast local presence, merging patch into the accumulated state.
+      const broadcastPresence = (patch: Record<string, any>) => {
+        const user = appUserRef.current;
+        localPresenceRef.current = {
+          username: user?.name ?? "Anonymous",
+          color: getPresenceColor(user?.id ?? "anon"),
+          avatarUrl: getAvatarUrl(user?.avatarUrl as string) ?? undefined,
+          ...localPresenceRef.current,
+          ...patch,
+        };
+        awareness.setLocalStateField("presence", localPresenceRef.current);
+      };
+
+      // Store broadcast fn so pointer/scroll handlers can call it.
+      (awarenessRef as any).broadcast = broadcastPresence;
+
       const applyRemotePresences = () => {
         const next = new Map<SocketId, Collaborator>();
+        let followedViewport: { scrollX: number; scrollY: number; zoom: AppState["zoom"] } | null = null;
+
         awareness.getStates().forEach((state: any, clientId: number) => {
           if (clientId === awareness.clientID) return;
           const p = state?.presence;
-          if (p?.pointer) {
-            next.set(String(clientId) as SocketId, {
-              pointer: p.pointer,
-              // button is required for laser trail rendering on the receiving end
-              button: p.button,
-              username: p.username ?? undefined,
-              color: { background: p.color, stroke: p.color },
-              avatarUrl: p.avatarUrl ?? undefined,
-            });
+          // Show all users who have at least broadcast their username (no cursor required).
+          if (!p?.username) return;
+
+          const socketId = String(clientId) as SocketId;
+          next.set(socketId, {
+            pointer: p.pointer,
+            button: p.button,
+            username: p.username,
+            color: { background: p.color, stroke: p.color },
+            avatarUrl: p.avatarUrl ?? undefined,
+            socketId,
+          });
+
+          // Collect the followed user's viewport so we can apply it below.
+          if (
+            userToFollowRef.current === socketId &&
+            p.scrollX !== undefined &&
+            p.scrollY !== undefined &&
+            p.zoom !== undefined
+          ) {
+            followedViewport = { scrollX: p.scrollX, scrollY: p.scrollY, zoom: p.zoom };
           }
         });
+
         excalidrawAPI.updateScene({ collaborators: next });
+
+        // Apply followed user's viewport — do it after the collaborator update
+        // so Excalidraw sees the consistent state in one paint.
+        if (followedViewport) {
+          excalidrawAPI.updateScene({ appState: followedViewport });
+        }
       };
 
       awareness.on("change", applyRemotePresences);
       applyRemotePresences();
 
+      // Broadcast initial presence so we appear in other clients' collaborator
+      // lists even before the local user moves the cursor.
+      broadcastPresence({});
+
       cleanupPresence = () => {
+        (awarenessRef as any).broadcast = null;
         awareness.off("change", applyRemotePresences);
         awareness.setLocalState(null);
       };
@@ -287,6 +334,8 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
       yElementsRef.current = null;
       yFilesRef.current = null;
       awarenessRef.current = null;
+      localPresenceRef.current = {};
+      userToFollowRef.current = null;
       unlistenYMap?.();
       cleanupPresence?.();
       localPersistence.destroy();
@@ -335,19 +384,26 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
       pointer: { x: number; y: number; tool: "pointer" | "laser" };
       button: "down" | "up";
     }) => {
-      const awareness = awarenessRef.current;
-      if (!awareness) return;
-      const user = appUserRef.current;
-      awareness.setLocalStateField("presence", {
-        pointer: payload.pointer,
-        button: payload.button,
-        username: user?.name ?? "Anonymous",
-        color: getPresenceColor(user?.id ?? "anon"),
-        avatarUrl: getAvatarUrl(user?.avatarUrl as string) ?? undefined,
-      });
+      const broadcast = (awarenessRef as any).broadcast as ((patch: Record<string, any>) => void) | null;
+      broadcast?.({ pointer: payload.pointer, button: payload.button });
     },
     [],
   );
+
+  // Broadcast local viewport changes so followers can apply them.
+  const handleScrollChange = useCallback(
+    (scrollX: number, scrollY: number, zoom: AppState["zoom"]) => {
+      const broadcast = (awarenessRef as any).broadcast as ((patch: Record<string, any>) => void) | null;
+      broadcast?.({ scrollX, scrollY, zoom });
+    },
+    [],
+  );
+
+  // Handle follow/unfollow button clicks in the collaborator avatar list.
+  const handleUserFollow = useCallback((payload: OnUserFollowedPayload) => {
+    userToFollowRef.current =
+      payload.action === "FOLLOW" ? payload.userToFollow.socketId : null;
+  }, []);
 
   return (
     <div className="excalidraw-wrapper">
@@ -355,6 +411,8 @@ export default function ExcalidrawEditor({ pageId, readOnly }: ExcalidrawEditorP
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         onChange={handleChange}
         onPointerUpdate={handlePointerUpdate}
+        onScrollChange={handleScrollChange}
+        onUserFollow={handleUserFollow}
         isCollaborating={true}
         viewModeEnabled={readOnly}
         theme={theme as "light" | "dark"}

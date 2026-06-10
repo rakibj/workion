@@ -15,6 +15,9 @@ import {
   KanbanColumn,
   KanbanMilestone,
 } from '@docmost/db/types/entity.types';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QueueJob, QueueName } from '../../integrations/queue/constants';
 
 const POSITION_STEP = 1000;
 
@@ -26,6 +29,7 @@ export class KanbanService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pagePermissionRepo: PagePermissionRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    @InjectQueue(QueueName.NOTIFICATION_QUEUE) private readonly notificationQueue: Queue,
   ) {}
 
   // ─── Board ─────────────────────────────────────────────────────────────────
@@ -104,12 +108,14 @@ export class KanbanService {
     const column = await this.kanbanRepo.findColumnById(columnId);
     if (!column) throw new NotFoundException('Column not found');
     const maxPos = await this.kanbanRepo.getMaxCardPosition(columnId);
-    return this.kanbanRepo.createCard({
+    const card = await this.kanbanRepo.createCard({
       columnId,
       title,
       description: '',
       position: maxPos + POSITION_STEP,
     });
+    await this.queueBoardUpdateNotification(column.pageId, userId);
+    return card;
   }
 
   async updateCard(
@@ -119,7 +125,10 @@ export class KanbanService {
   ): Promise<KanbanCard> {
     const card = await this.kanbanRepo.findCardById(cardId);
     if (!card) throw new NotFoundException('Card not found');
-    return this.kanbanRepo.updateCard(cardId, data);
+    const updated = await this.kanbanRepo.updateCard(cardId, data);
+    const column = await this.kanbanRepo.findColumnById(card.columnId);
+    if (column) await this.queueBoardUpdateNotification(column.pageId, userId);
+    return updated;
   }
 
   async moveCard(
@@ -132,13 +141,17 @@ export class KanbanService {
     if (!card) throw new NotFoundException('Card not found');
     const column = await this.kanbanRepo.findColumnById(columnId);
     if (!column) throw new NotFoundException('Column not found');
-    return this.kanbanRepo.updateCard(cardId, { columnId, position });
+    const updated = await this.kanbanRepo.updateCard(cardId, { columnId, position });
+    await this.queueBoardUpdateNotification(column.pageId, userId);
+    return updated;
   }
 
   async deleteCard(cardId: string, userId: string): Promise<void> {
     const card = await this.kanbanRepo.findCardById(cardId);
     if (!card) throw new NotFoundException('Card not found');
+    const column = await this.kanbanRepo.findColumnById(card.columnId);
     await this.kanbanRepo.deleteCard(cardId);
+    if (column) await this.queueBoardUpdateNotification(column.pageId, userId);
   }
 
   // ─── Assignees ─────────────────────────────────────────────────────────────
@@ -241,6 +254,22 @@ export class KanbanService {
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  private async queueBoardUpdateNotification(
+    pageId: string,
+    userId: string,
+  ): Promise<void> {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page) return;
+    await this.notificationQueue
+      .add(QueueJob.PAGE_UPDATED, {
+        pageId,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+        actorIds: [userId],
+      })
+      .catch(() => {});
+  }
 
   private async assertKanbanPage(pageId: string): Promise<void> {
     const page = await this.pageRepo.findById(pageId);
