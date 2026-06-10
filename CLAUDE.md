@@ -38,7 +38,7 @@ docmost/
 └── pnpm-workspace.yaml
 ```
 
-**Package manager**: pnpm 10 with NX for task orchestration.
+**Package manager**: pnpm 10 with NX for task orchestration. Dependency overrides, `patchedDependencies`, and `neverBuiltDependencies` live in `pnpm-workspace.yaml` (not `package.json`) — this is the correct location for pnpm v10+.
 
 ---
 
