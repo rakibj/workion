@@ -21,6 +21,7 @@ import {
   IconPalette,
   IconQuote,
   IconSparkles,
+  IconToggleLeft,
   IconTrash,
   IconTypography,
 } from "@tabler/icons-react";
@@ -208,6 +209,24 @@ export function BlockContextMenu({
       name: "Toggle block",
       icon: IconCaretRightFilled,
       command: () => editor.chain().focus().setDetails().run(),
+    },
+    {
+      name: "Toggle H1",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 1 }).run(),
+    },
+    {
+      name: "Toggle H2",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 2 }).run(),
+    },
+    {
+      name: "Toggle H3",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 3 }).run(),
     },
   ];
 

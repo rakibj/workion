@@ -13,6 +13,7 @@ import {
   IconList,
   IconListNumbers,
   IconQuote,
+  IconToggleLeft,
   IconTypography,
 } from "@tabler/icons-react";
 import { Popover, Button, ScrollArea, Tooltip } from "@mantine/core";
@@ -60,6 +61,9 @@ export const NodeSelector: FC<NodeSelectorProps> = ({
         isCodeBlock: ctx.editor.isActive("codeBlock"),
         isCallout: ctx.editor.isActive("callout"),
         isDetails: ctx.editor.isActive("details"),
+        isToggleHeading1: ctx.editor.isActive("toggleHeading", { level: 1 }),
+        isToggleHeading2: ctx.editor.isActive("toggleHeading", { level: 2 }),
+        isToggleHeading3: ctx.editor.isActive("toggleHeading", { level: 3 }),
         isTransclusionSource: ctx.editor.isActive("transclusionSource"),
       };
     },
@@ -147,6 +151,27 @@ export const NodeSelector: FC<NodeSelectorProps> = ({
       icon: IconCaretRightFilled,
       command: () => editor.chain().focus().setDetails().run(),
       isActive: () => editorState?.isDetails,
+    },
+    {
+      name: "Toggle H1",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 1 }).run(),
+      isActive: () => editorState?.isToggleHeading1,
+    },
+    {
+      name: "Toggle H2",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 2 }).run(),
+      isActive: () => editorState?.isToggleHeading2,
+    },
+    {
+      name: "Toggle H3",
+      icon: IconToggleLeft,
+      command: () =>
+        editor.chain().focus().toggleToggleHeading({ level: 3 }).run(),
+      isActive: () => editorState?.isToggleHeading3,
     },
   ];
 

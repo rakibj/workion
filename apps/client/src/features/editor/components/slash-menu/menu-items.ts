@@ -7,6 +7,7 @@ import {
   IconH1,
   IconH2,
   IconH3,
+  IconToggleLeft,
   IconInfoCircle,
   IconList,
   IconListNumbers,
@@ -124,6 +125,45 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .setNode("heading", { level: 3 })
           .run();
       },
+    },
+    {
+      title: "Toggle Heading 1",
+      description: "Collapsible heading 1.",
+      searchTerms: ["toggle", "h1", "heading", "collapsible", "expand"],
+      icon: IconToggleLeft,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setToggleHeading({ level: 1 })
+          .run(),
+    },
+    {
+      title: "Toggle Heading 2",
+      description: "Collapsible heading 2.",
+      searchTerms: ["toggle", "h2", "heading", "collapsible", "expand"],
+      icon: IconToggleLeft,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setToggleHeading({ level: 2 })
+          .run(),
+    },
+    {
+      title: "Toggle Heading 3",
+      description: "Collapsible heading 3.",
+      searchTerms: ["toggle", "h3", "heading", "collapsible", "expand"],
+      icon: IconToggleLeft,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setToggleHeading({ level: 3 })
+          .run(),
     },
     {
       title: "Bullet list",

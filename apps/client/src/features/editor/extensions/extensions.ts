@@ -23,6 +23,9 @@ import {
   Details,
   DetailsContent,
   DetailsSummary,
+  ToggleHeading,
+  ToggleHeadingTitle,
+  ToggleHeadingContent,
   MathBlock,
   MathInline,
   TableCell,
@@ -192,6 +195,14 @@ export const mainExtensions = [
       if (node.type.name === "detailsSummary") {
         return i18n.t("Toggle title");
       }
+      if (node.type.name === "toggleHeadingTitle") {
+        const $pos = editor.state.doc.resolve(pos);
+        const parentNode = $pos.parent;
+        if (parentNode.type.name === "toggleHeading") {
+          return i18n.t("Heading {{level}}", { level: parentNode.attrs.level });
+        }
+        return i18n.t("Toggle heading");
+      }
       if (node.type.name === "paragraph") {
         const $pos = editor.state.doc.resolve(pos);
         const parentName = $pos.parent.type.name;
@@ -285,6 +296,9 @@ export const mainExtensions = [
   Details,
   DetailsSummary,
   DetailsContent,
+  ToggleHeading,
+  ToggleHeadingTitle,
+  ToggleHeadingContent,
   Youtube.configure({
     addPasteHandler: false,
     controls: true,

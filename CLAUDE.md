@@ -338,6 +338,19 @@ Blue number badge on sidebar page items for pages with unread notifications dire
 - **Backend**: `PageReadsRepo` — `upsert`, `getUnreadCounts`, `getUnreadCount`. `NotificationService.create()` emits `pageUnreadCountChanged` WS event after inserting a page-scoped notification. Two new endpoints: `POST /pages/unread-counts` and `POST /pages/mark-read`.
 - **Frontend**: `pageUnreadCountsAtom` (Jotai). Initial fetch + WS subscription in `use-notification-socket.ts`. Badge in `SpaceTreeRow`. `useMarkPageRead` called in `PageContent` on page ID change.
 
+### Toggle Heading 1 / 2 / 3 — DONE
+Collapsible headings (H1/H2/H3) where the heading text is the toggle trigger, similar to Notion's toggle headings.
+- **Extension files:** `packages/editor-ext/src/lib/toggle-heading/` — `ToggleHeading` (outer wrapper node, `data-type="toggleHeading"`, attrs: `level: 1|2|3`, `open: bool`), `ToggleHeadingTitle` (inline heading content, styled via CSS per level), `ToggleHeadingContent` (collapsible body, `block*`).
+- **Commands:** `setToggleHeading({ level })` (wraps current block; updates level if already in toggleHeading), `unsetToggleHeading()` (converts back to heading + body blocks), `toggleToggleHeading({ level })` (toggle/change level).
+- **Input rules:** `#> ` → Toggle H1, `##> ` → Toggle H2, `###> ` → Toggle H3.
+- **CSS:** `apps/client/src/features/editor/styles/toggle-heading.css` — heading-size styling per level via `data-level` attribute, open/close via `[open]` attribute, content indented 1.5rem when open, caret rotates 90° when open, search-result auto-expand.
+- **No keyboard shortcuts** — conflicts with `Mod-Alt-1/2/3` which are bound to plain headings by the StarterKit Heading extension.
+- **Keyboard UX:** `Enter` in title → opens toggle + moves cursor into content; `Backspace` at title start → `unsetToggleHeading()`.
+- **Slash menu:** "Toggle Heading 1/2/3" entries (search terms include "toggle", "h1/h2/h3", "collapsible", "expand").
+- **Turn-into menu (block menu) + bubble menu (node selector):** Toggle H1/H2/H3 entries added.
+- **Placeholder:** level-aware ("Heading 1" / "Heading 2" / "Heading 3") via parent node lookup in `Placeholder.configure()`.
+- **`open` state is local only** — not synced across users (same as toggle block).
+
 ### DOCX Export & Import — DONE
 Single-page DOCX export and DOCX import via `mammoth`. No round-trip fidelity guarantee — DOCX is an exchange format.
 - **Dependencies added (server):** `html-to-docx`, `katex`, `mammoth`
