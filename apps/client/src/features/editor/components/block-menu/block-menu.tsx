@@ -242,7 +242,16 @@ export function BlockContextMenu({
   };
 
   const handleDelete = () => {
-    editor.chain().focus().deleteNode(nodeType).run();
+    const node = editor.state.doc.nodeAt(pos);
+    if (!node) { onClose(); return; }
+    editor
+      .chain()
+      .focus()
+      .command(({ tr }) => {
+        tr.delete(pos, pos + node.nodeSize);
+        return true;
+      })
+      .run();
     onClose();
   };
 

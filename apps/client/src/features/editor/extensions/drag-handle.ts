@@ -418,8 +418,23 @@ export function DragHandlePlugin(
           const rawPos = nodePosAtDOM(node, view, options);
           if (rawPos != null && rawPos >= 0) {
             const calcPos = calcNodePos(rawPos, view);
-            currentNodePos = calcPos;
-            currentNodeType = view.state.doc.nodeAt(calcPos)?.type.name ?? '';
+            const $pos = view.state.doc.resolve(calcPos);
+            // Walk up to table ancestor so the menu targets the whole table,
+            // not an inner cell/row (same logic as handleDragStart).
+            let tableDepth = -1;
+            for (let d = $pos.depth; d > 0; d--) {
+              if ($pos.node(d).type.name === "table") {
+                tableDepth = d;
+                break;
+              }
+            }
+            if (tableDepth > 0) {
+              currentNodePos = $pos.before(tableDepth);
+              currentNodeType = "table";
+            } else {
+              currentNodePos = calcPos;
+              currentNodeType = view.state.doc.nodeAt(calcPos)?.type.name ?? '';
+            }
           }
 
           const isCustomNode = isCustomNodeDOM(node, options);
