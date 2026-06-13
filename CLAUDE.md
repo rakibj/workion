@@ -126,181 +126,26 @@ REDIS_URL=redis://localhost:6379
 |---|---|---|
 | App (NestJS) | Contabo VPS — Docker | `https://workion.gameloops.io` (Caddy + Let's Encrypt) |
 | Redis | Contabo VPS — Docker | `REDIS_URL=redis://redis:6379` |
-| Postgres | Neon (eu-central-1, pooler endpoint) | `&pgbouncer=true` required — **pending migration to local VPS** (see below) |
+| Postgres | Contabo VPS — Docker | named volume `postgres_data`, `DATABASE_URL=postgresql://docmost:<pw>@postgres:5432/docmost` |
 | File storage | Cloudflare R2 | bucket: `workion`, uses `AWS_S3_*` prefix |
 
 **Domain:** `workion.gameloops.io` → `157.173.120.4`. TLS via Caddy (Let's Encrypt). `Caddyfile` + `docker-compose.prod.yml` already configured.
 
 **Upstash abandoned** — BullMQ exhausted the free tier in ~10 days. Now using local Redis.
 
----
+**Neon abandoned** — free-tier egress hit 81%. Migrated to local Postgres container on the VPS (2026-06-13). Data dumped with `pg_dump -Fc --no-owner --no-acl` via `docker run --rm postgres:18`, restored with `pg_restore --clean --if-exists`. No `sslmode` or `pgbouncer` params — internal Docker network, plain TCP. Daily backups to R2 via `backup.sh` (cron 2 AM). Postgres 18+ requires volume mount at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) — it creates the versioned subdirectory itself.
 
-## Pending Migration: Neon → Local Postgres on VPS
-
-> **Why:** Neon free-tier egress is at 81%. Moving Postgres onto the Contabo VPS costs nothing extra — containers use <600 MB of 8 GB RAM; internal Docker traffic is free.
-
-### Step 1 — Add Postgres service to `docker-compose.prod.yml`
-
-```yaml
-services:
-  postgres:
-    image: postgres:18
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: docmost
-      POSTGRES_USER: docmost
-      POSTGRES_PASSWORD: <strong-password>   # store only in .env on VPS, never commit
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    networks:
-      - app-network
-
-volumes:
-  postgres_data:
-```
-
-Ensure the `app` service's `depends_on` includes `postgres` and the network is the same (`app-network` or whatever is already defined).
-
-### Step 2 — Dump data from Neon
-
-Run locally or from the VPS (needs `psql` / `pg_dump` installed):
+### Disaster recovery — restore from R2 backup
 
 ```bash
-pg_dump "<current-neon-DATABASE_URL>" \
-  --no-owner --no-acl \
-  -Fc -f /tmp/docmost_neon.dump
-```
-
-`-Fc` = custom format (compressed, faster restore). `--no-owner --no-acl` strips Neon-specific roles that won't exist locally.
-
-### Step 3 — Copy dump to VPS and restore
-
-```bash
-# From your local machine
-scp /tmp/docmost_neon.dump root@157.173.120.4:/home/apps/workion/
-
-# On VPS — bring up Postgres only first (no app yet)
-ssh root@157.173.120.4
-cd /home/apps/workion
-docker compose -f docker-compose.prod.yml up -d postgres
-
-# Wait ~5s for Postgres to initialize, then restore
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  pg_restore -U docmost -d docmost --no-owner --no-acl /tmp/docmost_neon.dump
-# (mount the dump file first, or pipe it in via stdin — see note below)
-
-# Alternative if the file is on the VPS host, not inside the container:
-cat /home/apps/workion/docmost_neon.dump | \
-  docker compose -f docker-compose.prod.yml exec -T postgres \
-  pg_restore -U docmost -d docmost --no-owner --no-acl
-```
-
-### Step 4 — Update `.env` on VPS
-
-```bash
-nano /home/apps/workion/.env
-```
-
-Change:
-```
-# Before (Neon pooler)
-DATABASE_URL=postgresql://docmost:<pw>@<neon-pooler-host>/docmost?sslmode=require&pgbouncer=true
-
-# After (local container — no SSL, no pgbouncer param)
-DATABASE_URL=postgresql://docmost:<strong-password>@postgres:5432/docmost
-```
-
-`postgres` is the Docker service name — resolves automatically on the shared network. Drop `sslmode=require` and `&pgbouncer=true`.
-
-### Step 5 — Set up automated backups to R2
-
-Create `/home/apps/workion/backup.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DUMP_FILE="/tmp/docmost_backup_${TIMESTAMP}.dump"
-
-docker compose -f /home/apps/workion/docker-compose.prod.yml exec -T postgres \
-  pg_dump -U docmost -d docmost -Fc > "$DUMP_FILE"
-
-# Upload to R2 — reuses the same AWS_S3_* vars already in .env
 source /home/apps/workion/.env
-AWS_ACCESS_KEY_ID="$AWS_S3_ACCESS_KEY_ID" \
-AWS_SECRET_ACCESS_KEY="$AWS_S3_SECRET_ACCESS_KEY" \
-aws s3 cp "$DUMP_FILE" \
-  "s3://${AWS_S3_BUCKET}/backups/postgres/docmost_backup_${TIMESTAMP}.dump" \
-  --endpoint-url "https://${AWS_S3_ENDPOINT}"
-
-rm "$DUMP_FILE"
-echo "Backup complete: docmost_backup_${TIMESTAMP}.dump"
-```
-
-```bash
-chmod +x /home/apps/workion/backup.sh
-
-# Add daily 2 AM cron
-crontab -e
-# Add line:
-0 2 * * * /home/apps/workion/backup.sh >> /var/log/docmost_backup.log 2>&1
-```
-
-Keep the last 30 days; delete older:
-
-```bash
-# Add to backup.sh before the rm line:
-aws s3 ls "s3://${AWS_S3_BUCKET}/backups/postgres/" --endpoint-url "https://${AWS_S3_ENDPOINT}" \
-  | awk '{print $4}' \
-  | sort \
-  | head -n -30 \
-  | xargs -I{} aws s3 rm "s3://${AWS_S3_BUCKET}/backups/postgres/{}" \
-      --endpoint-url "https://${AWS_S3_ENDPOINT}"
-```
-
-### Step 6 — Cut over (brief downtime window)
-
-```bash
-# 1. Stop the app (not Postgres)
-docker compose -f docker-compose.prod.yml stop app
-
-# 2. Take a final dump from Neon (catches any writes during step 2-5 prep)
-pg_dump "<neon-url>" --no-owner --no-acl -Fc | \
-  docker compose -f docker-compose.prod.yml exec -T postgres \
-  pg_restore -U docmost -d docmost --no-owner --no-acl --clean
-
-# 3. Verify .env points to local postgres (step 4 done)
-
-# 4. Bring app back up
-docker compose -f docker-compose.prod.yml up -d app
-
-# 5. Check logs
-docker compose -f docker-compose.prod.yml logs -f app
-```
-
-Expected: app starts, Kysely connects, no `ECONNREFUSED` or TLS errors. Run a quick smoke test (login, open a page, check kanban).
-
-### Step 7 — Verify & decommission Neon
-
-After 24–48 hours of stable operation:
-1. Run the first manual backup to R2 and confirm the object appears in the bucket.
-2. Log into Neon dashboard → confirm the project is idle and no app is pointing at it.
-3. Delete the Neon project to stop any future egress clock (or leave idle as a cold backup).
-4. Update the **Cloud Deployment Status** table above: `Postgres | Contabo VPS — Docker | named volume postgres_data`.
-
-### Restore from R2 backup (disaster recovery)
-
-```bash
-# Download latest dump
 aws s3 cp "s3://${AWS_S3_BUCKET}/backups/postgres/<dump-file>" /tmp/restore.dump \
   --endpoint-url "https://${AWS_S3_ENDPOINT}"
 
-# Drop and recreate db, then restore
 docker compose -f docker-compose.prod.yml exec postgres \
   psql -U docmost -c "DROP DATABASE docmost WITH (FORCE); CREATE DATABASE docmost OWNER docmost;"
 
-cat /tmp/restore.dump | \
-  docker compose -f docker-compose.prod.yml exec -T postgres \
+cat /tmp/restore.dump | docker compose -f docker-compose.prod.yml exec -T postgres \
   pg_restore -U docmost -d docmost --no-owner --no-acl
 ```
 

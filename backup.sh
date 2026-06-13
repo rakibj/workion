@@ -21,7 +21,7 @@ AWS_ACCESS_KEY_ID="$AWS_S3_ACCESS_KEY_ID" \
 AWS_SECRET_ACCESS_KEY="$AWS_S3_SECRET_ACCESS_KEY" \
 aws s3 cp "$DUMP_FILE" \
   "s3://${AWS_S3_BUCKET}/backups/postgres/docmost_backup_${TIMESTAMP}.dump" \
-  --endpoint-url "https://${AWS_S3_ENDPOINT}"
+  --endpoint-url "${AWS_S3_ENDPOINT}"
 
 echo "[$(date)] Uploaded to R2."
 
@@ -31,7 +31,7 @@ rm "$DUMP_FILE"
 AWS_ACCESS_KEY_ID="$AWS_S3_ACCESS_KEY_ID" \
 AWS_SECRET_ACCESS_KEY="$AWS_S3_SECRET_ACCESS_KEY" \
 aws s3 ls "s3://${AWS_S3_BUCKET}/backups/postgres/" \
-  --endpoint-url "https://${AWS_S3_ENDPOINT}" \
+  --endpoint-url "${AWS_S3_ENDPOINT}" \
   | awk '{print $4}' \
   | sort \
   | head -n "-${RETAIN_COUNT}" \
@@ -39,7 +39,7 @@ aws s3 ls "s3://${AWS_S3_BUCKET}/backups/postgres/" \
       AWS_ACCESS_KEY_ID="$AWS_S3_ACCESS_KEY_ID" \
       AWS_SECRET_ACCESS_KEY="$AWS_S3_SECRET_ACCESS_KEY" \
       aws s3 rm "s3://${AWS_S3_BUCKET}/backups/postgres/${old_key}" \
-        --endpoint-url "https://${AWS_S3_ENDPOINT}"
+        --endpoint-url "${AWS_S3_ENDPOINT}"
       echo "[$(date)] Deleted old backup: $old_key"
     done
 
