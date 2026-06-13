@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/.env"
 
 echo "[$(date)] Starting backup..."
 
-docker exec -T infra-postgres-1 \
+docker exec infra-postgres-1 \
   pg_dump -U "${POSTGRES_USER:-docmost}" -d "${POSTGRES_DB:-docmost}" -Fc \
   > "$DUMP_FILE"
 
