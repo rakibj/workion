@@ -5,17 +5,9 @@ services:
     env_file: .env
     depends_on:
       - redis
-      - postgres
-
-  postgres:
-    image: postgres:18
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-docmost}
-      POSTGRES_USER: ${POSTGRES_USER:-docmost}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql
+    networks:
+      - default
+      - infra-net
 
   redis:
     image: redis:7-alpine
@@ -34,8 +26,12 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+networks:
+  infra-net:
+    external: true
+    name: infra-net
+
 volumes:
   caddy_data:
   caddy_config:
   redis_data:
-  postgres_data:
