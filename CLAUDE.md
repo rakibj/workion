@@ -151,7 +151,7 @@ services:
       POSTGRES_USER: docmost
       POSTGRES_PASSWORD: <strong-password>   # store only in .env on VPS, never commit
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     networks:
       - app-network
 
