@@ -126,7 +126,7 @@ REDIS_URL=redis://localhost:6379
 |---|---|---|
 | App (NestJS) | Contabo VPS — Docker | `https://workion.gameloops.io` (Caddy + Let's Encrypt) |
 | Redis | Contabo VPS — Docker | `REDIS_URL=redis://redis:6379` |
-| Postgres | Contabo VPS — Docker | named volume `postgres_data`, `DATABASE_URL=postgresql://docmost:<pw>@postgres:5432/docmost` |
+| Postgres | Contabo VPS — Docker (`/opt/infra`) | standalone infra stack, container `infra-postgres-1`, volume `infra-postgres-data`, `DATABASE_URL=postgresql://docmost:<pw>@postgres:5432/docmost` |
 | File storage | Cloudflare R2 | bucket: `workion`, uses `AWS_S3_*` prefix |
 
 **Domain:** `workion.gameloops.io` → `157.173.120.4`. TLS via Caddy (Let's Encrypt). `Caddyfile` + `docker-compose.prod.yml` already configured.
@@ -135,6 +135,8 @@ REDIS_URL=redis://localhost:6379
 
 **Neon abandoned** — free-tier egress hit 81%. Migrated to local Postgres container on the VPS (2026-06-13). Data dumped with `pg_dump -Fc --no-owner --no-acl` via `docker run --rm postgres:18`, restored with `pg_restore --clean --if-exists`. No `sslmode` or `pgbouncer` params — internal Docker network, plain TCP. Daily backups to R2 via `backup.sh` (cron 2 AM). Postgres 18+ requires volume mount at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) — it creates the versioned subdirectory itself.
 
+**Postgres extracted to standalone infra stack (2026-06-13)** — Postgres no longer lives inside Workion's compose project. It runs as an independent stack at `/opt/infra/docker-compose.yml` with its own named volume `infra-postgres-data` and network `infra-net`. Workion's `app` service joins `infra-net` as an external network and reaches Postgres via the `postgres` service-name DNS alias — no `DATABASE_URL` change required. `backup.sh` now targets `infra-postgres-1` directly via `docker exec` (not `docker compose exec`). To add a new app's database: `docker exec -it infra-postgres-1 psql -U docmost` then `CREATE DATABASE … / CREATE USER … / GRANT …`.
+
 ### Disaster recovery — restore from R2 backup
 
 ```bash
@@ -142,10 +144,10 @@ source /home/apps/workion/.env
 aws s3 cp "s3://${AWS_S3_BUCKET}/backups/postgres/<dump-file>" /tmp/restore.dump \
   --endpoint-url "https://${AWS_S3_ENDPOINT}"
 
-docker compose -f docker-compose.prod.yml exec postgres \
+docker exec -it infra-postgres-1 \
   psql -U docmost -c "DROP DATABASE docmost WITH (FORCE); CREATE DATABASE docmost OWNER docmost;"
 
-cat /tmp/restore.dump | docker compose -f docker-compose.prod.yml exec -T postgres \
+cat /tmp/restore.dump | docker exec -i infra-postgres-1 \
   pg_restore -U docmost -d docmost --no-owner --no-acl
 ```
 
