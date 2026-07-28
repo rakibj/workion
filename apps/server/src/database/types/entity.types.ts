@@ -25,6 +25,7 @@ import {
   WorkspaceInvitations,
   UserTokens,
   Backlinks,
+  BlogPostSettings as BlogPostSettingsTable,
   Billing as BillingSubscription,
   AuthProviders,
   AuthAccounts,
@@ -56,10 +57,7 @@ export type UpdatableAiChat = Updateable<Omit<AiChats, 'id'>>;
 // full-text search. It is omitted from the public type so it never leaks
 // into HTTP responses or the chat history fed to the language model.
 export type AiChatMessage = Omit<Selectable<AiChatMessages>, 'tsv'>;
-export type InsertableAiChatMessage = Omit<
-  Insertable<AiChatMessages>,
-  'tsv'
->;
+export type InsertableAiChatMessage = Omit<Insertable<AiChatMessages>, 'tsv'>;
 
 // Workspace
 export type Workspace = Selectable<Workspaces>;
@@ -154,6 +152,13 @@ export type Backlink = Selectable<Backlinks>;
 export type InsertableBacklink = Insertable<Backlink>;
 export type UpdatableBacklink = Updateable<Omit<Backlink, 'id'>>;
 
+// Blog post settings
+export type BlogPostSettings = Selectable<BlogPostSettingsTable>;
+export type InsertableBlogPostSettings = Insertable<BlogPostSettingsTable>;
+export type UpdatableBlogPostSettings = Updateable<
+  Omit<BlogPostSettingsTable, 'pageId' | 'spaceId'>
+>;
+
 // Billing
 export type Billing = Selectable<BillingSubscription>;
 export type InsertableBilling = Insertable<BillingSubscription>;
@@ -182,11 +187,14 @@ export type UpdatableFavorite = Updateable<Omit<Favorites, 'id'>>;
 // Page Transclusion
 export type PageTransclusion = Selectable<PageTransclusions>;
 export type InsertablePageTransclusion = Insertable<PageTransclusions>;
-export type UpdatablePageTransclusion = Updateable<Omit<PageTransclusions, 'id'>>;
+export type UpdatablePageTransclusion = Updateable<
+  Omit<PageTransclusions, 'id'>
+>;
 
 // Page Transclusion Reference
 export type PageTransclusionReference = Selectable<PageTransclusionReferences>;
-export type InsertablePageTransclusionReference = Insertable<PageTransclusionReferences>;
+export type InsertablePageTransclusionReference =
+  Insertable<PageTransclusionReferences>;
 export type UpdatablePageTransclusionReference = Updateable<
   Omit<PageTransclusionReferences, 'id'>
 >;
@@ -248,7 +256,9 @@ export type UpdatablePagePermission = Updateable<Omit<_PagePermissions, 'id'>>;
 // Page Verification
 export type PageVerification = Selectable<_PageVerifications>;
 export type InsertablePageVerification = Insertable<_PageVerifications>;
-export type UpdatablePageVerification = Updateable<Omit<_PageVerifications, 'id'>>;
+export type UpdatablePageVerification = Updateable<
+  Omit<_PageVerifications, 'id'>
+>;
 
 // Page Verifier
 export type PageVerifier = Selectable<_PageVerifiers>;

@@ -99,7 +99,10 @@ export class SpaceRepo {
     return count != 0;
   }
 
-  async invalidateSpaceCache(spaceId: string, workspaceId: string): Promise<void> {
+  async invalidateSpaceCache(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<void> {
     await this.cacheManager
       .del(CacheKey.SPACE(spaceId, workspaceId))
       .catch(() => {});
@@ -160,6 +163,34 @@ export class SpaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('comments', COALESCE(settings->'comments', '{}'::jsonb)
+          || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+    await this.invalidateSpaceCache(spaceId, workspaceId);
+    return result;
+  }
+
+  /**
+   * Stores per-space blog configuration in `spaces.settings.blog`.
+   * Current shape: { domain?: string }.
+   */
+  async updateBlogSettings(
+    spaceId: string,
+    workspaceId: string,
+    prefKey: string,
+    prefValue: string | boolean,
+    trx?: KyselyTransaction,
+  ) {
+    const db = dbOrTx(this.db, trx);
+    const result = await db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('blog', COALESCE(settings->'blog', '{}'::jsonb)
           || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
         updatedAt: new Date(),
       })

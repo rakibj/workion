@@ -27,6 +27,7 @@ import { SessionModule } from './session/session.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { TemplateModule } from './template/template.module';
 import { ClsMiddleware } from 'nestjs-cls';
+import { BlogModule } from './blog/blog.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { ClsMiddleware } from 'nestjs-cls';
     SessionModule,
     AiChatModule,
     TemplateModule,
+    BlogModule,
   ],
 })
 export class CoreModule implements NestModule {

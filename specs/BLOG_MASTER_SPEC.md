@@ -16,7 +16,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 
 | # | Spec | Status | Last session | Handover |
 |---|------|--------|--------------|----------|
-| 1 | Data model — blog page type + settings schema | Not started | — | Start here. |
+| 1 | Data model — blog page type + settings schema | Done | 2026-07-28 | Migration, repository, settings service, and unit tests added. |
 | 2 | Publish workflow + admin UI | Not started | — | Blocked on 1. |
 | 3 | Public Blog JSON API | Not started | — | Blocked on 1, 2. |
 | 4 | Custom-domain + `/blog/:slug` SSR pages | Not started | — | Blocked on 1, 2, 3. |

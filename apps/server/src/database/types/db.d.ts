@@ -126,6 +126,21 @@ export interface Backlinks {
   workspaceId: string;
 }
 
+export interface BlogPostSettings {
+  canonicalUrl: string | null;
+  createdAt: Generated<Timestamp>;
+  focusKeyword: string | null;
+  metaDescription: string | null;
+  metaTitle: string | null;
+  ogImageAttachmentId: string | null;
+  pageId: string;
+  robotsFollow: Generated<boolean>;
+  robotsIndex: Generated<boolean>;
+  slug: string;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Billing {
   amount: Int8 | null;
   billingScheme: string | null;
@@ -656,6 +671,7 @@ export interface DB {
   authAccounts: AuthAccounts;
   authProviders: AuthProviders;
   backlinks: Backlinks;
+  blogPostSettings: BlogPostSettings;
   billing: Billing;
   comments: Comments;
   kanbanColumns: KanbanColumns;
