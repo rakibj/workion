@@ -433,6 +433,7 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
+**Active spec:** [specs/BLOG_MASTER_SPEC.md](specs/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Read it first when picking up this work; it tracks per-session scope and progress/handover in its own tracker table.
 
 ---
 
