@@ -33,6 +33,17 @@ export async function updateSpace(data: Partial<ISpace>): Promise<ISpace> {
   return req.data;
 }
 
+export async function updateSpaceBlogSettings(
+  spaceId: string,
+  domain: string | null,
+): Promise<ISpace> {
+  const req = await api.patch<ISpace>(`/spaces/${spaceId}/blog-settings`, {
+    spaceId,
+    domain,
+  });
+  return req.data;
+}
+
 export async function deleteSpace(spaceId: string): Promise<void> {
   await api.post<void>("/spaces/delete", { spaceId });
 }
@@ -48,7 +59,9 @@ export async function getSpaceMembers(
 export async function getSpaceEditableUsers(
   spaceId: string,
 ): Promise<SpaceUserInfo[]> {
-  const req = await api.post<SpaceUserInfo[]>("/spaces/members/writers", { spaceId });
+  const req = await api.post<SpaceUserInfo[]>("/spaces/members/writers", {
+    spaceId,
+  });
   return req.data;
 }
 
@@ -69,7 +82,7 @@ export async function changeMemberRole(
 }
 
 export async function getSpaceMarkdownText(spaceId: string): Promise<string> {
-  const req = await api.post<{ text: string }>('/spaces/export-text', {
+  const req = await api.post<{ text: string }>("/spaces/export-text", {
     spaceId,
   });
   return req.data.text;

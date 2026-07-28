@@ -12,6 +12,7 @@ import {
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
+import SpaceBlogSettings from "@/features/space/components/space-blog-settings.tsx";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -71,6 +72,14 @@ export default function SpaceSettingsModal({
                   )}
                   {spaceAbility.can(
                     SpaceCaslAction.Manage,
+                    SpaceCaslSubject.Settings,
+                  ) && (
+                    <Tabs.Tab fw={500} value="blog">
+                      {t("Blog")}
+                    </Tabs.Tab>
+                  )}
+                  {spaceAbility.can(
+                    SpaceCaslAction.Manage,
                     SpaceCaslSubject.Member,
                   ) && (
                     <Tabs.Tab fw={500} value="invite-links">
@@ -122,6 +131,16 @@ export default function SpaceSettingsModal({
                       />
                     </div>
                   </ScrollArea>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="blog">
+                  <SpaceBlogSettings
+                    space={space}
+                    readOnly={spaceAbility.cannot(
+                      SpaceCaslAction.Manage,
+                      SpaceCaslSubject.Settings,
+                    )}
+                  />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="invite-links">

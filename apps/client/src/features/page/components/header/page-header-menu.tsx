@@ -1,7 +1,18 @@
-import { ActionIcon, Button, ColorPicker, Group, Menu, Modal, Text, ThemeIcon, Tooltip } from "@mantine/core";
+import {
+  ActionIcon,
+  Button,
+  ColorPicker,
+  Group,
+  Menu,
+  Modal,
+  Text,
+  ThemeIcon,
+  Tooltip,
+} from "@mantine/core";
 import {
   IconArrowRight,
   IconArrowsHorizontal,
+  IconArticle,
   IconDeviceFloppy,
   IconDots,
   IconEraser,
@@ -77,6 +88,7 @@ import {
   useUnwatchPageMutation,
 } from "@/features/page/queries/watcher-query";
 import useCurrentUser from "@/features/user/hooks/use-current-user";
+import { BlogSettingsModal } from "@/features/blog/components/blog-settings-modal";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -92,6 +104,10 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { data: currentUserData } = useCurrentUser();
   const isGuest = currentUserData?.user?.role === "guest";
   const isDeleted = !!page?.deletedAt;
+  const [
+    blogSettingsOpened,
+    { open: openBlogSettings, close: closeBlogSettings },
+  ] = useDisclosure(false);
 
   useHotkeys(
     [
@@ -122,9 +138,31 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     <>
       <ConnectionWarning />
 
-      {!readOnly && page?.type !== "kanban" && page?.type !== "excalidraw" && <PageEditModeToggle size="xs" />}
+      {!readOnly && page?.type !== "kanban" && page?.type !== "excalidraw" && (
+        <PageEditModeToggle size="xs" />
+      )}
 
       {!isGuest && <PageShareModal readOnly={readOnly} />}
+
+      {page?.type === "blog" && !readOnly && (
+        <>
+          <Tooltip label={t("Blog settings")} openDelay={250} withArrow>
+            <ActionIcon
+              variant="subtle"
+              color="dark"
+              aria-label={t("Blog settings")}
+              onClick={openBlogSettings}
+            >
+              <IconArticle size={20} stroke={2} />
+            </ActionIcon>
+          </Tooltip>
+          <BlogSettingsModal
+            pageId={page.id}
+            opened={blogSettingsOpened}
+            onClose={closeBlogSettings}
+          />
+        </>
+      )}
 
       {page?.type !== "excalidraw" && (
         <Tooltip label={t("Comments")} openDelay={250} withArrow>
@@ -259,7 +297,11 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     const elements = excalidrawAPI.getSceneElements();
     const appState = excalidrawAPI.getAppState();
     const files = excalidrawAPI.getFiles();
-    const svg = await exportToSvg({ elements, appState: appState as any, files });
+    const svg = await exportToSvg({
+      elements,
+      appState: appState as any,
+      files,
+    });
     const svgStr = new XMLSerializer().serializeToString(svg);
     const blob = new Blob([svgStr], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
@@ -272,25 +314,32 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
 
   const handleFindOnCanvas = useCallback(() => {
     setTimeout(() => {
-      const btn = document.querySelector<HTMLElement>(".excalidraw .search-menu-button");
+      const btn = document.querySelector<HTMLElement>(
+        ".excalidraw .search-menu-button",
+      );
       btn?.click();
     }, 50);
   }, []);
 
   const handleOpenBgModal = useCallback(() => {
-    const c = (excalidrawAPI?.getAppState() as any)?.viewBackgroundColor ?? "#ffffff";
+    const c =
+      (excalidrawAPI?.getAppState() as any)?.viewBackgroundColor ?? "#ffffff";
     setBgColor(c);
     setOrigBgColor(c);
     setBgModalOpen(true);
   }, [excalidrawAPI]);
 
   const handleCancelBg = useCallback(() => {
-    excalidrawAPI?.updateScene({ appState: { viewBackgroundColor: origBgColor } as any });
+    excalidrawAPI?.updateScene({
+      appState: { viewBackgroundColor: origBgColor } as any,
+    });
     setBgModalOpen(false);
   }, [excalidrawAPI, origBgColor]);
 
   const handleApplyBg = useCallback(() => {
-    excalidrawAPI?.updateScene({ appState: { viewBackgroundColor: bgColor } as any });
+    excalidrawAPI?.updateScene({
+      appState: { viewBackgroundColor: bgColor } as any,
+    });
     setBgModalOpen(false);
   }, [excalidrawAPI, bgColor]);
 
@@ -386,7 +435,10 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
           <Menu.Item
             leftSection={
               isFavorited ? (
-                <IconStarFilled size={16} color="var(--mantine-color-yellow-5)" />
+                <IconStarFilled
+                  size={16}
+                  color="var(--mantine-color-yellow-5)"
+                />
               ) : (
                 <IconStar size={16} />
               )
@@ -587,7 +639,9 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         size="sm"
       >
         <Text size="sm">
-          {t("This will clear all elements on the canvas. This action cannot be undone.")}
+          {t(
+            "This will clear all elements on the canvas. This action cannot be undone.",
+          )}
         </Text>
         <Group justify="flex-end" mt="md" gap="sm">
           <Button variant="default" onClick={() => setResetConfirmOpen(false)}>
@@ -611,8 +665,16 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
           onChange={setBgColor}
           format="hex"
           swatches={[
-            "#ffffff", "#f8f9fa", "#fff3bf", "#d3f9d8", "#d0ebff",
-            "#e5dbff", "#ffd6e7", "#ffe8cc", "#343a40", "#1c7ed6",
+            "#ffffff",
+            "#f8f9fa",
+            "#fff3bf",
+            "#d3f9d8",
+            "#d0ebff",
+            "#e5dbff",
+            "#ffd6e7",
+            "#ffe8cc",
+            "#343a40",
+            "#1c7ed6",
           ]}
           fullWidth
         />

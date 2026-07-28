@@ -6,6 +6,8 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -34,6 +36,7 @@ import {
 } from '../casl/interfaces/workspace-ability.type';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
+import { UpdateSpaceBlogSettingsDto } from './dto/update-space-blog-settings.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -158,6 +161,28 @@ export class SpaceController {
       throw new ForbiddenException();
     }
     return this.spaceService.updateSpace(updateSpaceDto, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Patch(':spaceId/blog-settings')
+  async updateBlogSettings(
+    @Param('spaceId') spaceId: string,
+    @Body() dto: UpdateSpaceBlogSettingsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (dto.spaceId !== spaceId) {
+      throw new BadRequestException('spaceId must match the route parameter');
+    }
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+    return this.spaceService.updateBlogSettings(
+      spaceId,
+      workspace.id,
+      dto.domain,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

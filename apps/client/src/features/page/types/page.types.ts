@@ -1,6 +1,6 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 
-export type PageType = "document" | "kanban" | "excalidraw";
+export type PageType = "document" | "kanban" | "excalidraw" | "blog";
 
 export interface IPage {
   id: string;

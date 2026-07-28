@@ -13,9 +13,14 @@ export interface ISpaceCommentsSettings {
   allowViewerComments?: boolean;
 }
 
+export interface ISpaceBlogSettings {
+  domain?: string;
+}
+
 export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
   comments?: ISpaceCommentsSettings;
+  blog?: ISpaceBlogSettings;
 }
 
 export interface ISpace {

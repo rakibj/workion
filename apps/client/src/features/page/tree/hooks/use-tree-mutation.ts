@@ -26,7 +26,10 @@ import { generateId } from "@/lib/utils.tsx";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
-  handleCreate: (parentId: string | null, type?: "document" | "kanban" | "excalidraw") => Promise<void>;
+  handleCreate: (
+    parentId: string | null,
+    type?: "document" | "kanban" | "excalidraw" | "blog",
+  ) => Promise<void>;
   handleRename: (id: string, name: string) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
 };
@@ -134,8 +137,12 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
   );
 
   const handleCreate = useCallback(
-    async (parentId: string | null, type: "document" | "kanban" | "excalidraw" = "document") => {
-      const payload: { spaceId: string; parentPageId?: string; type?: string } = { spaceId };
+    async (
+      parentId: string | null,
+      type: "document" | "kanban" | "excalidraw" = "document",
+    ) => {
+      const payload: { spaceId: string; parentPageId?: string; type?: string } =
+        { spaceId };
       if (parentId) payload.parentPageId = parentId;
       if (type !== "document") payload.type = type;
 
@@ -169,7 +176,10 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         createdPage = await createPageMutation.mutateAsync(payload);
       } catch {
         setData((prev) => treeModel.remove(prev, tempId));
-        notifications.show({ message: t("Failed to create page"), color: "red" });
+        notifications.show({
+          message: t("Failed to create page"),
+          color: "red",
+        });
         return;
       }
 
@@ -184,7 +194,14 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         hasChildren: false,
         children: [],
       };
-      setData((prev) => treeModel.insert(treeModel.remove(prev, tempId), parentId, newNode, lastIndex));
+      setData((prev) =>
+        treeModel.insert(
+          treeModel.remove(prev, tempId),
+          parentId,
+          newNode,
+          lastIndex,
+        ),
+      );
 
       setTimeout(() => {
         emit({
@@ -214,7 +231,10 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         treeModel.update(prev, id, { name } as Partial<SpaceTreeNode>),
       );
       try {
-        const page = await updatePageMutation.mutateAsync({ pageId: id, title: name });
+        const page = await updatePageMutation.mutateAsync({
+          pageId: id,
+          title: name,
+        });
         const event: UpdateEvent = {
           operation: "updateOne",
           spaceId: page.spaceId,
@@ -283,7 +303,16 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         console.error("Failed to delete page:", error);
       }
     },
-    [removePageMutation, setData, store, pageSlug, navigate, spaceSlug, emit, spaceId],
+    [
+      removePageMutation,
+      setData,
+      store,
+      pageSlug,
+      navigate,
+      spaceSlug,
+      emit,
+      spaceId,
+    ],
   );
 
   return { handleMove, handleCreate, handleRename, handleDelete };

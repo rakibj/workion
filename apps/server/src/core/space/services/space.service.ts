@@ -212,6 +212,22 @@ export class SpaceService {
     return updatedSpace;
   }
 
+  async updateBlogSettings(
+    spaceId: string,
+    workspaceId: string,
+    domain: string | null,
+  ): Promise<Space> {
+    const space = await this.spaceRepo.findById(spaceId, workspaceId);
+    if (!space) throw new NotFoundException('Space not found');
+
+    return this.spaceRepo.updateBlogSettings(
+      spaceId,
+      workspaceId,
+      'domain',
+      domain ?? '',
+    );
+  }
+
   async getSpaceInfo(spaceId: string, workspaceId: string): Promise<Space> {
     const space = await this.spaceRepo.findById(spaceId, workspaceId, {
       includeMemberCount: true,

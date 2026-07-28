@@ -44,22 +44,22 @@ docmost/
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend framework | NestJS (modular, DI-based) |
-| Database | PostgreSQL 18 |
-| Query builder | Kysely (typed SQL — NOT an ORM) |
-| Migrations | Kysely migrations (`apps/server/src/database/migrations/`) |
-| Caching | Redis + `@nestjs/cache-manager` |
-| Job queue | BullMQ (Redis-backed) |
-| Real-time collab | Hocuspocus + Yjs ← **BLACK BOX** |
-| Frontend framework | React 18 |
-| Build tool | Vite |
-| UI library | Mantine |
-| Editor | TipTap ← **BLACK BOX** |
-| Auth | JWT sessions, CASL for RBAC |
-| Storage | S3-compatible or local (`StorageService`) |
-| Email | Configurable via `MailModule` |
+| Layer              | Technology                                                 |
+| ------------------ | ---------------------------------------------------------- |
+| Backend framework  | NestJS (modular, DI-based)                                 |
+| Database           | PostgreSQL 18                                              |
+| Query builder      | Kysely (typed SQL — NOT an ORM)                            |
+| Migrations         | Kysely migrations (`apps/server/src/database/migrations/`) |
+| Caching            | Redis + `@nestjs/cache-manager`                            |
+| Job queue          | BullMQ (Redis-backed)                                      |
+| Real-time collab   | Hocuspocus + Yjs ← **BLACK BOX**                           |
+| Frontend framework | React 18                                                   |
+| Build tool         | Vite                                                       |
+| UI library         | Mantine                                                    |
+| Editor             | TipTap ← **BLACK BOX**                                     |
+| Auth               | JWT sessions, CASL for RBAC                                |
+| Storage            | S3-compatible or local (`StorageService`)                  |
+| Email              | Configurable via `MailModule`                              |
 
 ---
 
@@ -77,7 +77,9 @@ new Redis({ host: c.host, port: c.port, password: c.password });
 // ✅ — ioredis detects rediss:// and enables TLS
 new Redis(url);
 new Redis(url, { maxRetriesPerRequest: null }); // BullMQ
-config: { url }                                  // @nestjs-labs/nestjs-ioredis
+config: {
+  url;
+} // @nestjs-labs/nestjs-ioredis
 ```
 
 `parseRedisUrl()` is still safe for reading metadata (e.g. `family`) as long as the URL is also passed as the actual connection string.
@@ -108,6 +110,7 @@ pnpm --filter client run test               # Vitest (frontend)
 | `docker-compose.prod.yml` | Full production stack. Never use for local dev. |
 
 **Required env vars** (`.env` at repo root):
+
 ```
 APP_URL=http://localhost:5173   # Vite frontend dev URL — used for invite links, emails, etc.
 SERVER_URL=http://localhost:3000  # NestJS backend — Vite proxies /api here; omit in production
@@ -122,12 +125,12 @@ REDIS_URL=redis://localhost:6379
 
 > Credentials in `Cloud Implementation.md` (never commit).
 
-| Service | Where | Notes |
-|---|---|---|
-| App (NestJS) | Contabo VPS — Docker | `https://workion.gameloops.io` (Caddy + Let's Encrypt) |
-| Redis | Contabo VPS — Docker | `REDIS_URL=redis://redis:6379` |
-| Postgres | Contabo VPS — Docker (`/opt/infra`) | standalone infra stack, container `infra-postgres-1`, volume `infra-postgres-data`, `DATABASE_URL=postgresql://docmost:<pw>@postgres:5432/docmost` |
-| File storage | Cloudflare R2 | bucket: `workion`, uses `AWS_S3_*` prefix |
+| Service      | Where                               | Notes                                                                                                                                              |
+| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App (NestJS) | Contabo VPS — Docker                | `https://workion.gameloops.io` (Caddy + Let's Encrypt)                                                                                             |
+| Redis        | Contabo VPS — Docker                | `REDIS_URL=redis://redis:6379`                                                                                                                     |
+| Postgres     | Contabo VPS — Docker (`/opt/infra`) | standalone infra stack, container `infra-postgres-1`, volume `infra-postgres-data`, `DATABASE_URL=postgresql://docmost:<pw>@postgres:5432/docmost` |
+| File storage | Cloudflare R2                       | bucket: `workion`, uses `AWS_S3_*` prefix                                                                                                          |
 
 **Domain:** `workion.gameloops.io` → `157.173.120.4`. TLS via Caddy (Let's Encrypt). `Caddyfile` + `docker-compose.prod.yml` already configured.
 
@@ -196,9 +199,9 @@ Workspace
 ### Role enums (`apps/server/src/common/helpers/types/permission.ts`)
 
 ```ts
-UserRole:   owner | admin | member          // workspace level
-SpaceRole:  admin | writer | reader         // space membership level
-PagePermissionRole: writer | reader         // page-level override
+UserRole: owner | admin | member; // workspace level
+SpaceRole: admin | writer | reader; // space membership level
+PagePermissionRole: writer | reader; // page-level override
 ```
 
 `space_members`: member is either a **user** OR a **group** (DB check constraint).
@@ -213,26 +216,26 @@ PagePermissionRole: writer | reader         // page-level override
 
 Generated types: `apps/server/src/database/types/db.d.ts` (auto-generated, do not hand-edit).
 
-| Table | Purpose |
-|---|---|
-| `workspaces` | Top-level tenant |
-| `users` | Workspace-scoped users |
-| `groups` / `group_users` | Role grouping |
-| `spaces` | Document spaces |
-| `space_members` | User or group → space role |
-| `pages` | Hierarchical docs (parent_id self-ref) |
-| `page_permissions` | Per-page user/group overrides |
-| `page_access` | Restriction flag per page |
-| `page_history` | Full revision history |
-| `comments` | Threaded page comments |
-| `attachments` | File attachments |
-| `workspace_invitations` | Invite flow |
-| `shares` | Public share links |
-| `labels` / `watchers` / `favorites` | Tagging, subscriptions, starred |
-| `kanban_tasks` / `kanban_columns` | Kanban board data |
-| `templates` | Page templates |
-| `workspace_ai_config` | OpenRouter API key (encrypted) |
-| `page_reads` | Last-read timestamp per (user, page) — drives unread badge |
+| Table                               | Purpose                                                    |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `workspaces`                        | Top-level tenant                                           |
+| `users`                             | Workspace-scoped users                                     |
+| `groups` / `group_users`            | Role grouping                                              |
+| `spaces`                            | Document spaces                                            |
+| `space_members`                     | User or group → space role                                 |
+| `pages`                             | Hierarchical docs (parent_id self-ref)                     |
+| `page_permissions`                  | Per-page user/group overrides                              |
+| `page_access`                       | Restriction flag per page                                  |
+| `page_history`                      | Full revision history                                      |
+| `comments`                          | Threaded page comments                                     |
+| `attachments`                       | File attachments                                           |
+| `workspace_invitations`             | Invite flow                                                |
+| `shares`                            | Public share links                                         |
+| `labels` / `watchers` / `favorites` | Tagging, subscriptions, starred                            |
+| `kanban_tasks` / `kanban_columns`   | Kanban board data                                          |
+| `templates`                         | Page templates                                             |
+| `workspace_ai_config`               | OpenRouter API key (encrypted)                             |
+| `page_reads`                        | Last-read timestamp per (user, page) — drives unread badge |
 
 New tables go in new migration files. Never alter existing migrations.
 
@@ -242,37 +245,37 @@ New tables go in new migration files. Never alter existing migrations.
 
 ### Work areas
 
-| Path | What it is |
-|---|---|
-| `core/auth/` | Login, registration, session |
-| `core/workspace/` | Workspace CRUD, user management |
-| `core/space/` | Space CRUD, member management |
-| `core/page/` | Page CRUD, tree, history |
-| `core/page/page-access/` | Permission enforcement |
-| `core/casl/` | CASL ability factories |
-| `core/user/` | User profile |
-| `core/group/` | Group management |
-| `core/comment/` | Comments |
-| `core/label/` | Labels |
-| `core/kanban/` | Kanban board |
-| `core/ai-chat/` | AI chat — OpenRouter BYOK streaming |
-| `core/notification/` | In-app notifications |
-| `core/template/` | Page templates |
-| `database/migrations/` | Schema migrations |
-| `database/repos/` | Data access layer |
+| Path                     | What it is                          |
+| ------------------------ | ----------------------------------- |
+| `core/auth/`             | Login, registration, session        |
+| `core/workspace/`        | Workspace CRUD, user management     |
+| `core/space/`            | Space CRUD, member management       |
+| `core/page/`             | Page CRUD, tree, history            |
+| `core/page/page-access/` | Permission enforcement              |
+| `core/casl/`             | CASL ability factories              |
+| `core/user/`             | User profile                        |
+| `core/group/`            | Group management                    |
+| `core/comment/`          | Comments                            |
+| `core/label/`            | Labels                              |
+| `core/kanban/`           | Kanban board                        |
+| `core/ai-chat/`          | AI chat — OpenRouter BYOK streaming |
+| `core/notification/`     | In-app notifications                |
+| `core/template/`         | Page templates                      |
+| `database/migrations/`   | Schema migrations                   |
+| `database/repos/`        | Data access layer                   |
 
 ### Black boxes (do not modify unless you must)
 
-| Path | Why hands-off |
-|---|---|
-| `collaboration/` | Hocuspocus engine — additive touches only |
-| `apps/editor-ext/` | TipTap extensions |
-| `apps/ee/` | Enterprise Edition — conditionally loaded |
-| `integrations/storage/` | Use `StorageService`, don't re-implement |
-| `integrations/mail/` | Use `MailModule`, don't touch internals |
-| `integrations/queue/` | Add new jobs/queues, don't change infra |
-| `integrations/export/` | HTML/Markdown/DOCX export — extend via `ExportService`; `docx-utils.ts` for DOCX preprocessing |
-| `integrations/import/` | MD/HTML/DOCX import — extend via `ImportService` |
+| Path                    | Why hands-off                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `collaboration/`        | Hocuspocus engine — additive touches only                                                      |
+| `apps/editor-ext/`      | TipTap extensions                                                                              |
+| `apps/ee/`              | Enterprise Edition — conditionally loaded                                                      |
+| `integrations/storage/` | Use `StorageService`, don't re-implement                                                       |
+| `integrations/mail/`    | Use `MailModule`, don't touch internals                                                        |
+| `integrations/queue/`   | Add new jobs/queues, don't change infra                                                        |
+| `integrations/export/`  | HTML/Markdown/DOCX export — extend via `ExportService`; `docx-utils.ts` for DOCX preprocessing |
+| `integrations/import/`  | MD/HTML/DOCX import — extend via `ImportService`                                               |
 
 ---
 
@@ -280,33 +283,34 @@ New tables go in new migration files. Never alter existing migrations.
 
 ### Work areas
 
-| Path | What it is |
-|---|---|
-| `features/auth/` | Login/signup UI |
-| `features/workspace/` | Workspace settings |
-| `features/space/` | Space listing, settings, members |
-| `features/page/` | Page tree, page view |
-| `features/user/` | User profile |
-| `features/group/` | Group management UI |
-| `features/home/` | Dashboard |
-| `features/page/kanban/` | Kanban board |
-| `features/ai-chat/` | AI chat panel + key settings |
-| `features/notification/` | Notification bell + popover |
-| `apps/client/src/ee/template/` | Page templates UI |
+| Path                           | What it is                       |
+| ------------------------------ | -------------------------------- |
+| `features/auth/`               | Login/signup UI                  |
+| `features/workspace/`          | Workspace settings               |
+| `features/space/`              | Space listing, settings, members |
+| `features/page/`               | Page tree, page view             |
+| `features/user/`               | User profile                     |
+| `features/group/`              | Group management UI              |
+| `features/home/`               | Dashboard                        |
+| `features/page/kanban/`        | Kanban board                     |
+| `features/ai-chat/`            | AI chat panel + key settings     |
+| `features/notification/`       | Notification bell + popover      |
+| `apps/client/src/ee/template/` | Page templates UI                |
 
 ### Black boxes
 
-| Path | Why hands-off |
-|---|---|
-| `features/editor/` | TipTap integration |
-| `features/transclusion/` | Page embedding |
-| `features/websocket/` | Real-time sync |
+| Path                     | Why hands-off      |
+| ------------------------ | ------------------ |
+| `features/editor/`       | TipTap integration |
+| `features/transclusion/` | Page embedding     |
+| `features/websocket/`    | Real-time sync     |
 
 ---
 
 ## Signup Behaviour
 
 Workspace creation (signup) is **always enabled** — no env var gate.
+
 - **Backend**: `SetupGuard` always returns `true` (non-cloud). `GET /api/auth/setup-config` always returns `{ allowSignup: true }`.
 - **Frontend**: Default landing (`/`) redirects to `/setup/register`. Login page has a "Sign up" link. Signup page has a "Sign in" link.
 - Invitations and login always work regardless.
@@ -316,48 +320,67 @@ Workspace creation (signup) is **always enabled** — no env var gate.
 ## Implemented Custom Features
 
 ### Space Invite Links (Guest Access)
+
 Shareable invite links for spaces. Backend: `core/space/services/space-invite-link.service.ts`, controller at `spaces/invite-links/*`, `space_invite_links` table (token, spaceRole, expiresAt, maxUses, useCount). Auth endpoints: `GET /auth/invite-link/:token` (public info), `POST /auth/invite-link/signup` (new guest account), `POST /auth/invite-link/join` (existing user). `spaceRole` is `reader | commenter | writer` — `commenter` (can read + comment, no Settings access) is the typical guest role; joining always adds the user to the workspace as `UserRole.GUEST` and to the space with the given role. "Space Settings" UI is hidden when `spaceAbility.cannot(Read, Settings)` — commenter has no Settings ability. Frontend: `SpaceInviteLinks` component in space settings, `InviteLinkPage` at `/invite/:token`.
 
 **Comment permission system:** `SpaceRole.COMMENTER` (commenter) added alongside reader/writer/admin. `SpaceCaslSubject.Comment` added; only admin/writer/commenter get `can(Create, Comment)` — readers cannot comment. `PagePermissionRole.COMMENTER` added for page-level overrides. Backend `validateCanComment` enforces: unrestricted pages → CASL `Create Comment` ability required; restricted pages → page-level role must be commenter or writer. `page.permissions.canComment` returned from both page info endpoints and used on frontend to gate: inline comment dialog (page-editor), comment sidebar panel (comment-list-with-tabs), reply editors, and `@mention`. The `Share` option in the page header is hidden for workspace guests (`user.role === 'guest'`).
 
 ### AI Chat (BYOK via OpenRouter)
+
 OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backend: `core/ai-chat/` — streaming chat, page content injection, auto-title. Frontend: slide-over panel with thread list + model selector; key UI in workspace settings. All AI routes through OpenRouter only — no direct Anthropic/OpenAI calls.
 
 ### Kanban Board Page
+
 `kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room; filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
 
+### Blog Publishing Platform (in progress)
+
+`blog` is a page type with per-post metadata in `blog_post_settings` and a per-space hostname at `spaces.settings.blog.domain`. The authenticated API lives in `core/blog/`: `GET`/`POST /blog/posts/:pageId/settings`, `POST /blog/posts/:pageId/publish`, and `POST /blog/posts/:pageId/unpublish`; publishing creates a regular `shares` row. Space administrators update the hostname through `PATCH /spaces/:spaceId/blog-settings`. The client exposes Blog Post creation, a post settings modal, and a Blog tab in space settings. Refer to `specs/BLOG_MASTER_SPEC.md` for the ordered implementation plan; public API and SSR routes are not implemented yet.
+
 ### In-App Notifications
+
 Bell icon with unread badge. Backend: `core/notification/` — BullMQ processor + WS delivery to `user-${userId}` channel. `watchers` table: `watcher.service.ts` handles watch/unwatch for pages and spaces.
 
 ### Page Templates
+
 `templates` table (workspace-scoped). `core/template/` — `TemplateController` with 6 POST endpoints (`/templates`, `/templates/info`, `/templates/create`, `/templates/update`, `/templates/delete`, `/templates/use`). UI: `apps/client/src/ee/template/`.
 
 ### HTML Artifact Block
+
 `htmlArtifact` TipTap node via `/html` slash command. `features/editor/extensions/html-artifact.ts`. Sandboxed `<iframe sandbox="allow-scripts">` (no `allow-same-origin`). Persists `html` + `height` attrs in Yjs — no DB table. Auto-sizes via `postMessage(scrollHeight)`. Resizable drag handle; double-click resets.
 
 ### In-Place AI Text Improvement
+
 `POST /ai/generate/stream` (SSE) and `POST /ai/generate` in `core/ai-chat/controllers/ai-generate.controller.ts`. DTO: `{ action, content, prompt? }`. No message persistence — pure one-shot transformation.
 
 ### Block Handle Context Menu
+
 `drag-handle.ts` dispatches `blockHandleClick` event on handle click. Component: `features/editor/components/block-menu/block-menu.tsx` — Turn into, Text/Background color, Duplicate, Copy link (headings), Ask AI, Delete. Wired via `addEventListener('blockHandleClick')` in `page-editor.tsx`.
 
 ### Comment Resolve + Realtime Toast
+
 `POST /comments/resolve` → `CommentService.resolve()` — sets `resolvedAt`/`resolvedById`, emits `commentResolved` WS event, queues notification. `use-query-subscription.ts` shows toast on `commentCreated` from other users (filtered via `queryClient.getQueryData(["currentUser"])`).
 
 ### Logo
+
 SVG at `apps/client/src/assets/logo-workion.svg`, imported in `auth-layout.tsx` as a JS module (Vite content-hashes it). To update: replace the SVG and redeploy.
 
 ### Sidebar Inline Page Rename — DONE
+
 `...` context menu on sidebar page items includes a "Rename" option (canEdit only). Clicking it replaces the page title `<span>` with an inline `<input>` pre-filled and auto-focused. Enter/blur → saves via existing `handleRename()` (skips API if unchanged or empty). Escape → reverts. Files: `space-tree-node-menu.tsx`, `space-tree-row.tsx`, `tree.module.css`.
 
 ### Unread Page Notification Badge — DONE
+
 Blue number badge on sidebar page items for pages with unread notifications directed at the current user. Clears when the user navigates to the page.
+
 - **DB**: new `page_reads` table (migration `20260607T000000-page-reads.ts`). `page_id` was already on `notifications`.
 - **Backend**: `PageReadsRepo` — `upsert`, `getUnreadCounts`, `getUnreadCount`. `NotificationService.create()` emits `pageUnreadCountChanged` WS event after inserting a page-scoped notification. Two new endpoints: `POST /pages/unread-counts` and `POST /pages/mark-read`.
 - **Frontend**: `pageUnreadCountsAtom` (Jotai). Initial fetch + WS subscription in `use-notification-socket.ts`. Badge in `SpaceTreeRow`. `useMarkPageRead` called in `PageContent` on page ID change.
 
 ### Toggle Heading 1 / 2 / 3 — DONE
+
 Collapsible headings (H1/H2/H3) where the heading text is the toggle trigger, similar to Notion's toggle headings.
+
 - **Extension files:** `packages/editor-ext/src/lib/toggle-heading/` — `ToggleHeading` (outer wrapper node, `data-type="toggleHeading"`, attrs: `level: 1|2|3`, `open: bool`), `ToggleHeadingTitle` (inline heading content, styled via CSS per level), `ToggleHeadingContent` (collapsible body, `block*`).
 - **Commands:** `setToggleHeading({ level })` (wraps current block; updates level if already in toggleHeading), `unsetToggleHeading()` (converts back to heading + body blocks), `toggleToggleHeading({ level })` (toggle/change level).
 - **Input rules:** `#> ` → Toggle H1, `##> ` → Toggle H2, `###> ` → Toggle H3.
@@ -370,9 +393,11 @@ Collapsible headings (H1/H2/H3) where the heading text is the toggle trigger, si
 - **`open` state is local only** — not synced across users (same as toggle block).
 
 ### DOCX Export & Import — DONE
+
 Single-page DOCX export and DOCX import via `mammoth`. No round-trip fidelity guarantee — DOCX is an exchange format.
+
 - **Dependencies added (server):** `html-to-docx`, `katex`, `mammoth`
-- **Export pipeline:** `pageJson → jsonToHtml() → preprocessHtmlForDocx() → html-to-docx → Buffer`. `preprocessHtmlForDocx` (cheerio-based, in `integrations/export/docx-utils.ts`) runs in order: inline attachment images as base64 data URIs from storage, convert math blocks/inline via KaTeX HTML, callout → styled blockquote, unwrap columns, unwrap attachment nodes to their inner `<a>`, strip unrenderable nodes (subpages, transclusion), strip data-* attrs.
+- **Export pipeline:** `pageJson → jsonToHtml() → preprocessHtmlForDocx() → html-to-docx → Buffer`. `preprocessHtmlForDocx` (cheerio-based, in `integrations/export/docx-utils.ts`) runs in order: inline attachment images as base64 data URIs from storage, convert math blocks/inline via KaTeX HTML, callout → styled blockquote, unwrap columns, unwrap attachment nodes to their inner `<a>`, strip unrenderable nodes (subpages, transclusion), strip data-\* attrs.
 - **`ExportFormat.Docx = 'docx'`** added to enum in `export-dto.ts` (backend) and `page.types.ts` (frontend). `ExportPageDto` and `ExportSharedPageDto` `@IsIn` validators include `'docx'`. `ExportSpaceDto` intentionally excludes docx (ZIP multi-page not supported).
 - **`exportPages()`**: docx always treated as single-page (never zipped). `exportPage()` return type widened to `string | Buffer | undefined`.
 - **Import**: `processDocx()` in `import.service.ts` replaced EE dynamic-require with direct `mammoth.convertToHtml({ buffer }, { includeDefaultStyleMap: true })` → `processHTML()`. Signature simplified to `(fileBuffer: Buffer)`. Pre-assigned `pageId` removed for DOCX (still present for PDF/EE).
@@ -439,9 +464,8 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Completed Integrations
 
-
-
 **Env vars (both local `.env` and VPS):**
+
 ```
 MAIL_DRIVER=smtp
 SMTP_HOST=smtp.resend.com
@@ -454,6 +478,7 @@ MAIL_FROM_NAME=Workion
 ```
 
 **To redeploy after env change (no rebuild):**
+
 ```bash
 docker compose -f docker-compose.prod.yml restart app
 ```

@@ -14,6 +14,7 @@ import {
   IconFileExport,
   IconHome,
   IconLayoutKanban,
+  IconArticle,
   IconPencil,
   IconPlus,
   IconSearch,
@@ -93,6 +94,10 @@ export function SpaceSidebar() {
     handleCreate(null, "excalidraw");
   }
 
+  function handleCreateBlogPost() {
+    handleCreate(null, "blog");
+  }
+
   return (
     <>
       <div className={classes.navbar}>
@@ -154,7 +159,10 @@ export function SpaceSidebar() {
               </div>
             </UnstyledButton>
 
-            {spaceAbility.can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings) && (
+            {spaceAbility.can(
+              SpaceCaslAction.Manage,
+              SpaceCaslSubject.Settings,
+            ) && (
               <UnstyledButton className={classes.menu} onClick={openSettings}>
                 <div className={classes.menuItemInner}>
                   <IconSettings
@@ -226,13 +234,28 @@ export function SpaceSidebar() {
                     </Menu.Target>
                   </Tooltip>
                   <Menu.Dropdown>
-                    <Menu.Item leftSection={<IconPlus size={14} />} onClick={handleCreatePage}>
+                    <Menu.Item
+                      leftSection={<IconPlus size={14} />}
+                      onClick={handleCreatePage}
+                    >
                       {t("Document")}
                     </Menu.Item>
-                    <Menu.Item leftSection={<IconLayoutKanban size={14} />} onClick={handleCreateKanban}>
+                    <Menu.Item
+                      leftSection={<IconLayoutKanban size={14} />}
+                      onClick={handleCreateKanban}
+                    >
                       {t("Kanban")}
                     </Menu.Item>
-                    <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleCreateExcalidraw}>
+                    <Menu.Item
+                      leftSection={<IconArticle size={14} />}
+                      onClick={handleCreateBlogPost}
+                    >
+                      {t("Blog Post")}
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconPencil size={14} />}
+                      onClick={handleCreateExcalidraw}
+                    >
                       {t("Board")}
                     </Menu.Item>
                   </Menu.Dropdown>

@@ -1,0 +1,171 @@
+import {
+  Button,
+  Divider,
+  Group,
+  Modal,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Textarea,
+} from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  useBlogPostSettingsQuery,
+  usePublishBlogPostMutation,
+  useSaveBlogPostSettingsMutation,
+  useUnpublishBlogPostMutation,
+} from "@/features/blog/queries/blog-query";
+import { useShareForPageQuery } from "@/features/share/queries/share-query";
+
+export function BlogSettingsModal({
+  pageId,
+  opened,
+  onClose,
+}: {
+  pageId: string;
+  opened: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { data: settings } = useBlogPostSettingsQuery(pageId);
+  const { data: share } = useShareForPageQuery(pageId);
+  const save = useSaveBlogPostSettingsMutation(pageId);
+  const publish = usePublishBlogPostMutation(pageId);
+  const unpublish = useUnpublishBlogPostMutation(pageId);
+  const form = useForm({
+    initialValues: {
+      slug: "",
+      metaTitle: "",
+      metaDescription: "",
+      ogImageAttachmentId: "",
+      canonicalUrl: "",
+      focusKeyword: "",
+      robotsIndex: true,
+      robotsFollow: true,
+    },
+  });
+
+  useEffect(() => {
+    if (settings)
+      form.setValues({
+        slug: settings.slug,
+        metaTitle: settings.metaTitle ?? "",
+        metaDescription: settings.metaDescription ?? "",
+        ogImageAttachmentId: settings.ogImageAttachmentId ?? "",
+        canonicalUrl: settings.canonicalUrl ?? "",
+        focusKeyword: settings.focusKeyword ?? "",
+        robotsIndex: settings.robotsIndex,
+        robotsFollow: settings.robotsFollow,
+      });
+  }, [settings]);
+
+  const saveSettings = async () => {
+    try {
+      await save.mutateAsync({
+        ...form.values,
+        ogImageAttachmentId: form.values.ogImageAttachmentId || undefined,
+      });
+      notifications.show({ message: t("Blog settings saved") });
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message:
+          error["response"]?.data?.message ?? t("Unable to save blog settings"),
+      });
+    }
+  };
+  const publishPost = async () => {
+    if (!form.values.slug.trim()) {
+      form.setFieldError("slug", t("Slug is required before publishing"));
+      return;
+    }
+    await saveSettings();
+    try {
+      await publish.mutateAsync(form.values.robotsIndex);
+      notifications.show({ message: t("Post published") });
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message:
+          error["response"]?.data?.message ?? t("Unable to publish post"),
+      });
+    }
+  };
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={t("Blog post settings")}
+      size="lg"
+    >
+      <Stack>
+        <TextInput label={t("Slug")} {...form.getInputProps("slug")} />
+        <TextInput
+          label={t("Meta title")}
+          {...form.getInputProps("metaTitle")}
+        />
+        <Textarea
+          label={t("Meta description")}
+          autosize
+          minRows={3}
+          {...form.getInputProps("metaDescription")}
+        />
+        <TextInput
+          label={t("OG image attachment ID")}
+          description={t("Choose an uploaded attachment ID")}
+          {...form.getInputProps("ogImageAttachmentId")}
+        />
+        <TextInput
+          label={t("Canonical URL")}
+          {...form.getInputProps("canonicalUrl")}
+        />
+        <TextInput
+          label={t("Focus keyword")}
+          {...form.getInputProps("focusKeyword")}
+        />
+        <Switch
+          label={t("Allow search indexing")}
+          {...form.getInputProps("robotsIndex", { type: "checkbox" })}
+        />
+        <Switch
+          label={t("Allow search engines to follow links")}
+          {...form.getInputProps("robotsFollow", { type: "checkbox" })}
+        />
+        <Divider />
+        <Group justify="space-between">
+          <Text size="sm" c={share ? "green" : "dimmed"}>
+            {share ? t("Published") : t("Draft")}
+          </Text>
+          <Group>
+            <Button
+              variant="default"
+              onClick={saveSettings}
+              loading={save.isPending}
+            >
+              {t("Save")}
+            </Button>
+            {share ? (
+              <Button
+                color="red"
+                variant="light"
+                onClick={() => unpublish.mutate()}
+                loading={unpublish.isPending}
+              >
+                {t("Unpublish")}
+              </Button>
+            ) : (
+              <Button onClick={publishPost} loading={publish.isPending}>
+                {t("Publish")}
+              </Button>
+            )}
+          </Group>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}

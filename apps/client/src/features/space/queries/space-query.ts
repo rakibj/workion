@@ -23,6 +23,7 @@ import {
   removeSpaceMember,
   createSpace,
   updateSpace,
+  updateSpaceBlogSettings,
   deleteSpace,
 } from "@/features/space/services/space-service.ts";
 import { notifications } from "@mantine/notifications";
@@ -139,6 +140,24 @@ export function useUpdateSpaceMutation() {
   });
 }
 
+export function useUpdateSpaceBlogSettingsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      spaceId,
+      domain,
+    }: {
+      spaceId: string;
+      domain: string | null;
+    }) => updateSpaceBlogSettings(spaceId, domain),
+    onSuccess: (space) => {
+      queryClient.setQueryData(["space", space.id], space);
+      queryClient.setQueryData(["space", space.slug], space);
+      queryClient.invalidateQueries({ queryKey: ["spaces"] });
+    },
+  });
+}
+
 export function useDeleteSpaceMutation() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
@@ -193,10 +212,7 @@ export function useDeleteSpaceMutation() {
   });
 }
 
-export function useSpaceMembersInfiniteQuery(
-  spaceId: string,
-  query?: string,
-) {
+export function useSpaceMembersInfiniteQuery(spaceId: string, query?: string) {
   return useInfiniteQuery({
     queryKey: ["spaceMembers", spaceId, query],
     queryFn: ({ pageParam }) =>

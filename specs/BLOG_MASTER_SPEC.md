@@ -5,6 +5,7 @@
 ## Goal
 
 Turn Workion (this Docmost fork) into a headless-capable blog backend:
+
 - Write posts in Workion using the existing editor (a new `blog` page type).
 - Publish a post (reuses the existing `shares` mechanism as the publish signal).
 - Serve it three ways: (a) a public JSON API for pulling into an external app (e.g. Next.js), (b) real server-rendered HTML on a custom domain mapped to a space (e.g. `rakibjahan.com/make-a-game`), (c) the same content at `workion.gameloops.io/blog/make-a-game` on the primary domain.
@@ -14,13 +15,13 @@ Full design rationale lives in conversation history; this doc only carries what'
 
 ## Progress Tracker
 
-| # | Spec | Status | Last session | Handover |
-|---|------|--------|--------------|----------|
-| 1 | Data model — blog page type + settings schema | Done | 2026-07-28 | Migration, repository, settings service, and unit tests added. |
-| 2 | Publish workflow + admin UI | Not started | — | Blocked on 1. |
-| 3 | Public Blog JSON API | Not started | — | Blocked on 1, 2. |
-| 4 | Custom-domain + `/blog/:slug` SSR pages | Not started | — | Blocked on 1, 2, 3. |
-| 5 | Sitemap, RSS, robots.txt, render caching | Not started | — | Blocked on 3, 4. |
+| #   | Spec                                          | Status      | Last session | Handover                                                                                                                                           |
+| --- | --------------------------------------------- | ----------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Data model — blog page type + settings schema | Done        | 2026-07-28   | Migration, repository, settings service, and unit tests added.                                                                                     |
+| 2   | Publish workflow + admin UI                   | In progress | 2026-07-28   | Authenticated settings, publish/unpublish, domain endpoint, and initial admin UI are implemented; attachment picker and automated coverage remain. |
+| 3   | Public Blog JSON API                          | Not started | —            | Blocked on 1, 2.                                                                                                                                   |
+| 4   | Custom-domain + `/blog/:slug` SSR pages       | Not started | —            | Blocked on 1, 2, 3.                                                                                                                                |
+| 5   | Sitemap, RSS, robots.txt, render caching      | Not started | —            | Blocked on 3, 4.                                                                                                                                   |
 
 ---
 
@@ -31,6 +32,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 **What it does:** Makes `type: 'blog'` a valid page type and adds storage for per-post SEO/publishing metadata and per-space custom-domain config.
 
 **Data model:**
+
 - `apps/server/src/core/page/services/page.service.ts:11` — `PageType` union: add `'blog'`. **No migration needed on `pages.type`** — it's a plain `varchar` with no DB check constraint (verified: every other type, including `'kanban'`, was added the same way).
 - `core/page/dto/create-page.dto.ts` — allow `type: 'blog'`.
 - New migration `database/migrations/<ts>-blog-post-settings.ts`, table `blog_post_settings`:
@@ -67,6 +69,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 **What it does:** Lets a user edit a blog post's SEO settings, publish/unpublish it (publish = create a `shares` row, same table used for regular page sharing), and set a space's blog domain.
 
 **Backend:**
+
 - `core/blog/blog.controller.ts` (authenticated, standard `@UseGuards(JwtAuthGuard)`, no `@Public()`):
   - `POST /blog/posts/:pageId/settings` — upsert `blog_post_settings`. Gate with `PageAccessService.validateCanEdit`.
   - `GET /blog/posts/:pageId/settings`
@@ -75,6 +78,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 - `PATCH /spaces/:spaceId/blog-settings` body `{ domain: string | null }` — basic hostname format validation only, no DNS/ownership verification (single-tenant self-hosted, only a space admin can set this on their own space — see architecture discussion, no squatting risk to guard against). Gate with space admin ability via existing CASL space factory.
 
 **Frontend:**
+
 - `apps/client/src/features/blog/` — new feature folder, mirrors `features/kanban/` structure.
 - Blog settings panel/drawer, shown when `page.type === 'blog'`: slug, meta title, meta description, OG image (reuse existing attachment upload/picker), robots index/follow toggles, focus keyword field, Publish/Unpublish button + status pill.
 - Space settings: new "Blog" tab next to the existing "Sharing" tab — domain input + save.
@@ -95,6 +99,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 **What it does:** Unauthenticated JSON endpoints for pulling published posts into an external app (Next.js, etc.) — the "bring your own frontend" path.
 
 **Backend:** new `@Public()` controller `core/blog/blog-public.controller.ts`, mounted at `/api/public/blog/*` (same `@Public()` decorator pattern already used on `shares` public routes):
+
 - `GET /api/public/blog/posts?domain=&spaceId=&page=&limit=` — resolve target space by `domain` (against `spaces.settings.blog.domain`) or explicit `spaceId` (fallback for local dev without DNS — require exactly one of the two, 400 if both or neither given). List pages where `type='blog'` AND a `shares` row exists (published), joined with `blog_post_settings`, ordered by `share.createdAt desc`, paginated via existing `PaginationOptions`.
 - `GET /api/public/blog/posts/:slug?domain=&spaceId=` — single post: title, slug, body via `jsonToHtml(page.content)` (existing export pipeline, don't reinvent), meta fields from `blog_post_settings`, author display name, `publishedAt` (= `share.createdAt`), `updatedAt`.
 - 404 (not 403 — don't leak existence) when: domain doesn't resolve to any space, slug not found, post not published, or `PagePermissionRepo.hasRestrictedAncestor` is true (same guard `ShareService` already applies).
@@ -114,10 +119,12 @@ Full design rationale lives in conversation history; this doc only carries what'
 **Depends on:** Spec 1, 2, 3 (reuses its data-fetch logic, different output).
 
 **What it does:** Real crawlable HTML — the SEO-critical piece. Two entry points, one rendering path:
+
 - A domain mapped via `spaces.settings.blog.domain` (e.g. `rakibjahan.com`) → root path is the blog (`/` = archive, `/:slug` = post).
 - The primary app domain → only `/blog` and `/blog/:slug` are intercepted; every other path falls through to the normal SPA (untouched).
 
 **Backend:** new `core/blog/blog-render.controller.ts`:
+
 - Resolves `req.headers.host` itself, duplicating the lookup rather than depending on `DomainMiddleware` — reuse the exact workaround already documented in `share-seo.controller.ts:30` (NestJS doesn't apply middleware to paths excluded from the global `/api` prefix, so this controller must sit outside that prefix and do its own host/workspace resolution).
 - Renders a small, dependency-free HTML document by hand (own inline CSS, no client JS bundle, no React) containing: `<title>`, canonical `<link>`, meta description, OG/Twitter tags, `<script type="application/ld+json">` (`BlogPosting`, author, `datePublished`, `dateModified`), and the body from `jsonToHtml()`.
 - Any path that isn't a recognized blog route falls through to the existing `sendIndex()` SPA-shell behavior — this must never regress normal app routing on the primary domain.
@@ -139,6 +146,7 @@ Full design rationale lives in conversation history; this doc only carries what'
 **What it does:** Rounds out the technical-SEO surface and keeps render cost off the hot path.
 
 **Backend** (same controller as Spec 4, or a sibling `blog-seo.controller.ts` if it gets crowded):
+
 - `GET /sitemap.xml` — all published, `robotsIndex:true` posts for the resolved domain/space, with `lastmod`.
 - `GET /robots.txt` — `Allow: /` plus `Sitemap: <resolved-url>/sitemap.xml`.
 - `GET /rss.xml` — latest N published posts, RSS 2.0.
