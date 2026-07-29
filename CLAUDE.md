@@ -492,6 +492,12 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 **Active spec:** [specs/BLOG_MASTER_SPEC.md](specs/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. The approved 2026-07-29 implementation batch completes Spec 2 and implements Specs 3–4 as one publish-to-render vertical slice; it tracks per-session scope and progress/handover in its own tracker table.
 
+**Proposed, not yet approved (2026-07-29):** three specs written from a list of reported issues/requests, each grounded in a research pass over the actual code (file:line references, root causes verified against source). Nothing in them should be implemented until the individual spec is approved — implement one at a time even within a document, per the methodology above.
+
+- [specs/KANBAN_IMPROVEMENTS_SPEC.md](specs/KANBAN_IMPROVEMENTS_SPEC.md) — 5 independent Kanban fixes: GIF image support (5MB cap), a redundant-WS-broadcast cleanup that's the likely root cause of non-instant card/column move sync, live cursor presence on the board, title/description autosave in the card modal, and a Mantine `ScrollArea` `type="hover"` fix for the missing scrollbar in the card detail view.
+- [specs/SPACE_LIST_CACHING_SPEC.md](specs/SPACE_LIST_CACHING_SPEC.md) — brings the space list in line with the `withCache`/`CacheKey` + invalidate-on-write pattern already used for user/space/workspace/page lookups; today it explicitly disables React Query's default caching (`refetchOnMount: true`) and has no server-side cache at all.
+- [specs/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md](specs/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md) — fixes "Turn into" being unreachable for blocks inside a toggle block/toggle heading. Not a schema bug (verified by direct repro) — the global drag-handle's hit-testing never registers toggle content nodes in `customNodes`, so the handle never appears over them.
+
 ---
 
 ## Completed Integrations
