@@ -41,9 +41,9 @@ This batch deliberately combines the parts of the blog platform that form one us
 | 4   | Custom-domain + `/blog/:slug` SSR pages       | Done        | 2026-07-29   | Custom-domain and primary-domain rendering added; unrelated primary-domain routes fall through to the SPA.                                         |
 | 5   | Sitemap, RSS, robots.txt, render caching      | Done        | 2026-07-29   | Domain-resolved sitemap, RSS, and robots routes added; post and sitemap output use versioned cache keys with focused coverage.                     |
 | 6   | Browser smoke testing + production domain verification | In progress | 2026-07-29 | Configurable custom-domain paths and focused route coverage are implemented; run the documented browser procedure after the local stack/DNS/Caddy are available. |
-| 7   | Public attachment access for blog images (body + OG)   | Proposed    | 2026-07-29 | Not started. Fixes a real bug affecting Spec 4's live SSR pages today, not just headless — recommend pulling this forward regardless of when 8/9 land. |
-| 8   | Full SEO/meta package on the public API                 | Proposed    | 2026-07-29 | Not started. Depends on 7 for `ogImageUrl`.                                                                                                          |
-| 9   | Selector-based sitemap/RSS/robots (no DNS/Caddy needed)  | Proposed    | 2026-07-29 | Not started. Depends on 5.                                                                                                                            |
+| 7   | Public attachment access for blog images (body + OG)   | Done        | 2026-07-29 | Shared public-content preparation now rewrites inline attachments, strips comments, and exposes signed OG-image URLs; SSR cache is shorter than token lifetime. |
+| 8   | Full SEO/meta package on the public API                 | Done        | 2026-07-29 | Public posts now include a ready-to-render meta package with canonical, robots, OG/Twitter values, and BlogPosting JSON-LD.                         |
+| 9   | Selector-based sitemap/RSS/robots (no DNS/Caddy needed) | Done        | 2026-07-29 | Public selector feed routes accept `domain` or `spaceId` plus optional `baseUrl`; focused tests and server build pass.                               |
 
 ---
 

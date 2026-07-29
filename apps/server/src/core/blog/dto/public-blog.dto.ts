@@ -1,5 +1,13 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class PublicBlogSelectorDto {
   @IsOptional()
@@ -25,4 +33,10 @@ export class ListPublicBlogPostsDto extends PublicBlogSelectorDto {
   @Min(1)
   @Max(100)
   limit = 20;
+}
+
+export class PublicBlogFeedDto extends PublicBlogSelectorDto {
+  @IsOptional()
+  @IsUrl({ require_tld: false, require_protocol: true })
+  baseUrl?: string;
 }

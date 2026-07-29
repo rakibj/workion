@@ -125,6 +125,7 @@ export class BlogPostSettingsRepo {
       .leftJoin('users', 'users.id', 'pages.creatorId')
       .select([
         'pages.id as pageId',
+        'pages.workspaceId',
         'pages.title',
         'pages.content',
         'pages.updatedAt',
@@ -140,7 +141,9 @@ export class BlogPostSettingsRepo {
         'shares.createdAt as publishedAt',
         'users.name as authorName',
       ])
-      .$if(Boolean(spaceId), (qb) => qb.where('blogPostSettings.spaceId', '=', spaceId))
+      .$if(Boolean(spaceId), (qb) =>
+        qb.where('blogPostSettings.spaceId', '=', spaceId),
+      )
       .where('pages.type', '=', 'blog')
       .where('pages.deletedAt', 'is', null)
       .where('shares.deletedAt', 'is', null);

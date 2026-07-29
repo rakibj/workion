@@ -10,17 +10,9 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { nanoIdGen } from '../../common/helpers';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { TokenService } from '../auth/services/token.service';
-import { jsonToNode } from '../../collaboration/collaboration.util';
-import {
-  getAttachmentIds,
-  getProsemirrorContent,
-  isAttachmentNode,
-  removeMarkTypeFromDoc,
-} from '../../common/helpers/prosemirror/utils';
-import { Node } from '@tiptap/pm/model';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
-import { updateAttachmentAttr } from './share.util';
+import { prepareContentForPublic } from '../../common/helpers/attachment-share.util';
 import { Page } from '@docmost/db/types/entity.types';
 import { validate as isValidUUID } from 'uuid';
 import { sql } from 'kysely';
@@ -47,8 +39,9 @@ export class ShareService {
       throw new NotFoundException('Share not found');
     }
 
-    const isRestricted =
-      await this.pagePermissionRepo.hasRestrictedAncestor(share.pageId);
+    const isRestricted = await this.pagePermissionRepo.hasRestrictedAncestor(
+      share.pageId,
+    );
     if (isRestricted) {
       throw new NotFoundException('Share not found');
     }
@@ -128,8 +121,9 @@ export class ShareService {
     }
 
     // Block access to restricted pages
-    const isRestricted =
-      await this.pagePermissionRepo.hasRestrictedAncestor(page.id);
+    const isRestricted = await this.pagePermissionRepo.hasRestrictedAncestor(
+      page.id,
+    );
     if (isRestricted) {
       throw new NotFoundException('Shared page not found');
     }
@@ -158,7 +152,9 @@ export class ShareService {
         files: Object.fromEntries(files.entries()),
       };
     } catch (err) {
-      this.logger.warn(`Failed to extract excalidraw content for page ${page.id}: ${err}`);
+      this.logger.warn(
+        `Failed to extract excalidraw content for page ${page.id}: ${err}`,
+      );
       return null;
     }
   }
@@ -397,7 +393,7 @@ export class ShareService {
           item.sourcePageId,
           workspaceId,
         );
-        return { ...item, content: doc?.toJSON() ?? item.content };
+        return { ...item, content: doc ?? item.content };
       }),
     );
 
@@ -448,7 +444,7 @@ export class ShareService {
       page.id,
       page.workspaceId,
     );
-    return doc?.toJSON() ?? page.content;
+    return doc ?? page.content;
   }
 
   /**
@@ -476,31 +472,12 @@ export class ShareService {
     content: unknown,
     attachmentOwnerPageId: string,
     workspaceId: string,
-  ): Promise<Node | null> {
-    const pmJson = getProsemirrorContent(content);
-    const attachmentIds = getAttachmentIds(pmJson);
-
-    const tokenMap = new Map<string, string>();
-    await Promise.all(
-      attachmentIds.map(async (attachmentId: string) => {
-        const token = await this.tokenService.generateAttachmentToken({
-          attachmentId,
-          pageId: attachmentOwnerPageId,
-          workspaceId,
-        });
-        tokenMap.set(attachmentId, token);
-      }),
+  ): Promise<any> {
+    return prepareContentForPublic(
+      content,
+      attachmentOwnerPageId,
+      workspaceId,
+      this.tokenService,
     );
-
-    const doc = jsonToNode(pmJson);
-    doc?.descendants((node: Node) => {
-      if (!isAttachmentNode(node.type.name)) return;
-      const token = tokenMap.get(node.attrs.attachmentId);
-      if (!token) return;
-      updateAttachmentAttr(node, 'src', token);
-      updateAttachmentAttr(node, 'url', token);
-    });
-
-    return doc ? removeMarkTypeFromDoc(doc, 'comment') : null;
   }
 }

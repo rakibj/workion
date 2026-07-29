@@ -88,4 +88,41 @@ describe('BlogSeoController', () => {
     expect(reply.code).toHaveBeenCalledWith(404);
     expect(blog.listAllPosts).not.toHaveBeenCalled();
   });
+
+  it('uses an explicit selector baseUrl for public feed output', async () => {
+    blog.resolveSpace.mockResolvedValue({
+      id: 'space-1',
+      settings: { blog: { basePath: '/ignored' } },
+    });
+    blog.listAllPosts.mockResolvedValue([
+      {
+        id: 'post-1',
+        slug: 'hello',
+        robotsIndex: true,
+        updatedAt: '2026-07-29T00:00:00.000Z',
+      },
+    ]);
+    const reply = { type: jest.fn().mockReturnThis(), send: jest.fn() };
+
+    await controller.publicSitemap(
+      { spaceId: 'space-1', baseUrl: 'https://yoursite.example/blog' },
+      reply as any,
+    );
+
+    expect(reply.send.mock.calls[0][0]).toContain(
+      'https://yoursite.example/blog/hello',
+    );
+  });
+
+  it('requires baseUrl for a selector when the blog has no domain', async () => {
+    blog.resolveSpace.mockResolvedValue({
+      id: 'space-1',
+      settings: { blog: {} },
+    });
+    const reply = { type: jest.fn().mockReturnThis(), send: jest.fn() };
+
+    await expect(
+      controller.publicSitemap({ spaceId: 'space-1' }, reply as any),
+    ).rejects.toThrow('baseUrl is required');
+  });
 });

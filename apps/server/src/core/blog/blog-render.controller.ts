@@ -8,6 +8,7 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { htmlEscape } from '../../common/helpers/html-escaper';
 import { withCache } from '../../common/helpers/with-cache';
 import { BlogPublicService } from './services/blog-public.service';
+import { blogMeta } from './blog-meta.util';
 
 @Controller()
 export class BlogRenderController {
@@ -33,16 +34,29 @@ export class BlogRenderController {
     const context = await this.resolveRequest(req);
     if (!context) return this.sendIndex(res);
     const rawPath = req.url.split('?')[0];
-    const path = segment !== undefined ? `/${segment}` : rawPath === '/__blog-root' ? '' : rawPath;
+    const path =
+      segment !== undefined
+        ? `/${segment}`
+        : rawPath === '/__blog-root'
+          ? ''
+          : rawPath;
 
     if (path === context.pathPrefix) {
       const data = context.primary
         ? await this.blogPublicService.listPrimaryPosts(1, 20)
         : await this.blogPublicService.listPosts(context.selector, 1, 20);
-      return res.type('text/html').send(this.renderArchive(data.items, context.origin, context.pathPrefix));
+      return res
+        .type('text/html')
+        .send(
+          this.renderArchive(data.items, context.origin, context.pathPrefix),
+        );
     }
 
-    if (!context.primary && context.pathPrefix === '' && segment !== undefined) {
+    if (
+      !context.primary &&
+      context.pathPrefix === '' &&
+      segment !== undefined
+    ) {
       return this.sendPost(decodeURIComponent(segment), context, res);
     }
 
@@ -65,7 +79,12 @@ export class BlogRenderController {
 
   private async sendPost(
     slug: string,
-    context: { selector: Record<string, unknown>; origin: string; primary: boolean; pathPrefix: string },
+    context: {
+      selector: Record<string, unknown>;
+      origin: string;
+      primary: boolean;
+      pathPrefix: string;
+    },
     res: FastifyReply,
   ) {
     const post = context.primary
@@ -74,7 +93,9 @@ export class BlogRenderController {
     const html = await withCache(
       this.cacheManager,
       `blog:render:${post.id}:${new Date(post.updatedAt).getTime()}:${context.origin}${context.pathPrefix}`,
-      60 * 60 * 1000,
+      // Attachment access tokens in public post HTML expire after one hour.
+      // Keep the cached document shorter so it never serves an expired token.
+      55 * 60 * 1000,
       async () => this.renderPost(post, context.origin, context.pathPrefix),
     );
     return res.type('text/html').send(html);
@@ -82,12 +103,19 @@ export class BlogRenderController {
 
   private async resolveRequest(req: FastifyRequest) {
     const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
-    const primaryHost = new URL(this.environmentService.getAppUrl()).hostname.toLowerCase();
+    const primaryHost = new URL(
+      this.environmentService.getAppUrl(),
+    ).hostname.toLowerCase();
     const isPrimary = host === primaryHost || !host;
 
     if (isPrimary) {
       if (!req.url.split('?')[0].startsWith('/blog')) return null;
-      return { selector: {}, origin: this.origin(req), primary: true, pathPrefix: '/blog' };
+      return {
+        selector: {},
+        origin: this.origin(req),
+        primary: true,
+        pathPrefix: '/blog',
+      };
     }
 
     try {
@@ -104,8 +132,9 @@ export class BlogRenderController {
   }
 
   private origin(req: FastifyRequest) {
-    const protocol = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]
-      ?? (this.environmentService.isHttps() ? 'https' : 'http');
+    const protocol =
+      (req.headers['x-forwarded-proto'] as string)?.split(',')[0] ??
+      (this.environmentService.isHttps() ? 'https' : 'http');
     return `${protocol}://${req.headers.host}`;
   }
 
@@ -116,7 +145,8 @@ export class BlogRenderController {
   private renderArchive(posts: any[], origin: string, pathPrefix: string) {
     const cards = posts
       .map(
-        (post) => `<article><h2><a href="${pathPrefix}/${encodeURIComponent(post.slug)}">${htmlEscape(post.title)}</a></h2><p>${htmlEscape(post.metaDescription ?? '')}</p></article>`,
+        (post) =>
+          `<article><h2><a href="${pathPrefix}/${encodeURIComponent(post.slug)}">${htmlEscape(post.title)}</a></h2><p>${htmlEscape(post.metaDescription ?? '')}</p></article>`,
       )
       .join('');
     return this.document({
@@ -128,23 +158,20 @@ export class BlogRenderController {
   }
 
   private renderPost(post: any, origin: string, pathPrefix: string) {
-    const title = post.metaTitle || post.title;
-    const canonical = post.canonicalUrl || `${origin}${pathPrefix}/${encodeURIComponent(post.slug)}`;
-    const structuredData = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: title,
-      author: { '@type': 'Person', name: post.author.name },
-      datePublished: new Date(post.publishedAt).toISOString(),
-      dateModified: new Date(post.updatedAt).toISOString(),
-      mainEntityOfPage: canonical,
-    }).replace(/</g, '\\u003c');
+    const meta = {
+      ...blogMeta(post, origin, pathPrefix),
+      ogImage: post.ogImageUrl ?? null,
+    };
+    const structuredData = JSON.stringify(meta.structuredData).replace(
+      /</g,
+      '\\u003c',
+    );
     return this.document({
-      title,
-      description: post.metaDescription,
-      canonical,
-      robots: `${post.robotsIndex ? 'index' : 'noindex'},${post.robotsFollow ? 'follow' : 'nofollow'}`,
-      ogImage: post.ogImageAttachmentId,
+      title: meta.title,
+      description: meta.description,
+      canonical: meta.canonical,
+      robots: meta.robots,
+      ogImage: meta.ogImage,
       structuredData,
       body: `<main><article><h1>${htmlEscape(post.title)}</h1>${post.html}</article></main>`,
     });
@@ -167,7 +194,14 @@ export class BlogRenderController {
   }
 
   private sendIndex(res: FastifyReply) {
-    const indexPath = join(__dirname, '..', '..', '..', '..', 'client/dist/index.html');
+    const indexPath = join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+      'client/dist/index.html',
+    );
     if (!fs.existsSync(indexPath)) return res.code(404).send();
     return res.type('text/html').send(fs.createReadStream(indexPath));
   }

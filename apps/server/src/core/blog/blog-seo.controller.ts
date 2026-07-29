@@ -1,11 +1,21 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Controller, Get, Inject, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Inject,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { Cache } from 'cache-manager';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { withCache } from '../../common/helpers/with-cache';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { BlogPublicService } from './services/blog-public.service';
+import { Public } from '../../common/decorators/public.decorator';
+import { PublicBlogFeedDto } from './dto/public-blog.dto';
 
 @Controller()
 export class BlogSeoController {
@@ -67,6 +77,55 @@ export class BlogSeoController {
       );
   }
 
+  @Public()
+  @SkipTransform()
+  @Get('public/blog/sitemap.xml')
+  async publicSitemap(
+    @Query() query: PublicBlogFeedDto,
+    @Res() res: FastifyReply,
+  ) {
+    const context = await this.resolveSelector(query);
+    const posts = await this.listPosts(context);
+    return res.type('application/xml; charset=utf-8').send(
+      this.sitemapXml(
+        posts.filter((post) => post.robotsIndex),
+        context.origin,
+        context.pathPrefix,
+      ),
+    );
+  }
+
+  @Public()
+  @SkipTransform()
+  @Get('public/blog/rss.xml')
+  async publicRss(@Query() query: PublicBlogFeedDto, @Res() res: FastifyReply) {
+    const context = await this.resolveSelector(query);
+    return res
+      .type('application/rss+xml; charset=utf-8')
+      .send(
+        this.rssXml(
+          await this.listPosts(context),
+          context.origin,
+          context.pathPrefix,
+        ),
+      );
+  }
+
+  @Public()
+  @SkipTransform()
+  @Get('public/blog/robots.txt')
+  async publicRobots(
+    @Query() query: PublicBlogFeedDto,
+    @Res() res: FastifyReply,
+  ) {
+    const context = await this.resolveSelector(query);
+    return res
+      .type('text/plain; charset=utf-8')
+      .send(
+        `User-agent: *\nAllow: /\nSitemap: ${context.origin}${context.pathPrefix}/sitemap.xml\n`,
+      );
+  }
+
   private async resolveRequest(req: FastifyRequest) {
     const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
     const primaryHost = new URL(
@@ -89,6 +148,28 @@ export class BlogSeoController {
       ? await this.blogPublicService.listAllPrimaryPosts()
       : await this.blogPublicService.listAllPosts({ spaceId: context.key });
     return result;
+  }
+
+  private async resolveSelector(query: PublicBlogFeedDto) {
+    const space = await this.blogPublicService.resolveSpace(query);
+    const configuredDomain = (space.settings as any)?.blog?.domain;
+    if (!query.baseUrl && !configuredDomain) {
+      throw new BadRequestException(
+        'baseUrl is required when this blog has no configured domain',
+      );
+    }
+    const target = query.baseUrl
+      ? new URL(query.baseUrl)
+      : new URL(`https://${configuredDomain}`);
+    const pathname = target.pathname.replace(/\/$/, '');
+    return {
+      primary: false,
+      key: space.id,
+      origin: target.origin,
+      pathPrefix: query.baseUrl
+        ? pathname
+        : (space.settings as any)?.blog?.basePath || '',
+    };
   }
 
   private origin(req: FastifyRequest) {
