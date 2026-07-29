@@ -1,7 +1,8 @@
-import { Button, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Stack, Text, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { ISpace } from "@/features/space/types/space.types";
 import { useUpdateSpaceBlogSettingsMutation } from "@/features/space/queries/space-query";
 
@@ -52,6 +53,17 @@ export default function SpaceBlogSettings({
         disabled={readOnly}
         {...form.getInputProps("basePath")}
       />
+      {form.values.basePath.trim() && !form.values.domain.trim() && (
+        <Alert
+          variant="light"
+          color="yellow"
+          icon={<IconAlertTriangle size={16} />}
+        >
+          {t(
+            "Blog path only takes effect once a blog domain is set above. Without a domain, posts in this space are served at the app's shared /blog path.",
+          )}
+        </Alert>
+      )}
       <Button
         w="fit-content"
         onClick={save}

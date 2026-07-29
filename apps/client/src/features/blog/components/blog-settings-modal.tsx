@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Button,
   Divider,
   FileButton,
@@ -12,8 +13,9 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { IconExternalLink } from "@tabler/icons-react";
 import {
   useBlogPostSettingsQuery,
   usePublishBlogPostMutation,
@@ -22,6 +24,9 @@ import {
 } from "@/features/blog/queries/blog-query";
 import { useShareForPageQuery } from "@/features/share/queries/share-query";
 import { uploadFile } from "@/features/page/services/page-service";
+import { useSpaceQuery } from "@/features/space/queries/space-query";
+import { getAppUrl, getBlogDomainOrigin } from "@/lib/config";
+import CopyTextButton from "@/components/common/copy";
 
 export function BlogSettingsModal({
   pageId,
@@ -35,6 +40,7 @@ export function BlogSettingsModal({
   const { t } = useTranslation();
   const { data: settings } = useBlogPostSettingsQuery(pageId);
   const { data: share } = useShareForPageQuery(pageId);
+  const { data: space } = useSpaceQuery(settings?.spaceId);
   const save = useSaveBlogPostSettingsMutation(pageId);
   const publish = usePublishBlogPostMutation(pageId);
   const unpublish = useUnpublishBlogPostMutation(pageId);
@@ -99,6 +105,16 @@ export function BlogSettingsModal({
       });
     }
   };
+  const liveLink = useMemo(() => {
+    if (!settings?.slug) return undefined;
+    const blogSettings = space?.settings?.blog;
+    if (blogSettings?.domain) {
+      const basePath = blogSettings.basePath || "";
+      return `${getBlogDomainOrigin(blogSettings.domain)}${basePath}/${settings.slug}`;
+    }
+    return `${getAppUrl()}/blog/${settings.slug}`;
+  }, [settings?.slug, space?.settings?.blog]);
+
   const publishPost = async () => {
     if (!form.values.slug.trim()) {
       form.setFieldError("slug", t("Slug is required before publishing"));
@@ -163,6 +179,27 @@ export function BlogSettingsModal({
           {...form.getInputProps("robotsFollow", { type: "checkbox" })}
         />
         <Divider />
+        {share && liveLink && (
+          <Group gap={4} wrap="nowrap">
+            <TextInput
+              variant="filled"
+              value={liveLink}
+              readOnly
+              rightSection={<CopyTextButton text={liveLink} />}
+              style={{ flex: 1 }}
+            />
+            <ActionIcon
+              component="a"
+              variant="default"
+              target="_blank"
+              rel="noopener noreferrer"
+              href={liveLink}
+              size="lg"
+            >
+              <IconExternalLink size={16} />
+            </ActionIcon>
+          </Group>
+        )}
         <Group justify="space-between">
           <Text size="sm" c={share ? "green" : "dimmed"}>
             {share ? t("Published") : t("Draft")}

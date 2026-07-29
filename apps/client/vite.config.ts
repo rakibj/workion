@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "process.env": {
         APP_URL,
+        SERVER_URL,
         FILE_UPLOAD_SIZE_LIMIT,
         FILE_IMPORT_SIZE_LIMIT,
         DRAWIO_URL,
@@ -66,6 +67,10 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         "/api": {
+          target: backendUrl,
+          changeOrigin: false,
+        },
+        "/blog": {
           target: backendUrl,
           changeOrigin: false,
         },

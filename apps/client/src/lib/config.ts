@@ -53,6 +53,25 @@ export function getAvatarUrl(
   return getBackendUrl() + `/attachments/img/${type}/` + encodeURI(avatarUrl);
 }
 
+// Custom blog domains are resolved by the NestJS server directly (via the
+// Host header), bypassing the Vite dev proxy entirely. In prod, Caddy
+// terminates TLS on 443 for the custom domain and forwards to the app, so a
+// bare https:// origin is correct. In dev there's no such reverse proxy for
+// arbitrary hostnames, so the browser must hit the backend's own host:port
+// (SERVER_URL) directly, over the same protocol it actually speaks (http).
+export function getBlogDomainOrigin(domain: string): string {
+  if (import.meta.env.DEV) {
+    const serverUrl = getConfigValue("SERVER_URL") || getAppUrl();
+    try {
+      const { protocol, port } = new URL(serverUrl);
+      return `${protocol}//${domain}${port ? `:${port}` : ""}`;
+    } catch {
+      return `http://${domain}`;
+    }
+  }
+  return `https://${domain}`;
+}
+
 export function getSpaceUrl(spaceSlug: string) {
   return "/s/" + spaceSlug;
 }
