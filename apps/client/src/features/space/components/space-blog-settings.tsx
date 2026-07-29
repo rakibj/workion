@@ -15,7 +15,7 @@ export default function SpaceBlogSettings({
   const { t } = useTranslation();
   const update = useUpdateSpaceBlogSettingsMutation();
   const form = useForm({
-    initialValues: { domain: space?.settings?.blog?.domain ?? "" },
+    initialValues: { domain: space?.settings?.blog?.domain ?? "", basePath: space?.settings?.blog?.basePath ?? "" },
   });
   const save = async () => {
     if (!space) return;
@@ -23,6 +23,7 @@ export default function SpaceBlogSettings({
       await update.mutateAsync({
         spaceId: space.id,
         domain: form.values.domain.trim() || null,
+        basePath: form.values.basePath.trim(),
       });
       notifications.show({ message: t("Blog settings saved") });
     } catch (error) {
@@ -43,6 +44,13 @@ export default function SpaceBlogSettings({
         placeholder="example.com"
         disabled={readOnly}
         {...form.getInputProps("domain")}
+      />
+      <TextInput
+        label={t("Blog path")}
+        description={t("Optional path prefix, for example /blogs. Leave blank to publish at the domain root.")}
+        placeholder="/blogs"
+        disabled={readOnly}
+        {...form.getInputProps("basePath")}
       />
       <Button
         w="fit-content"

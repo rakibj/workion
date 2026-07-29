@@ -1,6 +1,7 @@
 import {
   Button,
   Divider,
+  FileButton,
   Group,
   Modal,
   Stack,
@@ -20,6 +21,7 @@ import {
   useUnpublishBlogPostMutation,
 } from "@/features/blog/queries/blog-query";
 import { useShareForPageQuery } from "@/features/share/queries/share-query";
+import { uploadFile } from "@/features/page/services/page-service";
 
 export function BlogSettingsModal({
   pageId,
@@ -48,6 +50,25 @@ export function BlogSettingsModal({
       robotsFollow: true,
     },
   });
+
+  const uploadOgImage = async (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      form.setFieldError("ogImageAttachmentId", t("Choose an image file"));
+      return;
+    }
+    try {
+      const attachment = await uploadFile(file, pageId);
+      form.setFieldValue("ogImageAttachmentId", attachment.id);
+      form.clearFieldError("ogImageAttachmentId");
+      notifications.show({ message: t("OG image uploaded") });
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message: error["response"]?.data?.message ?? t("Unable to upload image"),
+      });
+    }
+  };
 
   useEffect(() => {
     if (settings)
@@ -117,8 +138,13 @@ export function BlogSettingsModal({
         />
         <TextInput
           label={t("OG image attachment ID")}
-          description={t("Choose an uploaded attachment ID")}
+          description={t("Upload an image or paste an existing attachment ID")}
           {...form.getInputProps("ogImageAttachmentId")}
+          rightSection={
+            <FileButton onChange={uploadOgImage} accept="image/*">
+              {(props) => <Button {...props} size="compact-xs">{t("Upload")}</Button>}
+            </FileButton>
+          }
         />
         <TextInput
           label={t("Canonical URL")}

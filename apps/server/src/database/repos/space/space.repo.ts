@@ -176,13 +176,12 @@ export class SpaceRepo {
 
   /**
    * Stores per-space blog configuration in `spaces.settings.blog`.
-   * Current shape: { domain?: string }.
+   * Current shape: { domain?: string, basePath?: string }.
    */
   async updateBlogSettings(
     spaceId: string,
     workspaceId: string,
-    prefKey: string,
-    prefValue: string | boolean,
+    settings: Record<string, string | boolean>,
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);
@@ -191,7 +190,7 @@ export class SpaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('blog', COALESCE(settings->'blog', '{}'::jsonb)
-          || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+          || ${sql.lit(JSON.stringify(settings))}::jsonb)`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)

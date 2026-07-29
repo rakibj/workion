@@ -146,10 +146,12 @@ export function useUpdateSpaceBlogSettingsMutation() {
     mutationFn: ({
       spaceId,
       domain,
+      basePath,
     }: {
       spaceId: string;
       domain: string | null;
-    }) => updateSpaceBlogSettings(spaceId, domain),
+      basePath?: string;
+    }) => updateSpaceBlogSettings(spaceId, domain, basePath),
     onSuccess: (space) => {
       queryClient.setQueryData(["space", space.id], space);
       queryClient.setQueryData(["space", space.slug], space);

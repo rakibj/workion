@@ -15,6 +15,7 @@ export interface ISpaceCommentsSettings {
 
 export interface ISpaceBlogSettings {
   domain?: string;
+  basePath?: string;
 }
 
 export interface ISpaceSettings {

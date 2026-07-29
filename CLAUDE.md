@@ -335,7 +335,7 @@ OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backen
 
 ### Blog Publishing Platform (in progress)
 
-`blog` is a page type with per-post metadata in `blog_post_settings` and a per-space hostname at `spaces.settings.blog.domain`. The authenticated API lives in `core/blog/`: `GET`/`POST /blog/posts/:pageId/settings`, `POST /blog/posts/:pageId/publish`, and `POST /blog/posts/:pageId/unpublish`; publishing creates a regular `shares` row. Space administrators update the hostname through `PATCH /spaces/:spaceId/blog-settings`. The client exposes Blog Post creation, a post settings modal, and a Blog tab in space settings. Refer to `specs/BLOG_MASTER_SPEC.md` for the ordered implementation plan; public API and SSR routes are not implemented yet.
+`blog` is a page type with per-post metadata in `blog_post_settings` and a per-space hostname at `spaces.settings.blog.domain`. The authenticated API lives in `core/blog/`: `GET`/`POST /blog/posts/:pageId/settings`, `POST /blog/posts/:pageId/publish`, and `POST /blog/posts/:pageId/unpublish`; publishing creates a regular `shares` row. Space administrators update the hostname through `PATCH /spaces/:spaceId/blog-settings`. The client exposes Blog Post creation, a post settings modal, and a Blog tab in space settings. Public JSON endpoints are at `/api/public/blog/posts`; custom domains and `/blog/:slug` render server-side. Domain-resolved `/sitemap.xml`, `/rss.xml`, and `/robots.txt` complete the technical-SEO routes. Refer to `specs/BLOG_MASTER_SPEC.md` for the implementation record.
 
 ### In-App Notifications
 
@@ -458,7 +458,7 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Pending Features (Approved Specs)
 
-**Active spec:** [specs/BLOG_MASTER_SPEC.md](specs/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Read it first when picking up this work; it tracks per-session scope and progress/handover in its own tracker table.
+**Active spec:** [specs/BLOG_MASTER_SPEC.md](specs/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. The approved 2026-07-29 implementation batch completes Spec 2 and implements Specs 3–4 as one publish-to-render vertical slice; it tracks per-session scope and progress/handover in its own tracker table.
 
 ---
 

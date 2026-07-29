@@ -13,15 +13,34 @@ Turn Workion (this Docmost fork) into a headless-capable blog backend:
 
 Full design rationale lives in conversation history; this doc only carries what's needed to implement.
 
+## Proposed implementation batch — Publish-to-render foundation
+
+**Status:** Done (2026-07-29).
+
+This batch deliberately combines the parts of the blog platform that form one usable publishing path, while keeping crawl-surface extras (sitemap, RSS, robots, and caching) for the next batch:
+
+1. **Finish Spec 2 — Publish workflow + admin UI.** Add the missing automated coverage for the authenticated workflow and finish the OG-image attachment selection in the existing settings modal. This establishes an editor-owned, permission-checked publish state.
+2. **Spec 3 — Public Blog JSON API.** Implement a single reusable public-read service which resolves a space by exactly one of `domain` or `spaceId`, returns published unrestricted posts only, and renders post content to HTML. The controller remains a thin JSON adapter.
+3. **Spec 4 — Custom-domain and `/blog/:slug` SSR.** Reuse that public-read service in a non-`/api` render controller. It handles custom-domain archive/post routes and primary-domain `/blog` routes, while every unrecognised route continues to the SPA shell.
+
+**Why these belong together:** they share the same definition of a publishable post (blog page + settings + share + no restricted ancestor), domain resolution, content rendering, and SEO metadata. Implementing them as one vertical slice avoids two competing public-read queries and makes the publishing UI immediately verifiable through both JSON and HTML outputs.
+
+**Explicit boundary:** Spec 5 stays separate. XML feed generation and cache behavior need their own content-type, invalidation, and cache-hit tests, so combining them would reduce the confidence of this batch.
+
+**Acceptance checks for the batch:** authenticated publish/unpublish remains permission-checked; the public list and detail API reject invalid selectors and hide drafts/restricted posts as 404; SSR emits escaped metadata, canonical/robots/JSON-LD tags, and never intercepts unrelated primary-domain SPA routes.
+
+**Completion:** Specs 2–4 provide the publishing, public JSON, and SSR path. Spec 5 adds domain-resolved sitemap, RSS, and robots routes, plus versioned cache keys for rendered posts and sitemaps. The server build and focused tests pass. Browser smoke testing and production-domain verification remain before release.
+
 ## Progress Tracker
 
 | #   | Spec                                          | Status      | Last session | Handover                                                                                                                                           |
 | --- | --------------------------------------------- | ----------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Data model — blog page type + settings schema | Done        | 2026-07-28   | Migration, repository, settings service, and unit tests added.                                                                                     |
-| 2   | Publish workflow + admin UI                   | In progress | 2026-07-28   | Authenticated settings, publish/unpublish, domain endpoint, and initial admin UI are implemented; attachment picker and automated coverage remain. |
-| 3   | Public Blog JSON API                          | Not started | —            | Blocked on 1, 2.                                                                                                                                   |
-| 4   | Custom-domain + `/blog/:slug` SSR pages       | Not started | —            | Blocked on 1, 2, 3.                                                                                                                                |
-| 5   | Sitemap, RSS, robots.txt, render caching      | Not started | —            | Blocked on 3, 4.                                                                                                                                   |
+| 2   | Publish workflow + admin UI                   | Done        | 2026-07-29   | Added an OG-image upload control to the settings modal; the authenticated workflow was already present.                                           |
+| 3   | Public Blog JSON API                          | Done        | 2026-07-29   | Public-read service and JSON endpoints added, with selector, visibility, and pagination coverage.                                                  |
+| 4   | Custom-domain + `/blog/:slug` SSR pages       | Done        | 2026-07-29   | Custom-domain and primary-domain rendering added; unrelated primary-domain routes fall through to the SPA.                                         |
+| 5   | Sitemap, RSS, robots.txt, render caching      | Done        | 2026-07-29   | Domain-resolved sitemap, RSS, and robots routes added; post and sitemap output use versioned cache keys with focused coverage.                     |
+| 6   | Browser smoke testing + production domain verification | In progress | 2026-07-29 | Configurable custom-domain paths and focused route coverage are implemented; run the documented browser procedure after the local stack/DNS/Caddy are available. |
 
 ---
 
@@ -157,3 +176,31 @@ Full design rationale lives in conversation history; this doc only carries what'
 **Definition of done:** `sitemap.xml` / `robots.txt` / `rss.xml` resolve correctly per domain; a second request for an unchanged post visibly hits cache (check via timing or a log line — no new metrics system for this).
 
 **Out of scope:** analytics, search-console submission, anything beyond these three files.
+
+---
+
+## Spec 6 — Browser smoke testing + customizable public URLs
+
+**Depends on:** Spec 1–5.
+
+**What it does:** Confirms the complete publishing path in a real browser and makes the public URL structure editor-configurable.
+
+- Blog post slugs remain editable in the Blog post settings modal; saving validates uniqueness within the space and updates the public URL immediately.
+- Space Blog settings support a custom hostname plus an optional one-segment base path, such as `rakibjahan.com` with `/blogs`, producing `https://rakibjahan.com/blogs/<slug>`. An empty path publishes at the hostname root.
+- Browser smoke tests must cover publishing, editing a slug, saving the hostname/path, primary-domain `/blog` routing, custom-domain archive/post routes, SPA fallback, metadata, sitemap, RSS, and robots.
+
+**Definition of done:** a browser test or documented manual run proves `rakibjahan.com/blogs/<editable-slug>` renders after DNS/Caddy setup, and changing the slug changes the rendered URL without exposing the old post.
+
+### Smoke-test procedure
+
+**Prerequisites:** start the local Docker stack, build the client and server, and map the configured custom hostname to the local app through a hosts-file entry or DNS. Create a blog post in a space with `domain = blog.local.test` and `basePath = /blogs`.
+
+1. In the authenticated app, create a **Blog Post**, save slug `first-post`, and publish it. Confirm the settings modal shows **Published**.
+2. Change the slug to `renamed-post`, save, then confirm the old custom-domain URL returns no post while `https://blog.local.test/blogs/renamed-post` renders the post.
+3. Confirm `https://blog.local.test/blogs` renders the archive and links to `/blogs/renamed-post`.
+4. Confirm the post source includes its title, canonical URL, robots directive, Open Graph/Twitter metadata, and `BlogPosting` JSON-LD.
+5. Confirm `https://blog.local.test/blogs/sitemap.xml`, `/blogs/rss.xml`, and `/blogs/robots.txt` return their expected XML/text content; a `robotsIndex: false` post must be absent from the sitemap.
+6. Confirm `https://<primary-host>/blog/renamed-post` renders the same post and `https://<primary-host>/an-unrelated-app-route` still receives the SPA shell.
+7. Clear the space Blog path, save, and confirm the archive/feed routes move to the custom-domain root (`/`, `/sitemap.xml`, `/rss.xml`, `/robots.txt`) while `/blogs/...` no longer exposes content.
+
+Record the hostname, post ID, and the result of each check in the release handover. Do not mark Spec 6 done until this procedure passes against the deployed DNS/Caddy configuration.

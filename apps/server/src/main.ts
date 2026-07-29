@@ -40,7 +40,22 @@ async function bootstrap() {
   app.useLogger(app.get(PinoLogger));
 
   app.setGlobalPrefix('api', {
-    exclude: ['robots.txt', 'share/:shareId/p/:pageSlug', 'mcp'],
+    exclude: [
+      'robots.txt',
+      'sitemap.xml',
+      'rss.xml',
+      'share/:shareId/p/:pageSlug',
+      'blog',
+      'blog/:slug',
+      ':basePath',
+      ':basePath/:slug',
+      ':basePath/sitemap.xml',
+      ':basePath/rss.xml',
+      ':basePath/robots.txt',
+      ':slug',
+      '',
+      'mcp',
+    ],
   });
 
   const reflector = app.get(Reflector);

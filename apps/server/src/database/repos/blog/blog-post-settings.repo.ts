@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
+import { sql } from 'kysely';
 import {
   BlogPostSettings,
   InsertableBlogPostSettings,
@@ -57,5 +58,89 @@ export class BlogPostSettingsRepo {
       )
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  async findSpaceByBlogDomain(domain: string) {
+    return this.db
+      .selectFrom('spaces')
+      .selectAll()
+      .where(sql`LOWER(settings->'blog'->>'domain')`, '=', domain.toLowerCase())
+      .executeTakeFirst();
+  }
+
+  async findSpaceById(spaceId: string) {
+    return this.db
+      .selectFrom('spaces')
+      .selectAll()
+      .where('id', '=', spaceId)
+      .executeTakeFirst();
+  }
+
+  async findPublishedBySlug(spaceId: string, slug: string) {
+    return this.basePublishedQuery(spaceId)
+      .where('blogPostSettings.slug', '=', slug)
+      .executeTakeFirst();
+  }
+
+  async findPublishedBySlugAnywhere(slug: string) {
+    return this.basePublishedQuery()
+      .where('blogPostSettings.slug', '=', slug)
+      .executeTakeFirst();
+  }
+
+  async listPublished(spaceId: string, limit: number, offset: number) {
+    return this.basePublishedQuery(spaceId)
+      .orderBy('shares.createdAt', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .execute();
+  }
+
+  async listPublishedAnywhere(limit: number, offset: number) {
+    return this.basePublishedQuery()
+      .orderBy('shares.createdAt', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .execute();
+  }
+
+  async listAllPublished(spaceId: string) {
+    return this.basePublishedQuery(spaceId)
+      .orderBy('shares.createdAt', 'desc')
+      .execute();
+  }
+
+  async listAllPublishedAnywhere() {
+    return this.basePublishedQuery()
+      .orderBy('shares.createdAt', 'desc')
+      .execute();
+  }
+
+  private basePublishedQuery(spaceId?: string) {
+    return this.db
+      .selectFrom('blogPostSettings')
+      .innerJoin('pages', 'pages.id', 'blogPostSettings.pageId')
+      .innerJoin('shares', 'shares.pageId', 'pages.id')
+      .leftJoin('users', 'users.id', 'pages.creatorId')
+      .select([
+        'pages.id as pageId',
+        'pages.title',
+        'pages.content',
+        'pages.updatedAt',
+        'blogPostSettings.slug',
+        'blogPostSettings.metaTitle',
+        'blogPostSettings.metaDescription',
+        'blogPostSettings.ogImageAttachmentId',
+        'blogPostSettings.canonicalUrl',
+        'blogPostSettings.robotsIndex',
+        'blogPostSettings.robotsFollow',
+        'blogPostSettings.focusKeyword',
+        'shares.createdAt as publishedAt',
+        'users.name as authorName',
+      ])
+      .$if(Boolean(spaceId), (qb) => qb.where('blogPostSettings.spaceId', '=', spaceId))
+      .where('pages.type', '=', 'blog')
+      .where('pages.deletedAt', 'is', null)
+      .where('shares.deletedAt', 'is', null);
   }
 }

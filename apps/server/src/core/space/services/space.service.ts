@@ -216,6 +216,7 @@ export class SpaceService {
     spaceId: string,
     workspaceId: string,
     domain: string | null,
+    basePath?: string,
   ): Promise<Space> {
     const space = await this.spaceRepo.findById(spaceId, workspaceId);
     if (!space) throw new NotFoundException('Space not found');
@@ -223,8 +224,7 @@ export class SpaceService {
     return this.spaceRepo.updateBlogSettings(
       spaceId,
       workspaceId,
-      'domain',
-      domain ?? '',
+      { domain: domain ?? '', basePath: basePath ?? '' },
     );
   }
 

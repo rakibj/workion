@@ -36,10 +36,12 @@ export async function updateSpace(data: Partial<ISpace>): Promise<ISpace> {
 export async function updateSpaceBlogSettings(
   spaceId: string,
   domain: string | null,
+  basePath?: string,
 ): Promise<ISpace> {
   const req = await api.patch<ISpace>(`/spaces/${spaceId}/blog-settings`, {
     spaceId,
     domain,
+    basePath,
   });
   return req.data;
 }

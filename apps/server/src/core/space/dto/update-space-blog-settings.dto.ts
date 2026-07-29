@@ -5,6 +5,7 @@ import {
   Matches,
   ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateSpaceBlogSettingsDto {
   @IsUUID()
@@ -18,4 +19,16 @@ export class UpdateSpaceBlogSettingsDto {
     { message: 'domain must be a valid hostname' },
   )
   domain: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === ''
+      ? undefined
+      : value?.trim(),
+  )
+  @IsString()
+  @Matches(/^\/[a-z0-9][a-z0-9-]*$/i, {
+    message: 'basePath must be one URL path segment beginning with /',
+  })
+  basePath?: string;
 }
