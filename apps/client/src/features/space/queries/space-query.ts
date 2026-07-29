@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import {
   IAddSpaceMember,
+  IBlogCustomFieldDef,
   IChangeSpaceMemberRole,
   IRemoveSpaceMember,
   ISpace,
@@ -147,11 +148,13 @@ export function useUpdateSpaceBlogSettingsMutation() {
       spaceId,
       domain,
       basePath,
+      customFields,
     }: {
       spaceId: string;
       domain: string | null;
       basePath?: string;
-    }) => updateSpaceBlogSettings(spaceId, domain, basePath),
+      customFields?: IBlogCustomFieldDef[];
+    }) => updateSpaceBlogSettings(spaceId, domain, basePath, customFields),
     onSuccess: (space) => {
       queryClient.setQueryData(["space", space.id], space);
       queryClient.setQueryData(["space", space.slug], space);

@@ -13,9 +13,18 @@ export interface ISpaceCommentsSettings {
   allowViewerComments?: boolean;
 }
 
+export type BlogCustomFieldType = "boolean" | "number" | "text";
+
+export interface IBlogCustomFieldDef {
+  key: string;
+  label: string;
+  type: BlogCustomFieldType;
+}
+
 export interface ISpaceBlogSettings {
   domain?: string;
   basePath?: string;
+  customFields?: IBlogCustomFieldDef[];
 }
 
 export interface ISpaceSettings {

@@ -1,7 +1,8 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.repo';
 import { BlogPostSettingsService } from './blog-post-settings.service';
+import { BlogCustomFieldType } from '../../space/dto/update-space-blog-settings.dto';
 
 describe('BlogPostSettingsService', () => {
   let service: BlogPostSettingsService;
@@ -14,6 +15,7 @@ describe('BlogPostSettingsService', () => {
     const repoMock: jest.Mocked<Partial<BlogPostSettingsRepo>> = {
       findBySlugInSpace: jest.fn(),
       upsert: jest.fn(),
+      findSpaceById: jest.fn(),
     };
 
     const module = await Test.createTestingModule({
@@ -69,5 +71,62 @@ describe('BlogPostSettingsService', () => {
     await service.upsert({ pageId, spaceId, title: 'Hello World' });
 
     expect(repo.findBySlugInSpace).toHaveBeenCalledWith(spaceId, 'hello-world');
+  });
+
+  describe('customFields validation', () => {
+    beforeEach(() => {
+      repo.findBySlugInSpace.mockResolvedValue(undefined);
+      repo.upsert.mockResolvedValue({ pageId, spaceId, slug: 'hello-world' } as any);
+      repo.findSpaceById.mockResolvedValue({
+        id: spaceId,
+        settings: {
+          blog: {
+            customFields: [
+              { key: 'isFeatured', label: 'Featured', type: BlogCustomFieldType.BOOLEAN },
+              { key: 'priority', label: 'Priority', type: BlogCustomFieldType.NUMBER },
+            ],
+          },
+        },
+      } as any);
+    });
+
+    it('rejects a custom field key that is not in the space schema', async () => {
+      await expect(
+        service.upsert({
+          pageId,
+          spaceId,
+          title: 'Hello World',
+          customFields: { notInSchema: true },
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(repo.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a value whose type does not match the schema', async () => {
+      await expect(
+        service.upsert({
+          pageId,
+          spaceId,
+          title: 'Hello World',
+          customFields: { isFeatured: 'yes' as any },
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(repo.upsert).not.toHaveBeenCalled();
+    });
+
+    it('accepts values matching the space schema', async () => {
+      await service.upsert({
+        pageId,
+        spaceId,
+        title: 'Hello World',
+        customFields: { isFeatured: true, priority: 3 },
+      });
+
+      expect(repo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customFields: { isFeatured: true, priority: 3 },
+        }),
+      );
+    });
   });
 });

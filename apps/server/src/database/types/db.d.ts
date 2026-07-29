@@ -129,6 +129,7 @@ export interface Backlinks {
 export interface BlogPostSettings {
   canonicalUrl: string | null;
   createdAt: Generated<Timestamp>;
+  customFields: Generated<Json>;
   focusKeyword: string | null;
   metaDescription: string | null;
   metaTitle: string | null;

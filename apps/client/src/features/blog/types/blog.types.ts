@@ -9,4 +9,5 @@ export interface IBlogPostSettings {
   robotsIndex: boolean;
   robotsFollow: boolean;
   focusKeyword?: string | null;
+  customFields?: Record<string, boolean | number | string>;
 }

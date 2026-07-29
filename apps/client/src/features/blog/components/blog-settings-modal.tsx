@@ -5,6 +5,7 @@ import {
   FileButton,
   Group,
   Modal,
+  NumberInput,
   Stack,
   Switch,
   Text,
@@ -54,8 +55,13 @@ export function BlogSettingsModal({
       focusKeyword: "",
       robotsIndex: true,
       robotsFollow: true,
+      customFields: {} as Record<string, boolean | number | string>,
     },
   });
+
+  const customFieldDefs = space?.settings?.blog?.customFields ?? [];
+  const defaultForType = (type: "boolean" | "number" | "text") =>
+    type === "boolean" ? false : type === "number" ? 0 : "";
 
   const uploadOgImage = async (file: File | null) => {
     if (!file) return;
@@ -87,8 +93,14 @@ export function BlogSettingsModal({
         focusKeyword: settings.focusKeyword ?? "",
         robotsIndex: settings.robotsIndex,
         robotsFollow: settings.robotsFollow,
+        customFields: Object.fromEntries(
+          customFieldDefs.map((field) => [
+            field.key,
+            settings.customFields?.[field.key] ?? defaultForType(field.type),
+          ]),
+        ),
       });
-  }, [settings]);
+  }, [settings, space]);
 
   const saveSettings = async () => {
     try {
@@ -178,6 +190,34 @@ export function BlogSettingsModal({
           label={t("Allow search engines to follow links")}
           {...form.getInputProps("robotsFollow", { type: "checkbox" })}
         />
+        {customFieldDefs.length > 0 && (
+          <>
+            <Divider label={t("Custom fields")} labelPosition="left" />
+            {customFieldDefs.map((field) =>
+              field.type === "boolean" ? (
+                <Switch
+                  key={field.key}
+                  label={field.label}
+                  {...form.getInputProps(`customFields.${field.key}`, {
+                    type: "checkbox",
+                  })}
+                />
+              ) : field.type === "number" ? (
+                <NumberInput
+                  key={field.key}
+                  label={field.label}
+                  {...form.getInputProps(`customFields.${field.key}`)}
+                />
+              ) : (
+                <TextInput
+                  key={field.key}
+                  label={field.label}
+                  {...form.getInputProps(`customFields.${field.key}`)}
+                />
+              ),
+            )}
+          </>
+        )}
         <Divider />
         {share && liveLink && (
           <Group gap={4} wrap="nowrap">

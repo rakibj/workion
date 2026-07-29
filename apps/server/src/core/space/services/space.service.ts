@@ -10,11 +10,15 @@ import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { Space, User } from '@docmost/db/types/entity.types';
 import { UpdateSpaceDto } from '../dto/update-space.dto';
+import { BlogCustomFieldDefDto } from '../dto/update-space-blog-settings.dto';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
 import { SpaceMemberService } from './space-member.service';
 import { SpaceRole } from '../../../common/helpers/types/permission';
-import { QueueJob, QueueName } from 'src/integrations/queue/constants';
+import {
+  QueueJob,
+  QueueName,
+} from '../../../integrations/queue/constants';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
@@ -217,15 +221,25 @@ export class SpaceService {
     workspaceId: string,
     domain: string | null,
     basePath?: string,
+    customFields?: BlogCustomFieldDefDto[],
   ): Promise<Space> {
     const space = await this.spaceRepo.findById(spaceId, workspaceId);
     if (!space) throw new NotFoundException('Space not found');
 
-    return this.spaceRepo.updateBlogSettings(
-      spaceId,
-      workspaceId,
-      { domain: domain ?? '', basePath: basePath ?? '' },
-    );
+    const settings: Record<string, unknown> = {
+      domain: domain ?? '',
+      basePath: basePath ?? '',
+    };
+
+    if (customFields !== undefined) {
+      const keys = customFields.map((field) => field.key);
+      if (new Set(keys).size !== keys.length) {
+        throw new BadRequestException('customFields keys must be unique');
+      }
+      settings.customFields = customFields;
+    }
+
+    return this.spaceRepo.updateBlogSettings(spaceId, workspaceId, settings);
   }
 
   async getSpaceInfo(spaceId: string, workspaceId: string): Promise<Space> {

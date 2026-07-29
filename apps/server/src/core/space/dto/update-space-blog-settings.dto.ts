@@ -1,11 +1,40 @@
 import {
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+export enum BlogCustomFieldType {
+  BOOLEAN = 'boolean',
+  NUMBER = 'number',
+  TEXT = 'text',
+}
+
+export class BlogCustomFieldDefDto {
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^[a-zA-Z][a-zA-Z0-9_]*$/, {
+    message:
+      'key must start with a letter and contain only letters, numbers, and underscores',
+  })
+  key: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  label: string;
+
+  @IsEnum(BlogCustomFieldType)
+  type: BlogCustomFieldType;
+}
 
 export class UpdateSpaceBlogSettingsDto {
   @IsUUID()
@@ -31,4 +60,10 @@ export class UpdateSpaceBlogSettingsDto {
     message: 'basePath must be one URL path segment beginning with /',
   })
   basePath?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BlogCustomFieldDefDto)
+  customFields?: BlogCustomFieldDefDto[];
 }

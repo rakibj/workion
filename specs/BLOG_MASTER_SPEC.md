@@ -41,6 +41,9 @@ This batch deliberately combines the parts of the blog platform that form one us
 | 4   | Custom-domain + `/blog/:slug` SSR pages       | Done        | 2026-07-29   | Custom-domain and primary-domain rendering added; unrelated primary-domain routes fall through to the SPA.                                         |
 | 5   | Sitemap, RSS, robots.txt, render caching      | Done        | 2026-07-29   | Domain-resolved sitemap, RSS, and robots routes added; post and sitemap output use versioned cache keys with focused coverage.                     |
 | 6   | Browser smoke testing + production domain verification | In progress | 2026-07-29 | Configurable custom-domain paths and focused route coverage are implemented; run the documented browser procedure after the local stack/DNS/Caddy are available. |
+| 7   | Public attachment access for blog images (body + OG)   | Proposed    | 2026-07-29 | Not started. Fixes a real bug affecting Spec 4's live SSR pages today, not just headless — recommend pulling this forward regardless of when 8/9 land. |
+| 8   | Full SEO/meta package on the public API                 | Proposed    | 2026-07-29 | Not started. Depends on 7 for `ogImageUrl`.                                                                                                          |
+| 9   | Selector-based sitemap/RSS/robots (no DNS/Caddy needed)  | Proposed    | 2026-07-29 | Not started. Depends on 5.                                                                                                                            |
 
 ---
 
@@ -204,3 +207,71 @@ This batch deliberately combines the parts of the blog platform that form one us
 7. Clear the space Blog path, save, and confirm the archive/feed routes move to the custom-domain root (`/`, `/sitemap.xml`, `/rss.xml`, `/robots.txt`) while `/blogs/...` no longer exposes content.
 
 Record the hostname, post ID, and the result of each check in the release handover. Do not mark Spec 6 done until this procedure passes against the deployed DNS/Caddy configuration.
+
+---
+
+## Spec 7 — Public attachment access for blog images (body + OG)
+
+**Depends on:** Spec 3, 4.
+
+**What it does:** Fixes a gap not covered by Specs 1–6: attachment images referenced by a published blog post — both inline body images and the OG image — currently resolve to `/files/:fileId/:fileName`, which requires an authenticated session and page-view permission (`attachment.controller.ts:167`). `BlogPublicService.getPost()`/`listPosts()` call `jsonToHtml(post.content)` directly with no rewriting, and `serializePost()` returns `ogImageAttachmentId` as a bare UUID with no URL at all. Neither is fetchable by an anonymous reader, so images are currently broken both on Workion's own SSR pages (Spec 4) and for any headless consumer.
+
+**Backend:**
+
+- Reuse the existing `TokenService.generateAttachmentToken({ attachmentId, pageId, workspaceId })` + `/files/public/:fileId/:fileName?jwt=` route (already built for `shares`, in `share.service.ts:475` `prepareContentForShare`) — same threat model, same token shape, no new attachment-serving route needed.
+- `BlogPublicService`: before calling `jsonToHtml`, run `post.content` through the same content-preparation step `ShareService.prepareContentForShare` uses (rewrite attachment node `src`/`url` to the public token form, strip comment marks), scoped to the post's `pageId`. Extract that private helper into a shared utility both services call (e.g. `attachment-share.util.ts`) rather than writing a second implementation that can drift from the first.
+- `serializePost()` adds `ogImageUrl: string | null` — when `ogImageAttachmentId` is set and the attachment record still exists, mint the same public attachment token and build the absolute `/files/public/:id/:fileName?jwt=...` URL. Keep `ogImageAttachmentId` for backward compatibility; `ogImageUrl` is what consumers should render.
+- Tokens are minted per-request (short-lived, same as the existing share mechanism) — cached HTML/JSON responses (Spec 5's `with-cache.ts` wrapping) will embed whatever token was live at cache-write time, so cache TTL must stay shorter than the attachment token's expiry. Check `TokenService`'s attachment-token TTL against the blog cache TTLs when implementing.
+
+**Edge cases:** post body references a deleted attachment → renders whatever broken `src` results, no special handling (same as today, out of scope to fix). `ogImageAttachmentId` set but the attachment record is gone → `ogImageUrl` comes back `null`, not a token for a nonexistent file.
+
+**Tests:** unit test that `getPost`/`listPosts` output HTML with rewritten `src` attributes for a post containing an attachment node; unit test that `ogImageUrl` is `null` with no OG image set, `null` when the attachment record is missing, and a well-formed public URL otherwise.
+
+**Definition of done:** a blog post with an inline image and an OG image, fetched anonymously (no cookies/session) via `/api/public/blog/posts/:slug`, has an `html` field whose `<img>` tags resolve with a plain `curl`, and a non-null `ogImageUrl` that also resolves with a plain `curl`.
+
+**Out of scope:** image optimization/resizing, CDN caching of file bytes (already handled by `StorageService`), non-blog public content (page shares already work via `prepareContentForShare`).
+
+---
+
+## Spec 8 — Full SEO/meta package on the public API
+
+**Depends on:** Spec 3, 7.
+
+**What it does:** Bundles everything a headless frontend needs to render `<head>` correctly with zero SEO logic of its own — closes the gap between what `BlogRenderController` computes internally for its own pages (Spec 4) and what the public JSON API currently exposes (Spec 3), so both paths produce identical values from one shared computation instead of two hand-maintained ones.
+
+**Backend:**
+
+- Extract the fallback/composition logic currently inlined in `blog-render.controller.ts`'s `renderPost()`/`document()` (title fallback `metaTitle || title`, canonical fallback `canonicalUrl || origin+pathPrefix+slug`, robots string from two booleans, `BlogPosting` JSON-LD object) into a shared helper (e.g. `blog-meta.util.ts`) used by both `BlogRenderController` and `BlogPublicService.serializePost()`. This is a refactor for consistency, not new business logic — Spec 4's rendered output must not change.
+- `serializePost()` gains a `meta` object: `{ title, description, canonical, robots, ogTitle, ogDescription, ogImage, twitterCard, structuredData }`. `title`/`description` apply the existing `metaTitle || title` / `metaDescription` fallback. `canonical` is never null — falls back to the resolved space's `domain`+`basePath` (or the primary app domain + `/blog/`) + slug, the same formula `BlogRenderController` already uses. Requires threading the resolved `space` down into `serializePost` (not currently available there — `getPost`/`listPosts`/`getPrimaryPost`/`listPrimaryPosts` all resolve `space` first and can pass it through).
+- `structuredData` is the same `BlogPosting` JSON-LD object Spec 4 builds inline, returned as a plain object (not pre-stringified) — the client embeds it in their own `<script type="application/ld+json">{JSON.stringify(...)}</script>`.
+- `listPosts` may omit the heavier `meta.structuredData`/`meta.ogImage` fields if list-payload size becomes a concern — default to including them since list responses are already capped at `limit=100`.
+
+**Edge cases:** post's space has no `settings.blog.domain` configured (primary-domain-only post) → canonical falls back to `APP_URL` + `/blog/<slug>`, matching what `BlogRenderController` already does for primary-domain requests — this holds even for spaces that will only ever be consumed headlessly and never rendered by Workion.
+
+**Tests:** `meta.canonical` fallback under three cases (custom domain configured, no domain configured, explicit `canonicalUrl` set on the post overrides both); `meta.robots` string composition from the four boolean combinations; `meta.structuredData` shape.
+
+**Definition of done:** a client can take `response.meta` verbatim and populate a Next.js `<Head>` (or equivalent) — title, meta description, canonical link, robots meta, OG tags, Twitter card, and JSON-LD script — without computing any fallback or combining any fields themselves.
+
+**Out of scope:** rendering the client's page (that's on their site); AMP or other markup formats; multi-locale meta.
+
+---
+
+## Spec 9 — Selector-based sitemap/RSS/robots (no DNS/Caddy required)
+
+**Depends on:** Spec 5.
+
+**What it does:** Spec 5's `sitemap.xml`/`rss.xml`/`robots.txt` only resolve via the request's `Host` header matching `spaces.settings.blog.domain`, which requires DNS plus a Caddy site block pointed at Workion (see "Blog — Live Custom Domain Setup"). A pure headless setup — the client's own server renders everything and never proxies traffic to Workion — has no `Host` header Workion would recognize. This spec adds the same `?domain=`/`?spaceId=` selector Spec 3's JSON endpoints already use, so a client can fetch fully-formed feed output directly from Workion's API and serve it from their own `/sitemap.xml` etc. with zero XML/RSS templating of their own.
+
+**Backend:**
+
+- New `@Public()` routes alongside the existing domain-resolved ones (or the same handlers, made selector-aware): `GET /api/public/blog/sitemap.xml?domain=&spaceId=&baseUrl=`, `/rss.xml`, `/robots.txt`.
+- `baseUrl` — the absolute origin+path prefix used to build `<loc>`/`<link>` entries. Required when the resolved space has no `settings.blog.domain` configured; optional (and overriding) otherwise — Workion has no other way to know the client's real public URL structure when called this way, unlike the Host-header path, which infers it from the incoming request. Validate as a well-formed absolute URL.
+- Reuses Spec 5's existing sitemap/RSS/robots generation logic — a second entry point with an explicit selector + explicit base URL instead of implicit Host-header resolution, not a duplicate implementation.
+
+**Edge cases:** `baseUrl` omitted and no space domain configured → 400 with a clear message (can't build a sitemap without knowing the target site's URL). `domain` selector combined with `baseUrl` → `baseUrl` wins for URL construction; `domain` here only resolves which space's posts to include.
+
+**Tests:** sitemap output uses `baseUrl` instead of request host when provided; 400 when neither a configured domain nor an explicit `baseUrl` is available; existing Host-header-driven Spec 5 behavior unchanged (regression check).
+
+**Definition of done:** `curl 'https://workion.gameloops.io/api/public/blog/sitemap.xml?spaceId=<id>&baseUrl=https://yoursite.com/blog'` returns a ready-to-serve sitemap with `yoursite.com` URLs, and the client's own server can pipe that response verbatim at `yoursite.com/sitemap.xml` with no local generation code.
+
+**Out of scope:** the client's server actually doing the proxying (that's their infra, not Workion's); sitemap index files / multi-sitemap sharding (fine at current post-count scale).

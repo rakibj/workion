@@ -107,6 +107,7 @@ export class BlogPublicService {
       robotsIndex: post.robotsIndex,
       robotsFollow: post.robotsFollow,
       focusKeyword: post.focusKeyword,
+      customFields: post.customFields ?? {},
       author: { name: post.authorName ?? 'Unknown' },
       publishedAt: post.publishedAt,
       updatedAt: post.updatedAt,

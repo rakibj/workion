@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -46,4 +47,8 @@ export class UpsertBlogPostSettingsDto {
   @IsString()
   @MaxLength(255)
   focusKeyword?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  customFields?: Record<string, boolean | number | string>;
 }

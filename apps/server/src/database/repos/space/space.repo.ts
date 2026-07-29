@@ -176,12 +176,13 @@ export class SpaceRepo {
 
   /**
    * Stores per-space blog configuration in `spaces.settings.blog`.
-   * Current shape: { domain?: string, basePath?: string }.
+   * Current shape: { domain?: string, basePath?: string, customFields?: BlogCustomFieldDefDto[] }.
+   * Only keys present in `settings` are overwritten — omitted keys keep their stored value.
    */
   async updateBlogSettings(
     spaceId: string,
     workspaceId: string,
-    settings: Record<string, string | boolean>,
+    settings: Record<string, unknown>,
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);

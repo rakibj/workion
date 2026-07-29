@@ -53,6 +53,7 @@ export class BlogPostSettingsRepo {
           robotsIndex: settings.robotsIndex ?? true,
           robotsFollow: settings.robotsFollow ?? true,
           focusKeyword: settings.focusKeyword ?? null,
+          customFields: settings.customFields ?? {},
           updatedAt: new Date(),
         }),
       )
@@ -135,6 +136,7 @@ export class BlogPostSettingsRepo {
         'blogPostSettings.robotsIndex',
         'blogPostSettings.robotsFollow',
         'blogPostSettings.focusKeyword',
+        'blogPostSettings.customFields',
         'shares.createdAt as publishedAt',
         'users.name as authorName',
       ])

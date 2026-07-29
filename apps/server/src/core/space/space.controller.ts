@@ -183,6 +183,7 @@ export class SpaceController {
       workspace.id,
       dto.domain,
       dto.basePath,
+      dto.customFields,
     );
   }
 

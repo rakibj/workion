@@ -1,6 +1,7 @@
 import api from "@/lib/api-client";
 import {
   IAddSpaceMember,
+  IBlogCustomFieldDef,
   IChangeSpaceMemberRole,
   IExportSpaceParams,
   IRemoveSpaceMember,
@@ -37,11 +38,13 @@ export async function updateSpaceBlogSettings(
   spaceId: string,
   domain: string | null,
   basePath?: string,
+  customFields?: IBlogCustomFieldDef[],
 ): Promise<ISpace> {
   const req = await api.patch<ISpace>(`/spaces/${spaceId}/blog-settings`, {
     spaceId,
     domain,
     basePath,
+    customFields,
   });
   return req.data;
 }

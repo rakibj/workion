@@ -186,6 +186,32 @@ docker compose -f docker-compose.prod.yml build --no-cache && up -d
 
 ---
 
+## Blog — Live Custom Domain Setup
+
+How blog publishing behaves in production, and the runbook for pointing a client's domain at their space's blog. `BlogRenderController`/`BlogSeoController` resolve which space to serve purely from the request's `Host` header, looked up against `spaces.settings.blog.domain` in the DB at request time — there is no code path that needs redeploying per domain.
+
+**Primary domain (`workion.gameloops.io`) — zero setup.** Every space's published posts (a post needs a `shares` row, i.e. actually published, not just saved settings) are automatically reachable at `https://workion.gameloops.io/blog/:slug`, `/blog/sitemap.xml`, `/blog/rss.xml`. `basePath` is ignored here regardless of whether it's set — it only applies once a custom domain is configured for that space.
+
+**Custom domain per space — 4 manual steps, no app rebuild:**
+
+1. Space admin sets **Blog domain** (and optional **Blog path**, e.g. `/blogs`) under Space Settings → Blog. This only writes to `spaces.settings.blog`; it does nothing on its own until steps 2–3 are done.
+2. Point DNS for that domain at the VPS: A record → `157.173.120.4` (or CNAME to `workion.gameloops.io` for a subdomain).
+3. Add a site block to `Caddyfile` on the VPS and restart Caddy:
+   ```
+   client-domain.com {
+       reverse_proxy app:3000
+   }
+   ```
+   ```bash
+   docker compose -f docker-compose.prod.yml restart caddy
+   ```
+   DNS must already resolve to the VPS **before** this restart — Caddy's automatic HTTPS needs to complete an ACME HTTP-01 challenge against the domain to issue the Let's Encrypt cert. If DNS isn't propagated yet, Caddy retries in the background rather than failing hard, but the domain won't serve HTTPS until it succeeds.
+4. Once DNS + cert are live, the domain immediately serves that space's blog — `https://client-domain.com/<slug>` (or `/<basePath>/<slug>` if a path was set), plus `/sitemap.xml`, `/rss.xml`, `/robots.txt` at that domain's root or basePath.
+
+**Scaling caveat:** every new client domain currently means hand-editing `Caddyfile` and restarting the `caddy` container — fine for a handful of clients, doesn't scale to many. If/when that becomes a bottleneck, Caddy's `on_demand_tls` with an `ask` endpoint (hitting the app to check `spaces.settings.blog.domain` before issuing a cert automatically) would remove the manual Caddyfile edit per domain — not implemented, flagged here as the likely next step.
+
+---
+
 ## Permission System (Core — Do Not Break)
 
 ### Three-tier hierarchy
@@ -340,6 +366,8 @@ OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backen
 **Custom-domain routing (`BlogRenderController`) is resolved by the NestJS server directly via the request `Host` header** — it does not go through the Vite dev proxy (only `/api` and `/blog` are proxied in `vite.config.ts`). On the primary app domain (`APP_URL`'s hostname), every space's published posts are served at the shared `/blog/:slug` path regardless of any per-space `basePath` — `basePath` only applies once a custom domain is configured for that space.
 
 To test a custom blog domain locally: add a hosts-file entry for a dotted hostname (e.g. `blog.local` — the domain validator rejects single-label names like `localhost`) pointing at a loopback address, set it as the space's "Blog domain", and hit the backend directly on its own port — `http://blog.local:3000/...` (or with `basePath`, `http://blog.local:3000/<basePath>/<slug>`) — not through the Vite dev server on 5173. The client's `getBlogDomainOrigin()` (`lib/config.ts`) builds this automatically for the live-link display in the settings modal, using `SERVER_URL` (now exposed to the client bundle via `vite.config.ts`'s `define`) in dev and a bare `https://` origin in prod (Caddy terminates TLS there). In prod, a new custom domain also needs a DNS record pointing at the VPS and a new Caddyfile site block reverse-proxying to `app:3000` — no automation for that yet.
+
+**Blog post custom fields.** Space admins define an arbitrary metadata schema at `spaces.settings.blog.customFields` (`{ key, label, type: 'boolean'|'number'|'text' }[]`, edited in the "Custom fields" section of `space-blog-settings.tsx`, unique keys enforced in `SpaceService.updateBlogSettings`). Per-post values live in the new `blog_post_settings.custom_fields` JSONB column (migration `20260729T000000-blog-post-custom-fields.ts`), edited in `blog-settings-modal.tsx` via inputs generated from the space's schema. `BlogPostSettingsService.upsert()` strictly validates incoming `customFields` against the space's schema (unknown key or type mismatch → 400) before persisting. `BlogPublicService.serializePost()` always includes `customFields` in both list and single-post responses at `/api/public/blog/posts`, so consumers can pull fields like `isFeatured`/`priority` straight from the public JSON API and filter/sort client-side — there is no server-side filter/sort query param for this in v1. Removing or renaming a schema field does not scrub already-stored post values (they just stop rendering in the settings modal).
 
 ### In-App Notifications
 
