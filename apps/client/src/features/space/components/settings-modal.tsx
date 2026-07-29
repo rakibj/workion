@@ -40,7 +40,7 @@ export default function SpaceSettingsModal({
         padding="xl"
         yOffset="10vh"
         xOffset={0}
-        mah={400}
+        mah="90vh"
       >
         <Modal.Overlay />
         <Modal.Content style={{ overflow: "hidden" }}>
@@ -134,13 +134,17 @@ export default function SpaceSettingsModal({
                 </Tabs.Panel>
 
                 <Tabs.Panel value="blog">
-                  <SpaceBlogSettings
-                    space={space}
-                    readOnly={spaceAbility.cannot(
-                      SpaceCaslAction.Manage,
-                      SpaceCaslSubject.Settings,
-                    )}
-                  />
+                  <ScrollArea h={580} scrollbarSize={5} pr={8}>
+                    <div style={{ paddingBottom: "100px" }}>
+                      <SpaceBlogSettings
+                        space={space}
+                        readOnly={spaceAbility.cannot(
+                          SpaceCaslAction.Manage,
+                          SpaceCaslSubject.Settings,
+                        )}
+                      />
+                    </div>
+                  </ScrollArea>
                 </Tabs.Panel>
 
                 <Tabs.Panel value="invite-links">

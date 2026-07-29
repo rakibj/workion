@@ -168,6 +168,8 @@ export function BlogSettingsModal({
           label={t("OG image attachment ID")}
           description={t("Upload an image or paste an existing attachment ID")}
           {...form.getInputProps("ogImageAttachmentId")}
+          rightSectionWidth={72}
+          rightSectionPointerEvents="all"
           rightSection={
             <FileButton onChange={uploadOgImage} accept="image/*">
               {(props) => <Button {...props} size="compact-xs">{t("Upload")}</Button>}

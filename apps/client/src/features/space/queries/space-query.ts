@@ -156,8 +156,25 @@ export function useUpdateSpaceBlogSettingsMutation() {
       customFields?: IBlogCustomFieldDef[];
     }) => updateSpaceBlogSettings(spaceId, domain, basePath, customFields),
     onSuccess: (space) => {
-      queryClient.setQueryData(["space", space.id], space);
-      queryClient.setQueryData(["space", space.slug], space);
+      const mergeUpdatedSpace = (current?: ISpace) => {
+        if (!current) return space;
+
+        return {
+          ...current,
+          ...space,
+          settings: {
+            ...current.settings,
+            ...space.settings,
+            blog: {
+              ...current.settings?.blog,
+              ...space.settings?.blog,
+            },
+          },
+        };
+      };
+
+      queryClient.setQueryData<ISpace>(["space", space.id], mergeUpdatedSpace);
+      queryClient.setQueryData<ISpace>(["space", space.slug], mergeUpdatedSpace);
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
   });
