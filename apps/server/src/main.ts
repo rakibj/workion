@@ -26,6 +26,38 @@ async function bootstrap() {
         ignoreTrailingSlash: true,
         ignoreDuplicateSlashes: true,
       },
+      // NestJS's setGlobalPrefix `exclude` list matches by route *shape*, not by
+      // controller: a bare param pattern like ':slug' would also un-prefix any
+      // other single-segment route in the app (e.g. HealthController's '/health').
+      // So custom-domain blog requests (host != primary) are rewritten here, before
+      // Fastify's router runs, onto uniquely-named '__blog-*' sentinel paths that
+      // only BlogRenderController registers — that keeps the exclude patterns for
+      // those routes literal-prefixed and safe to match structurally.
+      rewriteUrl(req) {
+        const host = (req.headers.host ?? '')
+          .toString()
+          .toLowerCase()
+          .replace(/:\d+$/, '');
+        const primaryHost = new URL(
+          process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`,
+        ).hostname.toLowerCase();
+        if (!host || host === primaryHost) return req.url;
+
+        const [pathOnly, query] = req.url.split('?');
+        const suffix = query ? `?${query}` : '';
+        const segments = pathOnly.split('/').filter(Boolean);
+        const seoFile = (s: string) =>
+          s === 'sitemap.xml' || s === 'rss.xml' || s === 'robots.txt';
+
+        if (segments.length === 0) return `/__blog-root${suffix}`;
+        if (segments.length === 1 && !seoFile(segments[0])) {
+          return `/__blog-segment/${segments[0]}${suffix}`;
+        }
+        if (segments.length === 2 && !seoFile(segments[1])) {
+          return `/__blog-pair/${segments[0]}/${segments[1]}${suffix}`;
+        }
+        return req.url;
+      },
     }),
     {
       rawBody: true,
@@ -47,13 +79,15 @@ async function bootstrap() {
       'share/:shareId/p/:pageSlug',
       'blog',
       'blog/:slug',
-      ':basePath',
-      ':basePath/:slug',
+      'blog/sitemap.xml',
+      'blog/rss.xml',
+      'blog/robots.txt',
       ':basePath/sitemap.xml',
       ':basePath/rss.xml',
       ':basePath/robots.txt',
-      ':slug',
-      '',
+      '__blog-root',
+      '__blog-segment/:segment',
+      '__blog-pair/:basePath/:slug',
       'mcp',
     ],
   });

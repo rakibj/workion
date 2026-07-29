@@ -15,8 +15,13 @@ export class BlogSeoController {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
+  // Explicit 'blog/sitemap.xml' etc. static routes are required alongside the
+  // ':basePath/sitemap.xml' pattern: Fastify's router prefers the more specific
+  // static 'blog' branch it also uses for BlogRenderController's 'blog/:slug' post
+  // route, so without a literal match here 'sitemap.xml' would be captured as a
+  // post slug instead of reaching this controller.
   @SkipTransform()
-  @Get(['sitemap.xml', ':basePath/sitemap.xml'])
+  @Get(['sitemap.xml', 'blog/sitemap.xml', ':basePath/sitemap.xml'])
   async sitemap(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     const context = await this.resolveRequest(req);
     if (!this.matchesPath(req, context.pathPrefix, 'sitemap.xml'))
@@ -38,7 +43,7 @@ export class BlogSeoController {
   }
 
   @SkipTransform()
-  @Get(['rss.xml', ':basePath/rss.xml'])
+  @Get(['rss.xml', 'blog/rss.xml', ':basePath/rss.xml'])
   async rss(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     const context = await this.resolveRequest(req);
     if (!this.matchesPath(req, context.pathPrefix, 'rss.xml'))
@@ -50,7 +55,7 @@ export class BlogSeoController {
   }
 
   @SkipTransform()
-  @Get(['robots.txt', ':basePath/robots.txt'])
+  @Get(['robots.txt', 'blog/robots.txt', ':basePath/robots.txt'])
   async robots(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     const context = await this.resolveRequest(req);
     if (!this.matchesPath(req, context.pathPrefix, 'robots.txt'))

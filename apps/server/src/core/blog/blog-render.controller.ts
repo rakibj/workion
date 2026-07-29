@@ -17,24 +17,57 @@ export class BlogRenderController {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
-  @Get(['blog', '', ':basePath'])
-  async archive(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
+  // Custom-domain requests are rewritten in main.ts's Fastify `rewriteUrl` onto the
+  // '__blog-*' sentinel paths below before routing, since a bare single-segment
+  // param route would otherwise collide with unrelated single-segment routes
+  // elsewhere in the app (see the comment in main.ts). A single segment on a
+  // custom domain is ambiguous between "the configured basePath" (archive) and
+  // "a post slug at an empty basePath" — disambiguated here against the resolved
+  // space's basePath.
+  @Get(['blog', '__blog-root', '__blog-segment/:segment'])
+  async archive(
+    @Param('segment') segment: string | undefined,
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
+  ) {
     const context = await this.resolveRequest(req);
     if (!context) return this.sendIndex(res);
-    const path = req.url.split('?')[0].replace(/\/$/, '') || '/';
-    if (path !== context.pathPrefix && !(context.pathPrefix === '' && path === '/')) return this.sendIndex(res);
-    const data = context.primary
-      ? await this.blogPublicService.listPrimaryPosts(1, 20)
-      : await this.blogPublicService.listPosts(context.selector, 1, 20);
-    return res.type('text/html').send(this.renderArchive(data.items, context.origin, context.pathPrefix));
+    const rawPath = req.url.split('?')[0];
+    const path = segment !== undefined ? `/${segment}` : rawPath === '/__blog-root' ? '' : rawPath;
+
+    if (path === context.pathPrefix) {
+      const data = context.primary
+        ? await this.blogPublicService.listPrimaryPosts(1, 20)
+        : await this.blogPublicService.listPosts(context.selector, 1, 20);
+      return res.type('text/html').send(this.renderArchive(data.items, context.origin, context.pathPrefix));
+    }
+
+    if (!context.primary && context.pathPrefix === '' && segment !== undefined) {
+      return this.sendPost(decodeURIComponent(segment), context, res);
+    }
+
+    return this.sendIndex(res);
   }
 
-  @Get(['blog/:slug', ':slug', ':basePath/:slug'])
-  async post(@Param('slug') slug: string, @Req() req: FastifyRequest, @Res() res: FastifyReply) {
+  @Get(['blog/:slug', '__blog-pair/:basePath/:slug'])
+  async post(
+    @Param('slug') slug: string,
+    @Param('basePath') basePath: string | undefined,
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
+  ) {
     const context = await this.resolveRequest(req);
     if (!context) return this.sendIndex(res);
-    const path = req.url.split('?')[0].replace(/\/$/, '');
-    if (path !== `${context.pathPrefix}/${encodeURIComponent(slug)}`) return this.sendIndex(res);
+    const requestedPrefix = context.primary ? '/blog' : `/${basePath}`;
+    if (requestedPrefix !== context.pathPrefix) return this.sendIndex(res);
+    return this.sendPost(slug, context, res);
+  }
+
+  private async sendPost(
+    slug: string,
+    context: { selector: Record<string, unknown>; origin: string; primary: boolean; pathPrefix: string },
+    res: FastifyReply,
+  ) {
     const post = context.primary
       ? await this.blogPublicService.getPrimaryPost(slug)
       : await this.blogPublicService.getPost(context.selector, slug);

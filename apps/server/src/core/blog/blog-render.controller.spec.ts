@@ -33,12 +33,14 @@ describe('BlogRenderController', () => {
       cache as any,
     );
     const render = jest.spyOn(controller as any, 'renderPost');
-    const request = { url: '/hello', headers: { host: 'blog.example' } } as any;
+    // A custom domain with no configured base path serves a post slug directly at
+    // '/<slug>' — routed through archive()'s single-segment disambiguation branch.
+    const request = { url: '/__blog-segment/hello', headers: { host: 'blog.example' } } as any;
     const firstReply = { type: jest.fn().mockReturnThis(), send: jest.fn() };
     const secondReply = { type: jest.fn().mockReturnThis(), send: jest.fn() };
 
-    await controller.post('hello', request, firstReply as any);
-    await controller.post('hello', request, secondReply as any);
+    await controller.archive('hello', request, firstReply as any);
+    await controller.archive('hello', request, secondReply as any);
 
     expect(render).toHaveBeenCalledTimes(1);
     expect(cache.set.mock.calls[0][0]).toContain('blog:render:post-1:');
@@ -80,9 +82,12 @@ describe('BlogRenderController', () => {
       .mockReturnValue('spa');
     const reply = { type: jest.fn().mockReturnThis(), send: jest.fn() };
 
+    // Requested base path segment ('other') doesn't match the space's configured
+    // basePath ('/blogs') — falls back to the SPA shell rather than the post.
     await controller.post(
       'hello',
-      { url: '/hello', headers: { host: 'blog.example' } } as any,
+      'other',
+      { url: '/__blog-pair/other/hello', headers: { host: 'blog.example' } } as any,
       reply as any,
     );
     expect(sendIndex).toHaveBeenCalled();
@@ -90,7 +95,8 @@ describe('BlogRenderController', () => {
 
     await controller.post(
       'hello',
-      { url: '/blogs/hello', headers: { host: 'blog.example' } } as any,
+      'blogs',
+      { url: '/__blog-pair/blogs/hello', headers: { host: 'blog.example' } } as any,
       reply as any,
     );
     expect(blog.getPost).toHaveBeenCalledWith({ spaceId: 'space-1' }, 'hello');
