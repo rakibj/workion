@@ -76,11 +76,17 @@ export function prepareContentForBlog(content: unknown): any {
 
   const rewriteAttr = (node: any, attr: 'src' | 'url') => {
     const attrVal = node.attrs?.[attr];
-    if (
-      attrVal &&
-      (attrVal.startsWith('/files') || attrVal.startsWith('/api/files'))
-    ) {
-      node.attrs[attr] = attrVal.replace('/files/', '/files/blog/');
+    // Content authored through the live editor stores '/api/files/{id}/{name}';
+    // imported/migrated content stores the bare '/files/{id}/{name}' (no /api).
+    // Normalize both to the '/api'-prefixed form explicitly rather than
+    // preserving whichever prefix the source happened to have — a naive
+    // replace('/files/', ...) silently drops the /api on the bare form,
+    // producing a URL that 404s (falls through to the app's SPA shell).
+    if (typeof attrVal === 'string') {
+      const match = attrVal.match(/^\/?(?:api\/)?files\/(.+)$/);
+      if (match) {
+        node.attrs[attr] = `/api/files/blog/${match[1]}`;
+      }
     }
   };
 

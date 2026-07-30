@@ -84,6 +84,43 @@ describe('BlogPublicService', () => {
     });
   });
 
+  it('adds the /api prefix for imported/migrated content that stores a bare /files/ src', async () => {
+    repo.findSpaceById.mockResolvedValue({
+      id: 'space',
+      workspaceId: 'workspace',
+      settings: {},
+    });
+    repo.findPublishedBySlug.mockResolvedValue({
+      pageId: 'page',
+      title: 'Migrated post',
+      slug: 'migrated-post',
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              attachmentId: '123e4567-e89b-12d3-a456-426614174000',
+              src: '/files/123e4567-e89b-12d3-a456-426614174000/image.png',
+            },
+          },
+        ],
+      },
+      robotsIndex: true,
+      robotsFollow: true,
+      publishedAt: '2026-07-29T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+      authorName: 'Author',
+    });
+    permissions.hasRestrictedAncestor.mockResolvedValue(false);
+
+    const post = await service.getPost({ spaceId: 'space' }, 'migrated-post');
+
+    expect(post.html).toContain(
+      'https://workion.example/api/files/blog/123e4567-e89b-12d3-a456-426614174000/image.png',
+    );
+  });
+
   it('requires exactly one public-space selector', async () => {
     await expect(service.resolveSpace({})).rejects.toBeInstanceOf(
       BadRequestException,
