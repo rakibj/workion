@@ -57,3 +57,43 @@ export async function prepareContentForPublic(
 
   return doc;
 }
+
+/**
+ * Prepares blog post content for public serving. Unlike prepareContentForPublic,
+ * attachment URLs are rewritten to the stable /files/blog/ route (access checked
+ * live against publish state) rather than a short-lived signed token, since blog
+ * HTML is expected to be cached by external consumers beyond a token's lifetime.
+ */
+export function prepareContentForBlog(content: unknown): any {
+  const doc = JSON.parse(
+    JSON.stringify(
+      content ?? {
+        type: 'doc',
+        content: [{ type: 'paragraph', attrs: { textAlign: 'left' } }],
+      },
+    ),
+  );
+
+  const rewriteAttr = (node: any, attr: 'src' | 'url') => {
+    const attrVal = node.attrs?.[attr];
+    if (
+      attrVal &&
+      (attrVal.startsWith('/files') || attrVal.startsWith('/api/files'))
+    ) {
+      node.attrs[attr] = attrVal.replace('/files/', '/files/blog/');
+    }
+  };
+
+  const rewrite = (node: any) => {
+    if (isAttachmentNode(node?.type)) {
+      rewriteAttr(node, 'src');
+      rewriteAttr(node, 'url');
+    }
+    if (Array.isArray(node?.marks))
+      node.marks = node.marks.filter((mark: any) => mark.type !== 'comment');
+    if (Array.isArray(node?.content)) node.content.forEach(rewrite);
+  };
+  rewrite(doc);
+
+  return doc;
+}

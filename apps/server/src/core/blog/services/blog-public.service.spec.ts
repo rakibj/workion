@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import { TokenService } from '../../auth/services/token.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { BlogPublicService } from './blog-public.service';
 
@@ -17,7 +16,6 @@ describe('BlogPublicService', () => {
   };
   const permissions = { hasRestrictedAncestor: jest.fn() };
   const attachments = { findById: jest.fn() };
-  const tokens = { generateAttachmentToken: jest.fn() };
   const environment = { getAppUrl: jest.fn() };
 
   beforeEach(async () => {
@@ -29,7 +27,6 @@ describe('BlogPublicService', () => {
         { provide: BlogPostSettingsRepo, useValue: repo },
         { provide: PagePermissionRepo, useValue: permissions },
         { provide: AttachmentRepo, useValue: attachments },
-        { provide: TokenService, useValue: tokens },
         { provide: EnvironmentService, useValue: environment },
       ],
     }).compile();
@@ -66,7 +63,6 @@ describe('BlogPublicService', () => {
       authorName: 'Author',
     });
     permissions.hasRestrictedAncestor.mockResolvedValue(false);
-    tokens.generateAttachmentToken.mockResolvedValue('signed-token');
     attachments.findById.mockResolvedValue({
       id: '123e4567-e89b-12d3-a456-426614174000',
       fileName: 'cover image.png',
@@ -76,10 +72,11 @@ describe('BlogPublicService', () => {
     const post = await service.getPost({ spaceId: 'space' }, 'hello');
 
     expect(post.html).toContain(
-      'https://workion.example/api/files/public/123e4567-e89b-12d3-a456-426614174000/image.png?jwt=signed-token',
+      'https://workion.example/api/files/blog/123e4567-e89b-12d3-a456-426614174000/image.png',
     );
+    expect(post.html).not.toContain('jwt=');
     expect(post.ogImageUrl).toBe(
-      'https://blog.example/api/files/public/123e4567-e89b-12d3-a456-426614174000/cover%20image.png?jwt=signed-token',
+      'https://blog.example/api/files/blog/123e4567-e89b-12d3-a456-426614174000/cover%20image.png',
     );
     expect(post.meta).toMatchObject({
       canonical: 'https://blog.example/news/hello',

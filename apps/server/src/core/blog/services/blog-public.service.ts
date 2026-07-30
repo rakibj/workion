@@ -7,9 +7,8 @@ import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { jsonToHtml } from '../../../collaboration/collaboration.util';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import { TokenService } from '../../auth/services/token.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
-import { prepareContentForPublic } from '../../../common/helpers/attachment-share.util';
+import { prepareContentForBlog } from '../../../common/helpers/attachment-share.util';
 import { blogMeta } from '../blog-meta.util';
 
 type Selector = { domain?: string; spaceId?: string };
@@ -20,7 +19,6 @@ export class BlogPublicService {
     private readonly blogPostSettingsRepo: BlogPostSettingsRepo,
     private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly attachmentRepo: AttachmentRepo,
-    private readonly tokenService: TokenService,
     private readonly environmentService: EnvironmentService,
   ) {}
 
@@ -134,12 +132,7 @@ export class BlogPublicService {
     );
     const ogImageUrl = await this.ogImageUrl(post, origin);
     const prepared = includeHtml
-      ? await prepareContentForPublic(
-          post.content,
-          post.pageId,
-          space?.workspaceId ?? post.workspaceId,
-          this.tokenService,
-        )
+      ? prepareContentForBlog(post.content)
       : null;
     return {
       id: post.pageId,
@@ -174,12 +167,7 @@ export class BlogPublicService {
       post.ogImageAttachmentId,
     );
     if (!attachment) return null;
-    const token = await this.tokenService.generateAttachmentToken({
-      attachmentId: attachment.id,
-      pageId: attachment.pageId,
-      workspaceId: attachment.workspaceId,
-    });
-    return `${origin}/api/files/public/${attachment.id}/${encodeURIComponent(attachment.fileName)}?jwt=${token}`;
+    return `${origin}/api/files/blog/${attachment.id}/${encodeURIComponent(attachment.fileName)}`;
   }
 
   private blogOrigin(space?: any) {
@@ -196,7 +184,7 @@ export class BlogPublicService {
   private absoluteAttachmentUrls(html: string) {
     const origin = this.environmentService.getAppUrl().replace(/\/$/, '');
     return html.replace(
-      /((?:src|href)=["'])(\/(?:api\/)?files\/public\/[^"']+)/g,
+      /((?:src|href)=["'])(\/(?:api\/)?files\/(?:public|blog)\/[^"']+)/g,
       `$1${origin}$2`,
     );
   }

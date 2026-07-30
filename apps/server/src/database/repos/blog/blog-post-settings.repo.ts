@@ -117,6 +117,13 @@ export class BlogPostSettingsRepo {
       .execute();
   }
 
+  async isPublished(pageId: string): Promise<boolean> {
+    const result = await this.basePublishedQuery()
+      .where('pages.id', '=', pageId)
+      .executeTakeFirst();
+    return !!result;
+  }
+
   private basePublishedQuery(spaceId?: string) {
     return this.db
       .selectFrom('blogPostSettings')

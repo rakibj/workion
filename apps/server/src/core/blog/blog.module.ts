@@ -7,10 +7,9 @@ import { BlogSeoController } from './blog-seo.controller';
 import { BlogPublicService } from './services/blog-public.service';
 import { PageAccessModule } from '../page/page-access/page-access.module';
 import { ShareModule } from '../share/share.module';
-import { TokenModule } from '../auth/token.module';
 
 @Module({
-  imports: [PageAccessModule, ShareModule, TokenModule],
+  imports: [PageAccessModule, ShareModule],
   providers: [BlogPostSettingsService, BlogPublicService],
   controllers: [BlogController, BlogPublicController, BlogRenderController, BlogSeoController],
   exports: [BlogPostSettingsService, BlogPublicService],

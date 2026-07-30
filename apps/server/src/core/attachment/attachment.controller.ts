@@ -55,6 +55,8 @@ import { JwtAttachmentPayload, JwtType } from '../auth/dto/jwt-payload';
 import * as path from 'path';
 import { AttachmentInfoDto, RemoveIconDto } from './dto/attachment.dto';
 import { PageAccessService } from '../page/page-access/page-access.service';
+import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.repo';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
   AUDIT_SERVICE,
@@ -75,6 +77,8 @@ export class AttachmentController {
     private readonly environmentService: EnvironmentService,
     private readonly tokenService: TokenService,
     private readonly pageAccessService: PageAccessService,
+    private readonly blogPostSettingsRepo: BlogPostSettingsRepo,
+    private readonly pagePermissionRepo: PagePermissionRepo,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -206,7 +210,12 @@ export class AttachmentController {
     }
 
     try {
-      return await this.sendFileResponse(req, res, attachment, 'private');
+      return await this.sendFileResponse(
+        req,
+        res,
+        attachment,
+        'private, max-age=3600',
+      );
     } catch (err) {
       this.logger.error(err);
       throw new NotFoundException('File not found');
@@ -254,7 +263,54 @@ export class AttachmentController {
     }
 
     try {
-      return await this.sendFileResponse(req, res, attachment, 'public');
+      return await this.sendFileResponse(
+        req,
+        res,
+        attachment,
+        'public, max-age=3600',
+      );
+    } catch (err) {
+      this.logger.error(err);
+      throw new NotFoundException('File not found');
+    }
+  }
+
+  // Stable, token-free attachment URL for published blog posts. Unlike
+  // getPublicFile's JWT, which is meant for live per-request rendering,
+  // this route is designed to be safe for external consumers to cache
+  // indefinitely — access is re-checked against live publish state on
+  // every request instead of expiring on a fixed clock.
+  @Get('/files/blog/:fileId/:fileName')
+  async getBlogFile(
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
+    @Param('fileId') fileId: string,
+    @Param('fileName') fileName?: string,
+  ) {
+    if (!isValidUUID(fileId)) {
+      throw new NotFoundException('File not found');
+    }
+
+    const attachment = await this.attachmentRepo.findById(fileId);
+    if (!attachment || !attachment.pageId) {
+      throw new NotFoundException('File not found');
+    }
+
+    const [isPublished, hasRestrictedAncestor] = await Promise.all([
+      this.blogPostSettingsRepo.isPublished(attachment.pageId),
+      this.pagePermissionRepo.hasRestrictedAncestor(attachment.pageId),
+    ]);
+    if (!isPublished || hasRestrictedAncestor) {
+      throw new NotFoundException('File not found');
+    }
+
+    try {
+      return await this.sendFileResponse(
+        req,
+        res,
+        attachment,
+        'public, max-age=31536000, immutable',
+      );
     } catch (err) {
       this.logger.error(err);
       throw new NotFoundException('File not found');
@@ -472,7 +528,7 @@ export class AttachmentController {
     req: FastifyRequest,
     res: FastifyReply,
     attachment: Attachment,
-    cacheScope: 'private' | 'public',
+    cacheControl: string,
   ) {
     const fileSize = Number(attachment.fileSize);
     const rangeHeader = req.headers.range;
@@ -514,7 +570,7 @@ export class AttachmentController {
           'Content-Type': attachment.mimeType,
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Content-Length': end - start + 1,
-          'Cache-Control': `${cacheScope}, max-age=3600`,
+          'Cache-Control': cacheControl,
         });
 
         return res.send(fileStream);
@@ -527,7 +583,7 @@ export class AttachmentController {
 
     res.headers({
       'Content-Type': attachment.mimeType,
-      'Cache-Control': `${cacheScope}, max-age=3600`,
+      'Cache-Control': cacheControl,
     });
 
     const isSvg = attachment.fileExt === '.svg';
