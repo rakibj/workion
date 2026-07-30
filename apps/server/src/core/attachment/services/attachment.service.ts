@@ -15,7 +15,11 @@ import {
 } from '../attachment.utils';
 import { v4 as uuid4, v7 as uuid7 } from 'uuid';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import { AttachmentType, validImageExtensions } from '../attachment.constants';
+import {
+  AttachmentType,
+  MAX_GIF_SIZE_BYTES,
+  validImageExtensions,
+} from '../attachment.constants';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { Attachment, User, Workspace } from '@docmost/db/types/entity.types';
 import { InjectKysely } from 'nestjs-kysely';
@@ -92,6 +96,14 @@ export class AttachmentService {
 
     // Update fileSize from the consumed stream
     preparedFile.fileSize = getBytesRead();
+
+    const isGif =
+      preparedFile.fileExtension === '.gif' ||
+      preparedFile.mimeType === 'image/gif';
+    if (isGif && preparedFile.fileSize > MAX_GIF_SIZE_BYTES) {
+      await this.deleteRedundantFile(filePath);
+      throw new BadRequestException('GIFs must be under 5MB');
+    }
 
     let attachment: Attachment = null;
     try {

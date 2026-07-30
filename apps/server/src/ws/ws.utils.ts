@@ -16,4 +16,5 @@ export const TREE_EVENTS = new Set([
   'moveTreeNode',
   'deleteTreeNode',
   'refetchRootTreeNodeEvent',
+  'kanbanCursorMoved',
 ]);

@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { getAvatarUrl } from "@/lib/config";
 import {
@@ -82,6 +83,10 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit";
 import type { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter";
 import { buildPageUrl } from "@/features/page/page.utils";
+import { useAtom, useAtomValue } from "jotai";
+import { userAtom } from "@/features/user/atoms/current-user-atom";
+import { kanbanCursorsAtom, type IKanbanCursor } from "../atoms/kanban-cursor-atom";
+import { randomElement, userColors } from "@/features/editor/extensions/utils";
 import classes from "./kanban-board-page.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -721,6 +726,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const [desc, setDesc] = useState(card?.description ?? "");
   const [memberSearch, setMemberSearch] = useState("");
   const [showAssigneeSearch, setShowAssigneeSearch] = useState(false);
+  const lastSavedTitleRef = useRef(card?.title ?? "");
 
   const updateCard = useUpdateCardMutation(pageId);
   const deleteCard = useDeleteCardMutation(pageId);
@@ -730,21 +736,61 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
 
   const { data: members = [] } = useKanbanAssignableMembersQuery(pageId);
 
+  const saveTitle = useCallback(
+    (cardId: string, value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      lastSavedTitleRef.current = trimmed;
+      updateCard.mutate({ cardId, title: trimmed });
+    },
+    [updateCard],
+  );
+  const debouncedSaveTitle = useDebouncedCallback(saveTitle, 800);
+
+  const saveDesc = useCallback(
+    (cardId: string, value: string) => {
+      updateCard.mutate({ cardId, description: value });
+    },
+    [updateCard],
+  );
+  const debouncedSaveDesc = useDebouncedCallback(saveDesc, 800);
+
   useEffect(() => {
     if (card) {
       setTitle(card.title);
       setDesc(card.description);
+      lastSavedTitleRef.current = card.title;
       setMemberSearch("");
       setShowAssigneeSearch(false);
     }
+    // Flush whichever card's pending autosave was in flight — either the
+    // previous card (id about to change) or this one (on unmount) — using
+    // the id/value each debounced call closed over, not this card's id.
+    return () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveDesc.flush();
+    };
   }, [card?.id]);
 
   if (!card) return null;
 
-  const handleSave = () => {
-    if (!title.trim()) return;
-    updateCard.mutate({ cardId: card.id, title: title.trim(), description: desc });
-    onClose();
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    debouncedSaveTitle(card.id, value);
+  };
+
+  const handleTitleBlur = () => {
+    if (!title.trim()) {
+      debouncedSaveTitle.cancel();
+      setTitle(lastSavedTitleRef.current);
+      return;
+    }
+    debouncedSaveTitle.flush();
+  };
+
+  const handleDescChange = (value: string) => {
+    setDesc(value);
+    debouncedSaveDesc(card.id, value);
   };
 
   const handleDelete = () => {
@@ -779,27 +825,35 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
         body: { flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" },
       }}
     >
-      <ScrollArea style={{ flex: 1 }} p="xl">
+      <ScrollArea style={{ flex: 1 }} p="xl" type="auto">
         {canEdit ? (
-          <TextInput
-            value={title}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            placeholder="Untitled"
-            styles={{
-              input: {
-                fontWeight: 700,
-                fontSize: "1.75rem",
-                lineHeight: 1.2,
-                border: "none",
-                padding: 0,
-                height: "auto",
-                background: "transparent",
-              },
-            }}
-            variant="unstyled"
-            autoFocus
-            mb="md"
-          />
+          <Group justify="space-between" align="center" mb="md" wrap="nowrap">
+            <TextInput
+              value={title}
+              onChange={(e) => handleTitleChange(e.currentTarget.value)}
+              onBlur={handleTitleBlur}
+              placeholder="Untitled"
+              styles={{
+                root: { flex: 1 },
+                input: {
+                  fontWeight: 700,
+                  fontSize: "1.75rem",
+                  lineHeight: 1.2,
+                  border: "none",
+                  padding: 0,
+                  height: "auto",
+                  background: "transparent",
+                },
+              }}
+              variant="unstyled"
+              autoFocus
+            />
+            {(updateCard.isPending || updateCard.isSuccess) && (
+              <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                {updateCard.isPending ? "Saving…" : "Saved"}
+              </Text>
+            )}
+          </Group>
         ) : (
           <Text fw={700} style={{ fontSize: "1.75rem", lineHeight: 1.2 }} mb="md">
             {card.title || "Untitled"}
@@ -811,7 +865,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
           initialContent={card.description}
           editable={canEdit}
           pageId={pageId}
-          onChange={setDesc}
+          onChange={handleDescChange}
         />
       </ScrollArea>
 
@@ -988,10 +1042,7 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
             >
               Delete card
             </Button>
-            <Group gap="xs">
-              <Button variant="default" size="xs" onClick={onClose}>Cancel</Button>
-              <Button size="xs" onClick={handleSave} loading={updateCard.isPending}>Save</Button>
-            </Group>
+            <Button variant="default" size="xs" onClick={onClose}>Close</Button>
           </Group>
         ) : (
           <Group justify="flex-end">
@@ -1298,6 +1349,53 @@ function KanbanColumnItem({
   );
 }
 
+// ─── Live cursors ───────────────────────────────────────────────────────────────
+
+const CURSOR_STALE_MS = 5000;
+
+function KanbanCursorsLayer({ pageId }: { pageId: string }) {
+  const [cursors, setCursors] = useAtom(kanbanCursorsAtom);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setCursors((prev) => {
+        let changed = false;
+        const next: Record<string, IKanbanCursor> = {};
+        for (const [userId, cursor] of Object.entries(prev)) {
+          if (now - cursor.updatedAt < CURSOR_STALE_MS) {
+            next[userId] = cursor;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [setCursors]);
+
+  const visible = Object.values(cursors).filter((c) => c.pageId === pageId);
+  if (visible.length === 0) return null;
+
+  return (
+    <div className={classes.cursorLayer}>
+      {visible.map((c) => (
+        <div
+          key={c.userId}
+          className={classes.remoteCursor}
+          style={{ left: c.x, top: c.y }}
+        >
+          <div className={classes.remoteCursorDot} style={{ background: c.color }} />
+          <span className={classes.remoteCursorLabel} style={{ background: c.color }}>
+            {c.name}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Board ────────────────────────────────────────────────────────────────────
 
 interface KanbanBoardPageProps {
@@ -1328,6 +1426,36 @@ export default function KanbanBoardPage({
   const { mutateAsync: updateTitleMutate } = useUpdateTitlePageMutation();
   const emit = useQueryEmit();
   const navigate = useNavigate();
+
+  const currentUser = useAtomValue(userAtom);
+  const cursorColorRef = useRef(randomElement(userColors));
+  const boardRef = useRef<HTMLDivElement>(null);
+  const lastCursorEmitRef = useRef(0);
+
+  const handleBoardPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!currentUser) return;
+      const now = Date.now();
+      if (now - lastCursorEmitRef.current < 130) return;
+      lastCursorEmitRef.current = now;
+
+      const el = boardRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+
+      emit({
+        operation: "kanbanCursorMoved",
+        spaceId,
+        pageId,
+        userId: currentUser.id,
+        x: e.clientX - rect.left + el.scrollLeft,
+        y: e.clientY - rect.top + el.scrollTop,
+        name: currentUser.name || "Someone",
+        color: cursorColorRef.current,
+      });
+    },
+    [currentUser, emit, spaceId, pageId],
+  );
 
   useEffect(() => {
     setTitleValue(title);
@@ -1438,20 +1566,9 @@ export default function KanbanBoardPage({
       });
       setLocalColumns(newCols);
 
-      moveCard.mutate(
-        { cardId, columnId: toColumnId, position: newPosition },
-        {
-          onSuccess: () =>
-            emit({
-              operation: "invalidate",
-              spaceId,
-              entity: ["kanban-board"],
-              id: pageId,
-            }),
-        },
-      );
+      moveCard.mutate({ cardId, columnId: toColumnId, position: newPosition });
     },
-    [displayColumns, moveCard, emit, spaceId, pageId],
+    [displayColumns, moveCard],
   );
 
   const handleColumnDrop = useCallback(
@@ -1482,20 +1599,9 @@ export default function KanbanBoardPage({
         .sort((a, b) => a.position - b.position);
       setLocalColumns(newCols);
 
-      moveColumn.mutate(
-        { columnId: dragColumnId, position: newPosition },
-        {
-          onSuccess: () =>
-            emit({
-              operation: "invalidate",
-              spaceId,
-              entity: ["kanban-board"],
-              id: pageId,
-            }),
-        },
-      );
+      moveColumn.mutate({ columnId: dragColumnId, position: newPosition });
     },
-    [displayColumns, moveColumn, emit, spaceId, pageId],
+    [displayColumns, moveColumn],
   );
 
   const commitAddColumn = () => {
@@ -1552,7 +1658,8 @@ export default function KanbanBoardPage({
         </Button>
       </div>
 
-      <div className={classes.board}>
+      <div className={classes.board} ref={boardRef} onPointerMove={handleBoardPointerMove}>
+        <KanbanCursorsLayer pageId={pageId} />
         {displayColumns.map((col) => (
           <KanbanColumnItem
             key={col.id}

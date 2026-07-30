@@ -107,6 +107,17 @@ export type KanbanColumnMovedEvent = {
   userId: string;
 };
 
+export type KanbanCursorMovedEvent = {
+  operation: "kanbanCursorMoved";
+  spaceId: string;
+  pageId: string;
+  userId: string;
+  x: number;
+  y: number;
+  name: string;
+  color: string;
+};
+
 export type WebSocketEvent =
   | InvalidateEvent
   | CommentCreatedEvent
@@ -121,4 +132,5 @@ export type WebSocketEvent =
   | RefetchRootTreeNodeEvent
   | VerificationUpdatedEvent
   | KanbanCardMovedEvent
-  | KanbanColumnMovedEvent;
+  | KanbanColumnMovedEvent
+  | KanbanCursorMovedEvent;

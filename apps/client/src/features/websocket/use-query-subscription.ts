@@ -1,6 +1,7 @@
 import React from "react";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
+import { kanbanCursorsAtom } from "@/features/kanban/atoms/kanban-cursor-atom";
 import { InfiniteData, useQueryClient } from "@tanstack/react-query";
 import { WebSocketEvent } from "@/features/websocket/types";
 import { IPage } from "../page/types/page.types";
@@ -20,6 +21,7 @@ import { notifications } from "@mantine/notifications";
 export const useQuerySubscription = () => {
   const queryClient = useQueryClient();
   const [socket] = useAtom(socketAtom);
+  const setKanbanCursors = useSetAtom(kanbanCursorsAtom);
 
   React.useEffect(() => {
     socket?.on("message", (event) => {
@@ -213,7 +215,24 @@ export const useQuerySubscription = () => {
           );
           break;
         }
+        case "kanbanCursorMoved": {
+          const currentUser = queryClient.getQueryData<ICurrentUser>(["currentUser"]);
+          if (data.userId === currentUser?.user?.id) break;
+          setKanbanCursors((prev) => ({
+            ...prev,
+            [data.userId]: {
+              userId: data.userId,
+              pageId: data.pageId,
+              x: data.x,
+              y: data.y,
+              name: data.name,
+              color: data.color,
+              updatedAt: Date.now(),
+            },
+          }));
+          break;
+        }
       }
     });
-  }, [queryClient, socket]);
+  }, [queryClient, socket, setKanbanCursors]);
 };

@@ -5,6 +5,8 @@ import { getFileUploadSizeLimit } from "@/lib/config.ts";
 import { formatBytes } from "@/lib";
 import i18n from "@/i18n.ts";
 
+const MAX_GIF_SIZE_BYTES = 5 * 1024 * 1024;
+
 export const uploadImageAction = handleImageUpload({
   onUpload: async (file: File, pageId: string): Promise<any> => {
     try {
@@ -19,6 +21,15 @@ export const uploadImageAction = handleImageUpload({
   },
   validateFn: (file) => {
     if (!file.type.includes("image/")) {
+      return false;
+    }
+    if (file.type === "image/gif" && file.size > MAX_GIF_SIZE_BYTES) {
+      notifications.show({
+        color: "red",
+        message: i18n.t("GIFs must be under {{limit}}", {
+          limit: formatBytes(MAX_GIF_SIZE_BYTES),
+        }),
+      });
       return false;
     }
     if (file.size > getFileUploadSizeLimit()) {

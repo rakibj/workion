@@ -158,6 +158,9 @@ export class AttachmentController {
         this.logger.error(errMessage);
         throw new BadRequestException(errMessage);
       }
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       this.logger.error(err);
       throw new BadRequestException('Error processing file upload.');
     }

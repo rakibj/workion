@@ -6,13 +6,15 @@ export enum AttachmentType {
   Chat = 'chat',
 }
 
-export const validImageExtensions = ['.jpg', '.png', '.jpeg'];
+export const validImageExtensions = ['.jpg', '.png', '.jpeg', '.gif'];
 export const MAX_AVATAR_SIZE = '10MB';
+export const MAX_GIF_SIZE_BYTES = 5 * 1024 * 1024;
 
 export const inlineFileExtensions = [
   '.jpg',
   '.png',
   '.jpeg',
+  '.gif',
   '.pdf',
   '.mp4',
   '.mov',

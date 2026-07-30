@@ -31,6 +31,7 @@
 /* ── Board ── */
 
 .board {
+  position: relative;
   display: flex;
   gap: var(--mantine-spacing-sm);
   align-items: flex-start;
@@ -39,6 +40,43 @@
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+}
+
+/* ── Live cursors ── */
+
+.cursorLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.remoteCursor {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-2px, -2px);
+  transition: left 100ms linear, top 100ms linear;
+}
+
+.remoteCursorDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--mantine-color-body);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.remoteCursorLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Column wrapper + drop indicators ── */
