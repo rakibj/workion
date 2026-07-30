@@ -57,6 +57,7 @@ export class SpaceMemberService {
       },
       trx,
     );
+    await this.spaceMemberRepo.invalidateUserSpacesCache(userId, workspaceId);
   }
 
   async addGroupToSpace(
@@ -73,6 +74,11 @@ export class SpaceMemberService {
         role: role,
       },
       trx,
+    );
+    const memberUserIds = await this.groupUserRepo.getUserIdsByGroupId(groupId);
+    await this.spaceMemberRepo.invalidateUserSpacesCacheForMany(
+      memberUserIds,
+      workspaceId,
     );
   }
 
@@ -185,6 +191,18 @@ export class SpaceMemberService {
 
     if (membersToAdd.length > 0) {
       await this.spaceMemberRepo.insertSpaceMember(membersToAdd);
+
+      const groupMemberUserIds = (
+        await Promise.all(
+          validGroups.map((group) =>
+            this.groupUserRepo.getUserIdsByGroupId(group.id),
+          ),
+        )
+      ).flat();
+      await this.spaceMemberRepo.invalidateUserSpacesCacheForMany(
+        [...validUsers.map((u) => u.id), ...groupMemberUserIds],
+        workspaceId,
+      );
 
       // Audit log for each member added
       for (const user of validUsers) {
@@ -301,6 +319,11 @@ export class SpaceMemberService {
       );
     });
 
+    await this.spaceMemberRepo.invalidateUserSpacesCacheForMany(
+      affectedUserIds,
+      workspaceId,
+    );
+
     this.auditService.log({
       event: AuditEvent.SPACE_MEMBER_REMOVED,
       resourceType: AuditResource.SPACE_MEMBER,
@@ -401,8 +424,9 @@ export class SpaceMemberService {
 
   async getUserSpaces(
     userId: string,
+    workspaceId: string,
     pagination: PaginationOptions,
   ): Promise<CursorPaginationResult<Space>> {
-    return this.spaceMemberRepo.getUserSpaces(userId, pagination);
+    return this.spaceMemberRepo.getUserSpaces(userId, workspaceId, pagination);
   }
 }

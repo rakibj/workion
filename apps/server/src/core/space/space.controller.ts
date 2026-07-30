@@ -58,6 +58,7 @@ export class SpaceController {
   ) {
     const result = await this.spaceMemberService.getUserSpaces(
       user.id,
+      user.workspaceId,
       pagination,
     );
 

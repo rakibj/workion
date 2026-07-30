@@ -5,6 +5,7 @@ import { KYSELY_MODULE_CONNECTION_TOKEN } from 'nestjs-kysely';
 import { SpaceService } from './space.service';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberService } from './space-member.service';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { QueueName } from '../../../integrations/queue/constants';
 import { AUDIT_SERVICE } from '../../../integrations/audit/audit.service';
@@ -28,6 +29,7 @@ describe('SpaceService', () => {
         SpaceService,
         { provide: SpaceRepo, useValue: spaceRepo },
         { provide: SpaceMemberService, useValue: {} },
+        { provide: SpaceMemberRepo, useValue: {} },
         { provide: ShareRepo, useValue: {} },
         {
           provide: KYSELY_MODULE_CONNECTION_TOKEN(undefined),

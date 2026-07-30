@@ -14,6 +14,7 @@ import { BlogCustomFieldDefDto } from '../dto/update-space-blog-settings.dto';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
 import { SpaceMemberService } from './space-member.service';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 import {
   QueueJob,
@@ -35,6 +36,7 @@ export class SpaceService {
   constructor(
     private spaceRepo: SpaceRepo,
     private spaceMemberService: SpaceMemberService,
+    private spaceMemberRepo: SpaceMemberRepo,
     private shareRepo: ShareRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
@@ -201,6 +203,15 @@ export class SpaceService {
     if (columnChanges) {
       Object.assign(before, columnChanges.before);
       Object.assign(after, columnChanges.after);
+
+      // name/description show up in every member's cached space list
+      const memberUserIds = await this.spaceMemberRepo.getAllMemberUserIds(
+        updateSpaceDto.spaceId,
+      );
+      await this.spaceMemberRepo.invalidateUserSpacesCacheForMany(
+        memberUserIds,
+        workspaceId,
+      );
     }
 
     if (Object.keys(after).length > 0) {
@@ -266,7 +277,13 @@ export class SpaceService {
       throw new NotFoundException('Space not found');
     }
 
+    const memberUserIds = await this.spaceMemberRepo.getAllMemberUserIds(spaceId);
+
     await this.spaceRepo.deleteSpace(spaceId, workspaceId);
+    await this.spaceMemberRepo.invalidateUserSpacesCacheForMany(
+      memberUserIds,
+      workspaceId,
+    );
     await this.attachmentQueue.add(QueueJob.DELETE_SPACE_ATTACHMENTS, space);
 
     this.auditService.log({

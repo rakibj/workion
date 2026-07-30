@@ -19,6 +19,7 @@ import { withCache } from '../../../common/helpers/with-cache';
 import {
   CacheKey,
   PERMISSION_CACHE_TTL_MS,
+  USER_SPACES_CACHE_TTL_MS,
 } from '../../../common/helpers/cache-keys';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 
@@ -387,7 +388,28 @@ export class SpaceMemberRepo {
     });
   }
 
-  async getUserSpaces(userId: string, pagination: PaginationOptions) {
+  async getUserSpaces(
+    userId: string,
+    workspaceId: string,
+    pagination: PaginationOptions,
+  ) {
+    // Only the common "first page, no search" call is cache-friendly — caching
+    // every query/cursor combination would create an unbounded key space.
+    const isDefault =
+      !pagination.query && !pagination.cursor && !pagination.beforeCursor;
+
+    if (isDefault) {
+      return withCache(
+        this.cacheManager,
+        CacheKey.USER_SPACES(userId, workspaceId),
+        USER_SPACES_CACHE_TTL_MS,
+        () => this._getUserSpaces(userId, pagination),
+      );
+    }
+    return this._getUserSpaces(userId, pagination);
+  }
+
+  private async _getUserSpaces(userId: string, pagination: PaginationOptions) {
     let query = this.db
       .selectFrom('spaces')
       .selectAll()
@@ -418,5 +440,48 @@ export class SpaceMemberRepo {
       ],
       parseCursor: (cursor) => ({ name: cursor.name, id: cursor.id }),
     });
+  }
+
+  async invalidateUserSpacesCache(
+    userId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    await this.cacheManager
+      .del(CacheKey.USER_SPACES(userId, workspaceId))
+      .catch(() => {});
+  }
+
+  async invalidateUserSpacesCacheForMany(
+    userIds: string[],
+    workspaceId: string,
+  ): Promise<void> {
+    await Promise.all(
+      userIds.map((userId) =>
+        this.invalidateUserSpacesCache(userId, workspaceId),
+      ),
+    );
+  }
+
+  /**
+   * All user ids with access to a space, direct or via a group — used to
+   * invalidate every affected member's cached space list on space
+   * delete/rename, where the mutation doesn't already know its members.
+   */
+  async getAllMemberUserIds(spaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('spaceMembers')
+      .select('userId')
+      .where('spaceId', '=', spaceId)
+      .where('userId', 'is not', null)
+      .unionAll(
+        this.db
+          .selectFrom('spaceMembers')
+          .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
+          .select('groupUsers.userId')
+          .where('spaceMembers.spaceId', '=', spaceId),
+      )
+      .execute();
+
+    return [...new Set(rows.map((r) => r.userId).filter(Boolean))];
   }
 }
