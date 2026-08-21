@@ -65,6 +65,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: true,
+      allowedHosts: [".lvh.me"],
       proxy: {
         "/api": {
           target: backendUrl,

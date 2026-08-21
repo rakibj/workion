@@ -13,6 +13,9 @@ import {
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { EntitlementGuard } from '../../common/entitlement/entitlement.guard';
+import { RequireFeature } from '../../common/entitlement/require-feature.decorator';
+import { WorkionFeature } from '../../common/entitlement/entitlement';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageAccessService } from '../page/page-access/page-access.service';
@@ -25,7 +28,8 @@ import {
 } from './dto/blog-post-settings.dto';
 import { PublishBlogPostDto } from './dto/publish-blog-post.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EntitlementGuard)
+@RequireFeature(WorkionFeature.BLOG)
 @Controller('blog/posts')
 export class BlogController {
   constructor(

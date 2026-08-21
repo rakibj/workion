@@ -34,6 +34,7 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
 import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
+import { JwtExchangePayload, JwtType } from '../dto/jwt-payload';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { AuditEvent, AuditResource } from '../../../common/events/audit-events';
 import {
@@ -331,5 +332,35 @@ export class AuthService {
       workspaceId,
     );
     return { token };
+  }
+
+  /**
+   * Consumes the short-lived (10s) exchange JWT minted by
+   * TokenService.generateExchangeToken for the cross-subdomain signup
+   * handoff (specs/MULTI_TENANCY_SPEC.md Slice 2): the browser is on the new
+   * tenant's own subdomain by the time this runs, so the auth cookie set
+   * from the returned token is valid there.
+   */
+  async exchangeToken(token: string, workspaceId: string): Promise<string> {
+    let payload: JwtExchangePayload;
+    try {
+      payload = (await this.tokenService.verifyJwt(
+        token,
+        JwtType.EXCHANGE,
+      )) as JwtExchangePayload;
+    } catch {
+      throw new UnauthorizedException('Invalid or expired exchange token');
+    }
+
+    if (payload.workspaceId !== workspaceId) {
+      throw new UnauthorizedException('Invalid or expired exchange token');
+    }
+
+    const user = await this.userRepo.findById(payload.sub, workspaceId);
+    if (!user || isUserDisabled(user)) {
+      throw new UnauthorizedException('Invalid or expired exchange token');
+    }
+
+    return this.sessionService.createSessionAndToken(user);
   }
 }

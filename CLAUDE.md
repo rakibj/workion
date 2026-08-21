@@ -6,7 +6,39 @@
 
 ## Project Goal
 
-Fork of [docmost](https://github.com/docmost/docmost) repurposed as a **client management platform**. Docmost provides the document/wiki backbone; the goal is to layer client-centric features on top (client spaces, per-client access control, project tracking, client portals, etc.) while treating the core document engine as a black box.
+Fork of [docmost](https://github.com/docmost/docmost) repurposed as an **agency/client delivery platform**: manage client work from brief to delivery/publication in one workspace. Docmost provides the document/wiki backbone (treated as infrastructure, not the sales proposition); the differentiation is the client workflow layered on top.
+
+**Core vertical (the only workflow that matters):**
+
+```
+Onboard → Collaborate → Execute → Review → Approve → Deliver/Publish
+```
+
+**Anti-goal:** do not drift into "Docs + CRM + Kanban + Whiteboard + AI + Agents + Blog + Automation" as a horizontal workspace. Every new feature must serve the vertical above.
+
+**Positioning decision (2026-08):** not "another Notion/Docmost alternative" — an agency client workspace where every client gets a portal, work moves through approval, and finished content can publish directly to the client's site. Full analysis in the AppSumo handoff doc.
+
+---
+
+## Editions: Internal vs Public
+
+Workion currently runs **internally** (Gameloops/Cognitive Peak client work). A **public version** (AppSumo LTD launch) is planned. **Decision (2026-08): one repo, no second fork.** Edition differences are handled by feature flags, not branches or separate repos.
+
+- Blog/publishing is **internal-only for now**. Public builds ship with it disabled via a feature flag.
+- The blog module must stay **cleanly separable**: own module directory, own routes, registered conditionally. This serves three purposes at once — edition gating, a simpler AGPL audit boundary, and a future paid-tier entitlement check.
+- **Decision (2026-08): runtime flags only, for now.** One deploy, features resolved per-workspace from a plan/entitlement attribute; internal workspaces resolve to "everything enabled." Revisit build-time exclusion only if the Pre-Launch Gate licensing audit below finds a specific feature that legally cannot ship hidden-but-present in the public bundle — that's a narrow, named exception, not the default mechanism.
+- ⚠️ Note: `apps/server/src/common/features.ts` is Docmost's own upstream `Feature` enum for EE license-gated features (SSO, MFA, SCIM, etc.), backed by a stubbed-out `LicenseCheckService` that currently grants everything. It is **not** the internal/public edition flag infra — that's a separate, Workion-specific mechanism, implemented per `specs/EDITION_ENTITLEMENT_SPEC.md` (see "Entitlement / Edition Gating" under Implemented Custom Features). Don't conflate the two systems.
+- Public-edition tier limits (clients per workspace, users, domains) will be enforced in-app. Limits/pricing are **unvalidated** — treat any numbers as placeholders.
+
+## Pre-Launch Gate: Licensing Audit (blocking)
+
+Required before any commercial/AppSumo distribution. This is a legal/architecture requirement, not cleanup:
+
+- [ ] Audit Docmost Core AGPL obligations for our distribution model (AppSumo buyers = distribution).
+- [ ] Verify no Enterprise Edition (`apps/ee/`) code or features are distributed in the public build.
+- [ ] Audit the whiteboard component's license.
+- [ ] Keep proprietary functionality architecturally separable.
+- [ ] Confirm AppSumo redistribution/rights requirements can be satisfied.
 
 ---
 
@@ -335,11 +367,42 @@ New tables go in new migration files. Never alter existing migrations.
 
 ## Signup Behaviour
 
-Workspace creation (signup) is **always enabled** — no env var gate.
+⚠️ **Correction (2026-08-21): the claim below that workspace creation is "always enabled" is stale/wrong — verified against current source, not fixed.** `GET /api/auth/setup-config` does always return `{ allowSignup: true }` (that part is accurate — it's just a UI signal to show the sign-up link). But the actual workspace-creation endpoint, `POST /auth/setup`, is gated by `SetupGuard` (`core/auth/guards/setup.guard.ts`):
+```ts
+async canActivate(): Promise<boolean> {
+  if (this.environmentService.isCloud()) return false;
+  const count = await this.workspaceRepo.count();
+  return count === 0;
+}
+```
+This only succeeds once, ever, per deployment — the very first workspace. Once Gameloops exists, `/auth/setup` is permanently blocked (and it's blocked unconditionally in `isCloud()` mode regardless of count). See "Multi-Tenancy Status" below — this is the mechanism behind why self-hosted Workion cannot create a second workspace today.
 
-- **Backend**: `SetupGuard` always returns `true` (non-cloud). `GET /api/auth/setup-config` always returns `{ allowSignup: true }`.
-- **Frontend**: Default landing (`/`) redirects to `/setup/register`. Login page has a "Sign up" link. Signup page has a "Sign in" link.
-- Invitations and login always work regardless.
+- **Frontend**: Default landing (`/`) redirects to `/setup/register`. Login page has a "Sign up" link. Signup page has a "Sign in" link. These UI elements are misleading beyond the first workspace — they render regardless of whether signup will actually succeed.
+- Invitations (joining an *existing* workspace via `invite-link/*` or `workspace_invitations`) and login always work regardless — only *creating a new workspace* is limited to the first one.
+
+---
+
+## Multi-Tenancy Status (verified 2026-08-21 — read before any "separate paid workspace" work)
+
+**Self-hosted Workion, as currently built, is architecturally single-workspace. This is not a config flag — it needs real implementation work before "different paid Workion workspaces" is possible.** Two independent blockers, both verified against source:
+
+1. **No way to create a second workspace.** `POST /auth/setup` is a one-time bootstrap gated by `SetupGuard` (see "Signup Behaviour" above) — blocked forever once workspace #1 exists. The frontend also references a second creation path (`apps/client/src/ee/pages/create-workspace.tsx`, the `/create` and `/select` routes in `App.tsx`, calling `POST /workspace/create`) — but that's Docmost's own Enterprise/Cloud signup flow, and **`apps/server/src/ee/` does not exist in this repo at all**. That endpoint has no backend implementation here; it would 404.
+2. **No per-request tenant routing.** `DomainMiddleware` (`common/middlewares/domain.middleware.ts`) resolves the workspace for every request:
+   ```ts
+   if (this.environmentService.isSelfHosted()) {
+     const workspace = await this.workspaceRepo.findFirst(); // always the same one
+     ...
+   } else if (this.environmentService.isCloud()) {
+     const subdomain = req.headers.host.split('.')[0];
+     const workspace = await this.workspaceRepo.findByHostname(subdomain);
+     ...
+   }
+   ```
+   In self-hosted mode (how Workion runs today — `CLOUD` unset), **every request resolves to `findFirst()` — literally the first workspace ever created, unconditionally.** Even if a second workspace row existed in the database, nothing would ever route a request to it. Hostname-based per-tenant routing (`findByHostname`) only exists in the `isCloud()` branch.
+
+**What this means for "paid Workion workspaces with different permissions, Gameloops stays internal":** the [[EDITION_ENTITLEMENT_SPEC.md|entitlement/plan system]] (`common/entitlement/`) is real and necessary — it's the layer that differentiates *what a workspace can do* once you know which workspace you're in. But it assumes workspace resolution works, which it currently doesn't beyond workspace #1. Building real separation requires, at minimum: a working workspace-create/signup flow (the missing EE piece), and either (a) `CLOUD`-mode-style hostname/subdomain routing on a single shared deployment, or (b) one deployment per paid workspace. **Decision (2026-08-21), see `specs/MULTI_TENANCY_SPEC.md`:** a hybrid — a second, separate deployment (own DB, own Redis, `CLOUD=true`) that itself does real subdomain-based multi-tenant routing for paid customers, while Gameloops' existing production deployment stays untouched. This satisfies "real multi-tenancy" and "don't touch Gameloops" simultaneously by isolating at the deployment level, not the request-routing level.
+
+**Update (2026-08-21): the "missing EE piece" above is no longer missing at the code level.** `specs/MULTI_TENANCY_SPEC.md` Slices 1–3 are implemented — `POST /workspace/create`, `POST /workspace/verify-email`, `POST /workspace/resend-verification`, and `GET /api/auth/exchange` all exist now, gated behind a new `CloudGuard` (inert whenever `isCloud()` is false, i.e. always on Gameloops today), plus the entitlement default fix (new cloud workspaces get `WorkionPlan.FREE`, not the old dead `'standard'` string). What's still missing is purely Slice 4: standing up the actual second `CLOUD=true` deployment (DNS, `SUBDOMAIN_HOST`, Caddy, its own DB/Redis) — see the spec for details. Nothing in Slices 1–3 changes Gameloops' behavior, since none of that code is reachable while `CLOUD` is unset.
 
 ---
 
@@ -359,7 +422,13 @@ OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backen
 
 `kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room; filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
 
-### Blog Publishing Platform (in progress)
+### Entitlement / Edition Gating
+
+Workspace-level plan/feature gating, independent of Docmost's own upstream EE `Feature`/`LicenseCheckService` system (which stays untouched — see "Editions: Internal vs Public"). Core: `apps/server/src/common/entitlement/` — `WorkionPlan`/`WorkionFeature` enums and `PLAN_FEATURES`/`PLAN_LIMITS` maps (`entitlement.ts`), `EntitlementService.resolvePlan/hasFeature/getLimits` (`entitlement.service.ts`, pure/DB-less), registered via a `@Global()` `EntitlementModule` in `app.module.ts`. Resolution reuses the existing (currently always-null) `workspaces.plan` column: `null`/unset → `WorkionPlan.INTERNAL` (everything on, no limits) — this is what every existing workspace has today, so internal usage is unaffected by construction; an unrecognized plan string fails safe to the most-restrictive plan rather than crashing or granting everything. Route-level enforcement is a reusable `@RequireFeature(WorkionFeature.BLOG)` decorator + `EntitlementGuard` (Reflector-based, same shape for any future gated feature) — currently applied only to `BlogController` (the authenticated create/settings/publish/unpublish path). Plan values and limit numbers are unvalidated placeholders per CLAUDE.md's editions note. Full design and slice-by-slice status: `specs/EDITION_ENTITLEMENT_SPEC.md`.
+
+### Blog Publishing Platform (in progress — internal-only)
+
+> **Edition note:** blog/publishing is not part of the planned public build. Gated via `EntitlementGuard` on `BlogController` (see "Entitlement / Edition Gating" above) — a workspace whose plan lacks the `blog` feature gets a 403 on create/settings/publish/unpublish. **Known gap:** the unauthenticated public-read routes (`BlogPublicController`/`BlogRenderController`/`BlogSeoController`) are not yet gated — a workspace downgraded after already publishing keeps serving those old posts. See Slice 2 in the entitlement spec.
 
 `blog` is a page type with per-post metadata in `blog_post_settings` and a per-space hostname at `spaces.settings.blog.domain`/`basePath`. The authenticated API lives in `core/blog/`: `GET`/`POST /blog/posts/:pageId/settings`, `POST /blog/posts/:pageId/publish`, and `POST /blog/posts/:pageId/unpublish`; **publishing requires a `shares` row for the page** — `findPublishedBySlug`/`findPublishedBySlugAnywhere` inner-join `shares`, so a post with saved settings but no share (never published, or unpublished) 404s as "Blog post not found" even though its settings exist. Space administrators update the hostname through `PATCH /spaces/:spaceId/blog-settings`. The client exposes Blog Post creation, a post settings modal (`blog-settings-modal.tsx`, shows the live published URL with copy/open-in-new-tab once a `shares` row exists), and a Blog tab in space settings (`space-blog-settings.tsx`, warns when `basePath` is set without a `domain` since basePath is ignored without one). Public JSON endpoints are at `/api/public/blog/posts`; custom domains and `/blog/:slug` render server-side via `BlogRenderController`. Domain-resolved `/sitemap.xml`, `/rss.xml`, and `/robots.txt` complete the technical-SEO routes. Refer to `specs/BLOG_MASTER_SPEC.md` for the implementation record.
 
@@ -485,6 +554,26 @@ App env config:       apps/server/src/integrations/environment/environment.servi
 Cache helper:         apps/server/src/common/helpers/with-cache.ts
 Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 ```
+
+---
+
+## Next Major Direction: Client Layer
+
+⚠️ **Naming collision, resolved 2026-08-21 — read this before touching "client" anything.** "Client Layer" here means an **agency client** — a company Gameloops does work for, nested under the existing Space/permission model. This is a *completely different concept* from **a paid Workion workspace/tenant** (a separate organization paying to use Workion itself, e.g. an AppSumo buyer). A same-session mix-up built a full Client-entity MVP (migration, backend, frontend) in answer to a question that was actually about multi-tenant workspace separation — it was reverted the same session once the misunderstanding surfaced. See "Multi-Tenancy Status" above for the real (and much bigger) architecture question that prompted this. Do not conflate the two: this section is agency clients; multi-tenancy is a workspace/deployment question.
+
+The main product gap: a client is currently just a Space + guest users. There is no first-class model for Client, Project, Deliverable, Request, Approval, or client status/timeline. Priority order (from the AppSumo handoff):
+
+1. **Client entity** (critical) — not started. (A working MVP existed briefly on 2026-08-21 and was reverted — see note above. The design was: `clients`/`client_spaces`/`projects` tables, one client can span multiple Spaces, write ops gated by the existing `Space` CASL ability. Worth reusing as a starting point if/when this is actually picked up.)
+2. **Projects / Deliverables** (critical) — not started.
+3. **Branded client portal** (critical) — not started.
+4. **Approval / request flow** (high) — needs review → changes requested → approved → delivered → published. Not started.
+5. **Agency-focused AI** (high) — brief→tasks, feedback→action items, status summaries, client-context drafting. No generic autonomous agents before this. Not started.
+
+**Decision (2026-08): the client portal is a filtered view over existing Spaces/permissions**, not a separate frontend surface — it reuses the Space/CASL model as a scoped, re-skinned view rather than duplicating permission/display logic in a second surface.
+
+**The edition/entitlement architecture** (`specs/EDITION_ENTITLEMENT_SPEC.md`, Slices 1–2) is done and unrelated to this reverted work — it's the plan/feature-gating layer, currently applied to the blog module, and it's what real multi-tenancy will also need once workspace resolution itself is fixed (see "Multi-Tenancy Status"). Slice 3 (tier limits) is blocked on the Client entity existing, which it currently doesn't.
+
+One spec, one feature at a time, per the methodology — do not batch client-layer work without its own spec.
 
 ---
 

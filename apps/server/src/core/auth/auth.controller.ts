@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -21,6 +22,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthService } from './services/auth.service';
 import { SessionService } from '../session/session.service';
 import { SetupGuard } from './guards/setup.guard';
+import { CloudGuard } from './guards/cloud.guard';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -222,6 +224,32 @@ export class AuthController {
       resourceType: AuditResource.USER,
       resourceId: user.id,
     });
+  }
+
+  @UseGuards(CloudGuard)
+  @Get('exchange')
+  async exchange(
+    @Query('token') token: string,
+    @AuthWorkspace() workspace: Workspace,
+    @Res() res: FastifyReply,
+  ) {
+    if (!token) {
+      res.redirect('/login');
+      return;
+    }
+
+    try {
+      const authToken = await this.authService.exchangeToken(
+        token,
+        workspace.id,
+      );
+      this.setAuthCookie(res, authToken);
+    } catch {
+      res.redirect('/login');
+      return;
+    }
+
+    res.redirect('/home');
   }
 
   setAuthCookie(res: FastifyReply, token: string) {

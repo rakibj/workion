@@ -21,7 +21,14 @@ export class CreateAdminUserDto extends CreateUserDto {
   @MinLength(1)
   @MaxLength(50)
   @IsString()
-  @Transform(({ value }: TransformFnParams) => value?.trim())
+  @Transform(({ value }: TransformFnParams) => {
+    // The cloud signup form (SetupWorkspaceForm) doesn't collect this field
+    // and submits "" rather than omitting the key — treat that the same as
+    // not provided so @IsOptional() actually applies, instead of tripping
+    // @MinLength(1). Callers fall back to a default workspace name.
+    const trimmed = value?.trim();
+    return trimmed === '' ? undefined : trimmed;
+  })
   workspaceName: string;
 
   @IsOptional()

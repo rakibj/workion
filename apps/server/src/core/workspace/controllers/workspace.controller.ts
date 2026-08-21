@@ -35,7 +35,11 @@ import { EnvironmentService } from '../../../integrations/environment/environmen
 import { LicenseCheckService } from '../../../integrations/environment/license-check.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
+import { VerifyEmailDto } from '../dto/verify-email.dto';
+import { ResendVerificationDto } from '../dto/resend-verification.dto';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { CloudGuard } from '../../auth/guards/cloud.guard';
+import { CreateAdminUserDto } from '../../auth/dto/create-admin-user.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -325,6 +329,51 @@ export class WorkspaceController {
   @Post('/check-hostname')
   async checkHostname(@Body() checkHostnameDto: CheckHostnameDto) {
     return this.workspaceService.checkHostname(checkHostnameDto.hostname);
+  }
+
+  @Public()
+  @UseGuards(CloudGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('/create')
+  async createWorkspace(@Body() dto: CreateAdminUserDto) {
+    return this.workspaceService.createCloudWorkspace(dto);
+  }
+
+  @Public()
+  @UseGuards(CloudGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('/verify-email')
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const authToken = await this.workspaceService.verifyEmail(
+      dto.token,
+      workspace,
+    );
+
+    res.setCookie('authToken', authToken, {
+      httpOnly: true,
+      path: '/',
+      expires: this.environmentService.getCookieExpiresIn(),
+      secure: this.environmentService.isHttps(),
+    });
+  }
+
+  @Public()
+  @UseGuards(CloudGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('/resend-verification')
+  async resendVerification(
+    @Body() dto: ResendVerificationDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.workspaceService.resendVerificationEmail(
+      dto.email,
+      dto.sig,
+      workspace,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

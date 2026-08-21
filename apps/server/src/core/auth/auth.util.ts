@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Workspace } from '@docmost/db/types/entity.types';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export function computeEmailSignature(
   email: string,
@@ -10,6 +10,23 @@ export function computeEmailSignature(
   return createHmac('sha256', appSecret)
     .update(`${email.toLowerCase()}:${workspaceId}`)
     .digest('hex');
+}
+
+export function verifyEmailSignature(
+  email: string,
+  workspaceId: string,
+  signature: string,
+  appSecret: string,
+): boolean {
+  const expected = computeEmailSignature(email, workspaceId, appSecret);
+  const expectedBuf = Buffer.from(expected, 'hex');
+  const actualBuf = Buffer.from(signature ?? '', 'hex');
+
+  if (expectedBuf.length !== actualBuf.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuf, actualBuf);
 }
 
 export function throwIfEmailNotVerified(opts: {

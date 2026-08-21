@@ -6,6 +6,7 @@ import { EnvironmentService } from './integrations/environment/environment.servi
 import { AuditActorInterceptor } from './common/interceptors/audit-actor.interceptor';
 import { CoreModule } from './core/core.module';
 import { EnvironmentModule } from './integrations/environment/environment.module';
+import { EntitlementModule } from './common/entitlement/entitlement.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { WsModule } from './ws/ws.module';
 import { DatabaseModule } from '@docmost/db/database.module';
@@ -28,18 +29,19 @@ import { ClsModule } from 'nestjs-cls';
 import { NoopAuditModule } from './integrations/audit/audit.module';
 import { ThrottleModule } from './integrations/throttle/throttle.module';
 
+// apps/server/src/ee/ is an optional plugin directory (see CLAUDE.md) that
+// does not exist in this fork. Multi-tenancy's cloud signup flow
+// (specs/MULTI_TENANCY_SPEC.md) doesn't depend on it, so a missing EE module
+// is not fatal in any deployment mode — self-hosted or cloud.
 const enterpriseModules = [];
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  if (require('./ee/ee.module')?.EeModule) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    enterpriseModules.push(require('./ee/ee.module')?.EeModule);
+  const eeModule = require('./ee/ee.module');
+  if (eeModule?.EeModule) {
+    enterpriseModules.push(eeModule.EeModule);
   }
-} catch (err) {
-  if (process.env.CLOUD === 'true') {
-    console.warn('Failed to load enterprise modules. Exiting program.\n', err);
-    process.exit(1);
-  }
+} catch {
+  // no-op: EE modules are optional everywhere.
 }
 
 @Module({
@@ -53,6 +55,7 @@ try {
     CoreModule,
     DatabaseModule,
     EnvironmentModule,
+    EntitlementModule,
     RedisModule.forRootAsync({
       useClass: RedisConfigService,
     }),

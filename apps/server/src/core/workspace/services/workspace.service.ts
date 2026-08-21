@@ -18,12 +18,13 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
-import { User } from '@docmost/db/types/entity.types';
+import { User, Workspace } from '@docmost/db/types/entity.types';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { UpdateWorkspaceUserRoleDto } from '../dto/update-workspace-user-role.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { UserTokenRepo } from '@docmost/db/repos/user-token/user-token.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
@@ -37,6 +38,7 @@ import { Queue } from 'bullmq';
 import {
   generateRandomSuffixNumbers,
   diffAuditTrackedFields,
+  nanoIdGen,
 } from '../../../common/helpers';
 import { isPageEmbeddingsTableExists } from '@docmost/db/helpers/helpers';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
@@ -48,6 +50,16 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../../integrations/audit/audit.service';
+import { MailService } from '../../../integrations/mail/mail.service';
+import { SessionService } from '../../session/session.service';
+import { CreateAdminUserDto } from '../../auth/dto/create-admin-user.dto';
+import { UserTokenType } from '../../auth/auth.constants';
+import {
+  computeEmailSignature,
+  verifyEmailSignature,
+} from '../../auth/auth.util';
+import { WorkionPlan } from '../../../common/entitlement/entitlement';
+import EmailVerificationEmail from '@docmost/transactional/emails/email-verification-email';
 
 @Injectable()
 export class WorkspaceService {
@@ -72,6 +84,9 @@ export class WorkspaceService {
     @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
     private userSessionRepo: UserSessionRepo,
+    private userTokenRepo: UserTokenRepo,
+    private mailService: MailService,
+    private sessionService: SessionService,
   ) {}
 
   async findById(workspaceId: string) {
@@ -142,7 +157,7 @@ export class WorkspaceService {
             this.environmentService.getBillingTrialDays(),
           );
           status = WorkspaceStatus.Active;
-          plan = 'standard';
+          plan = WorkionPlan.FREE;
           billingEmail = user.email;
           settings = { ai: { generative: true, chat: true } };
         }
@@ -254,6 +269,153 @@ export class WorkspaceService {
     }
 
     return createdWorkspace;
+  }
+
+  /**
+   * Cloud-only signup path (specs/MULTI_TENANCY_SPEC.md Slice 1). Mirrors
+   * SignupService.initialSetup() but never marks the email pre-verified —
+   * cloud logins are gated on emailVerifiedAt via throwIfEmailNotVerified,
+   * so a brand new owner must go through the verify-email flow below first.
+   */
+  async createCloudWorkspace(dto: CreateAdminUserDto): Promise<{
+    workspace: Workspace;
+    requiresEmailVerification: true;
+    emailSignature: string;
+  }> {
+    let user: User;
+    let workspace: Workspace;
+
+    await executeTx(this.db, async (trx) => {
+      user = await this.userRepo.insertUser(
+        {
+          name: dto.name,
+          email: dto.email,
+          password: dto.password,
+          role: UserRole.OWNER,
+        },
+        trx,
+      );
+
+      workspace = await this.create(
+        user,
+        { name: dto.workspaceName || 'My workspace', hostname: dto.hostname },
+        trx,
+      );
+    });
+
+    await this.sendVerificationEmail(user, workspace);
+
+    const emailSignature = computeEmailSignature(
+      user.email,
+      workspace.id,
+      this.environmentService.getAppSecret(),
+    );
+
+    return { workspace, requiresEmailVerification: true, emailSignature };
+  }
+
+  /**
+   * Consumes an email-verification token (sent by createCloudWorkspace /
+   * resendVerificationEmail) and logs the now-verified user in. `workspace`
+   * comes from DomainMiddleware's Host-header resolution — the caller is
+   * always on that tenant's own subdomain, so setting the auth cookie
+   * directly here (no cross-domain exchange) is safe.
+   */
+  async verifyEmail(token: string, workspace: Workspace): Promise<string> {
+    const userToken = await this.userTokenRepo.findById(token, workspace.id);
+
+    if (
+      !userToken ||
+      userToken.type !== UserTokenType.EMAIL_VERIFICATION ||
+      userToken.expiresAt < new Date()
+    ) {
+      throw new BadRequestException('Invalid or expired token');
+    }
+
+    const user = await this.userRepo.findById(userToken.userId, workspace.id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await executeTx(this.db, async (trx) => {
+      await this.userRepo.updateUser(
+        { emailVerifiedAt: new Date() },
+        user.id,
+        workspace.id,
+        trx,
+      );
+      await this.userTokenRepo.deleteToken(token, trx);
+    });
+
+    return this.sessionService.createSessionAndToken(user);
+  }
+
+  /**
+   * `sig` is an HMAC of (email, workspaceId) computed with the app secret —
+   * see computeEmailSignature/throwIfEmailNotVerified — so this route can
+   * re-send without requiring an active session. Silently no-ops on an
+   * unknown or already-verified user rather than leaking account existence.
+   */
+  async resendVerificationEmail(
+    email: string,
+    sig: string,
+    workspace: Workspace,
+  ): Promise<void> {
+    const isValidSig = verifyEmailSignature(
+      email,
+      workspace.id,
+      sig,
+      this.environmentService.getAppSecret(),
+    );
+    if (!isValidSig) {
+      throw new BadRequestException('Invalid request');
+    }
+
+    const user = await this.userRepo.findByEmail(email, workspace.id);
+    if (!user || user.emailVerifiedAt) {
+      return;
+    }
+
+    await this.sendVerificationEmail(user, workspace);
+  }
+
+  private async sendVerificationEmail(
+    user: User,
+    workspace: Workspace,
+  ): Promise<void> {
+    const token = nanoIdGen(16);
+
+    await executeTx(this.db, async (trx) => {
+      await trx
+        .deleteFrom('userTokens')
+        .where('userId', '=', user.id)
+        .where('type', '=', UserTokenType.EMAIL_VERIFICATION)
+        .execute();
+
+      await this.userTokenRepo.insertUserToken(
+        {
+          token,
+          userId: user.id,
+          workspaceId: workspace.id,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          type: UserTokenType.EMAIL_VERIFICATION,
+        },
+        { trx },
+      );
+    });
+
+    const verifyLink = `${this.domainService.getUrl(workspace.hostname)}/verify-email?token=${token}`;
+
+    const emailTemplate = EmailVerificationEmail({
+      username: user.name,
+      verifyLink,
+    });
+
+    await this.mailService.sendToQueue({
+      to: user.email,
+      subject: 'Verify your email',
+      template: emailTemplate,
+    });
   }
 
   async addUserToWorkspace(
