@@ -13,7 +13,13 @@ export const useRedirectToCloudSelect = () => {
       const frontendUrl = getAppUrl();
       const serverUrl = getServerAppUrl();
       if (frontendUrl === serverUrl) {
-        navigate(APP_ROUTE.AUTH.SELECT_WORKSPACE);
+        // SELECT_WORKSPACE ("already part of a workspace? sign in") needs
+        // POST /workspace/joined and /workspace/find-by-email, which don't
+        // have a backend implementation (specs/MULTI_TENANCY_SPEC.md is
+        // scoped to signup, not the cross-workspace switcher) — send an
+        // unauthenticated apex visitor to create a workspace instead of a
+        // page that 404s.
+        navigate(APP_ROUTE.AUTH.CREATE_WORKSPACE);
       }
     }
   }, [navigate]);
