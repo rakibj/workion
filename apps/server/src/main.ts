@@ -43,6 +43,19 @@ async function bootstrap() {
         ).hostname.toLowerCase();
         if (!host || host === primaryHost) return req.url;
 
+        // In cloud mode, the bare SUBDOMAIN_HOST and every tenant subdomain
+        // under it (specs/MULTI_TENANCY_SPEC.md) are legitimate first-party
+        // hosts, not blog custom domains — only a host outside that whole
+        // family should hit the blog-domain rewrite below.
+        const subdomainHost = (process.env.SUBDOMAIN_HOST || '').toLowerCase();
+        if (
+          process.env.CLOUD === 'true' &&
+          subdomainHost &&
+          (host === subdomainHost || host.endsWith(`.${subdomainHost}`))
+        ) {
+          return req.url;
+        }
+
         const [pathOnly, query] = req.url.split('?');
         const suffix = query ? `?${query}` : '';
         const segments = pathOnly.split('/').filter(Boolean);
