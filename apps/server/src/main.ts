@@ -175,6 +175,7 @@ async function bootstrap() {
       // don't require workspaceId for the following paths
       const excludedPaths = [
         '/api/auth/setup',
+        '/api/auth/exchange',
         '/api/health',
         '/api/billing/stripe/webhook',
         '/api/workspace/check-hostname',
@@ -182,6 +183,9 @@ async function bootstrap() {
         '/api/workspace/create',
         '/api/workspace/joined',
         '/api/workspace/find-by-email',
+        '/api/workspace/verify-email',
+        '/api/workspace/resend-verification',
+        '/api/workspace/domain-ask',
       ];
 
       if (
