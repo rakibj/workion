@@ -1,6 +1,6 @@
 # Fix "Turn Into" Inside Toggle Blocks / Toggle Headings — Spec
 
-> **Status: Proposed, not approved.** Per CLAUDE.md's methodology, get approval before implementing.
+> **Status: Done.** Implemented in commit `eb15aad` — toggle-heading/details nodes registered for drag-handle hit-testing.
 
 ## Goal
 

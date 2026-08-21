@@ -44,7 +44,7 @@ async function bootstrap() {
         if (!host || host === primaryHost) return req.url;
 
         // In cloud mode, the bare SUBDOMAIN_HOST and every tenant subdomain
-        // under it (specs/MULTI_TENANCY_SPEC.md) are legitimate first-party
+        // under it (docs/specs/done/MULTI_TENANCY_SPEC.md) are legitimate first-party
         // hosts, not blog custom domains — only a host outside that whole
         // family should hit the blog-domain rewrite below.
         const subdomainHost = (process.env.SUBDOMAIN_HOST || '').toLowerCase();

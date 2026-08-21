@@ -4,7 +4,7 @@ import { EnvironmentService } from '../../../integrations/environment/environmen
 /**
  * Blocks a route everywhere except a `CLOUD=true` deployment. Gameloops runs
  * self-hosted (`isCloud() === false`), so any route behind this guard is a
- * permanent no-op there — see specs/MULTI_TENANCY_SPEC.md.
+ * permanent no-op there — see docs/specs/done/MULTI_TENANCY_SPEC.md.
  */
 @Injectable()
 export class CloudGuard implements CanActivate {

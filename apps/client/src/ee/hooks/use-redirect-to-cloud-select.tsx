@@ -15,7 +15,7 @@ export const useRedirectToCloudSelect = () => {
       if (frontendUrl === serverUrl) {
         // SELECT_WORKSPACE ("already part of a workspace? sign in") needs
         // POST /workspace/joined and /workspace/find-by-email, which don't
-        // have a backend implementation (specs/MULTI_TENANCY_SPEC.md is
+        // have a backend implementation (docs/specs/done/MULTI_TENANCY_SPEC.md is
         // scoped to signup, not the cross-workspace switcher) — send an
         // unauthenticated apex visitor to create a workspace instead of a
         // page that 404s.

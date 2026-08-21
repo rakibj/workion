@@ -1,6 +1,6 @@
 # Stable Blog Attachment URLs — Spec
 
-> **Status: Proposed, not approved.** Per CLAUDE.md's methodology, get approval before implementing.
+> **Status: Done.** Implemented in commits `36e9d65` (stable publish-gated attachment route) and `780a5ef` (URL-rewrite `/api` prefix fix).
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # Space List Caching — Spec
 
-> **Status: Proposed, not approved.** Per CLAUDE.md's methodology, get approval before implementing.
+> **Status: Done.** Implemented in commit `99a933d` — space-list query cached via `withCache`, invalidated on membership writes.
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # Kanban Improvements — Spec
 
-> **Status: Proposed, not approved.** Per CLAUDE.md's methodology, nothing here should be implemented until each spec below is individually approved. Implement one spec at a time, not the whole batch — they're grouped in one document only because they touch the same module.
+> **Status: Done.** Implemented in commit `62d2339` — GIF image support, redundant-WS-broadcast cleanup, live cursor presence, card title/description autosave, and the `ScrollArea` scrollbar fix.
 
 ## Goal
 

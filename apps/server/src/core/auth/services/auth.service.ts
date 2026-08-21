@@ -337,7 +337,7 @@ export class AuthService {
   /**
    * Consumes the short-lived (10s) exchange JWT minted by
    * TokenService.generateExchangeToken for the cross-subdomain signup
-   * handoff (specs/MULTI_TENANCY_SPEC.md Slice 2): the browser is on the new
+   * handoff (docs/specs/done/MULTI_TENANCY_SPEC.md Slice 2): the browser is on the new
    * tenant's own subdomain by the time this runs, so the auth cookie set
    * from the returned token is valid there.
    */

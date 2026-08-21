@@ -27,7 +27,7 @@ Workion currently runs **internally** (Gameloops/Cognitive Peak client work). A 
 - Blog/publishing is **internal-only for now**. Public builds ship with it disabled via a feature flag.
 - The blog module must stay **cleanly separable**: own module directory, own routes, registered conditionally. This serves three purposes at once — edition gating, a simpler AGPL audit boundary, and a future paid-tier entitlement check.
 - **Decision (2026-08): runtime flags only, for now.** One deploy, features resolved per-workspace from a plan/entitlement attribute; internal workspaces resolve to "everything enabled." Revisit build-time exclusion only if the Pre-Launch Gate licensing audit below finds a specific feature that legally cannot ship hidden-but-present in the public bundle — that's a narrow, named exception, not the default mechanism.
-- ⚠️ Note: `apps/server/src/common/features.ts` is Docmost's own upstream `Feature` enum for EE license-gated features (SSO, MFA, SCIM, etc.), backed by a stubbed-out `LicenseCheckService` that currently grants everything. It is **not** the internal/public edition flag infra — that's a separate, Workion-specific mechanism, implemented per `specs/EDITION_ENTITLEMENT_SPEC.md` (see "Entitlement / Edition Gating" under Implemented Custom Features). Don't conflate the two systems.
+- ⚠️ `common/features.ts` is Docmost's own upstream EE `Feature` enum (SSO/MFA/SCIM), backed by a stubbed `LicenseCheckService` that currently grants everything — **not** the internal/public edition flag infra. That's the separate `WorkionFeature`/entitlement mechanism (see "Entitlement / Edition Gating" under Implemented Custom Features). Don't conflate the two.
 - Public-edition tier limits (clients per workspace, users, domains) will be enforced in-app. Limits/pricing are **unvalidated** — treat any numbers as placeholders.
 
 ## Pre-Launch Gate: Licensing Audit (blocking)
@@ -53,6 +53,18 @@ Required before any commercial/AppSumo distribution. This is a legal/architectur
 5. **Update this file** if the feature changes architecture or adds new black-box zones.
 
 Never implement more than one approved feature at once. Never skip the spec step.
+
+**Spec file location.** Every spec is its own markdown doc under `docs/specs/`, in one of three subfolders by status:
+
+```
+docs/specs/draft/     # written, not yet approved
+docs/specs/ongoing/   # approved, implementation in progress (or partially done — some slices remain)
+docs/specs/done/      # fully implemented
+```
+
+Move the file (`git mv`) to the matching folder as its status changes — don't just edit a status line while it sits in the wrong folder. Update any links to it (in this file, other specs, or code comments) when it moves.
+
+**Detail lives in the spec, not here.** Once a feature has a spec doc, that doc is the source of truth for its design and status — update it there, including new findings, gaps, or scope changes discovered during implementation. An entry under "Implemented Custom Features" below points to its spec (name + link + one-line summary) instead of restating the spec's content. This is what lets this file — and anyone reading it — always know which spec is active for a given feature without cross-checking two descriptions that can drift apart. Features shipped without ever getting a spec doc keep their full description here until one exists.
 
 ---
 
@@ -168,9 +180,9 @@ REDIS_URL=redis://localhost:6379
 
 **Upstash abandoned** — BullMQ exhausted the free tier in ~10 days. Now using local Redis.
 
-**Neon abandoned** — free-tier egress hit 81%. Migrated to local Postgres container on the VPS (2026-06-13). Data dumped with `pg_dump -Fc --no-owner --no-acl` via `docker run --rm postgres:18`, restored with `pg_restore --clean --if-exists`. No `sslmode` or `pgbouncer` params — internal Docker network, plain TCP. Daily backups to R2 via `backup.sh` (cron 2 AM). Postgres 18+ requires volume mount at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) — it creates the versioned subdirectory itself.
+**Neon abandoned (2026-06-13)** — free-tier egress hit 81%. Migrated to a local Postgres container on the VPS. Dump/restore via `pg_dump -Fc --no-owner --no-acl` / `pg_restore --clean --if-exists`. No `sslmode`/pgbouncer params — internal Docker network, plain TCP. Daily backups to R2 via `backup.sh` (cron 2 AM). Postgres 18+ needs its volume mounted at `/var/lib/postgresql` (not `.../data`) — it creates the versioned subdirectory itself.
 
-**Postgres extracted to standalone infra stack (2026-06-13)** — Postgres no longer lives inside Workion's compose project. It runs as an independent stack at `/opt/infra/docker-compose.yml` with its own named volume `infra-postgres-data` and network `infra-net`. Workion's `app` service joins `infra-net` as an external network and reaches Postgres via the `postgres` service-name DNS alias — no `DATABASE_URL` change required. `backup.sh` now targets `infra-postgres-1` directly via `docker exec` (not `docker compose exec`). To add a new app's database: `docker exec -it infra-postgres-1 psql -U docmost` then `CREATE DATABASE … / CREATE USER … / GRANT …`.
+**Postgres runs as a standalone infra stack (2026-06-13)** — independent of Workion's compose project, at `/opt/infra/docker-compose.yml`, own volume `infra-postgres-data`, own network `infra-net`. Workion's `app` service joins `infra-net` as external and reaches Postgres via the `postgres` service-name DNS alias — no `DATABASE_URL` change needed. `backup.sh` targets `infra-postgres-1` directly via `docker exec` (not `docker compose exec`). New app database: `docker exec -it infra-postgres-1 psql -U docmost` → `CREATE DATABASE … / CREATE USER … / GRANT …`.
 
 ### Disaster recovery — restore from R2 backup
 
@@ -220,9 +232,9 @@ docker compose -f docker-compose.prod.yml build --no-cache && up -d
 
 ## Blog — Live Custom Domain Setup
 
-How blog publishing behaves in production, and the runbook for pointing a client's domain at their space's blog. `BlogRenderController`/`BlogSeoController` resolve which space to serve purely from the request's `Host` header, looked up against `spaces.settings.blog.domain` in the DB at request time — there is no code path that needs redeploying per domain.
+How blog publishing behaves in production, and the runbook for pointing a client's domain at their space's blog. `BlogRenderController`/`BlogSeoController` resolve which space to serve purely from the request's `Host` header, looked up against `spaces.settings.blog.domain` in the DB at request time — no code path needs redeploying per domain.
 
-**Primary domain (`workion.gameloops.io`) — zero setup.** Every space's published posts (a post needs a `shares` row, i.e. actually published, not just saved settings) are automatically reachable at `https://workion.gameloops.io/blog/:slug`, `/blog/sitemap.xml`, `/blog/rss.xml`. `basePath` is ignored here regardless of whether it's set — it only applies once a custom domain is configured for that space.
+**Primary domain (`workion.gameloops.io`) — zero setup.** Every space's published posts (needs a `shares` row, i.e. actually published, not just saved settings) are automatically reachable at `https://workion.gameloops.io/blog/:slug`, `/blog/sitemap.xml`, `/blog/rss.xml`. `basePath` is ignored here regardless of whether it's set — it only applies once a custom domain is configured for that space.
 
 **Custom domain per space — 4 manual steps, no app rebuild:**
 
@@ -241,6 +253,8 @@ How blog publishing behaves in production, and the runbook for pointing a client
 4. Once DNS + cert are live, the domain immediately serves that space's blog — `https://client-domain.com/<slug>` (or `/<basePath>/<slug>` if a path was set), plus `/sitemap.xml`, `/rss.xml`, `/robots.txt` at that domain's root or basePath.
 
 **Scaling caveat:** every new client domain currently means hand-editing `Caddyfile` and restarting the `caddy` container — fine for a handful of clients, doesn't scale to many. If/when that becomes a bottleneck, Caddy's `on_demand_tls` with an `ask` endpoint (hitting the app to check `spaces.settings.blog.domain` before issuing a cert automatically) would remove the manual Caddyfile edit per domain — not implemented, flagged here as the likely next step.
+
+**Local testing (no DNS/Caddy needed):** add a dotted hosts-file entry (e.g. `blog.local` — single-label names like `localhost` are rejected by the domain validator), set it as the space's Blog domain, and hit the backend directly on its own port (`http://blog.local:3000/...`), not the Vite dev server on 5173. `getBlogDomainOrigin()` (`lib/config.ts`) builds the live-link URL shown in the settings modal from `SERVER_URL` in dev / a bare `https://` origin in prod.
 
 ---
 
@@ -304,7 +318,7 @@ New tables go in new migration files. Never alter existing migrations.
 ### Work areas
 
 | Path                     | What it is                          |
-| ------------------------ | ----------------------------------- |
+| ------------------------ | ------------------------------------ |
 | `core/auth/`             | Login, registration, session        |
 | `core/workspace/`        | Workspace CRUD, user management     |
 | `core/space/`            | Space CRUD, member management       |
@@ -324,16 +338,16 @@ New tables go in new migration files. Never alter existing migrations.
 
 ### Black boxes (do not modify unless you must)
 
-| Path                    | Why hands-off                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `collaboration/`        | Hocuspocus engine — additive touches only                                                      |
-| `apps/editor-ext/`      | TipTap extensions                                                                              |
-| `apps/ee/`              | Enterprise Edition — conditionally loaded                                                      |
-| `integrations/storage/` | Use `StorageService`, don't re-implement                                                       |
-| `integrations/mail/`    | Use `MailModule`, don't touch internals                                                        |
-| `integrations/queue/`   | Add new jobs/queues, don't change infra                                                        |
-| `integrations/export/`  | HTML/Markdown/DOCX export — extend via `ExportService`; `docx-utils.ts` for DOCX preprocessing |
-| `integrations/import/`  | MD/HTML/DOCX import — extend via `ImportService`                                               |
+| Path                    | Why hands-off                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `collaboration/`        | Hocuspocus engine — additive touches only                                                        |
+| `apps/editor-ext/`      | TipTap extensions                                                                                 |
+| `apps/ee/`              | Enterprise Edition — conditionally loaded                                                        |
+| `integrations/storage/` | Use `StorageService`, don't re-implement                                                          |
+| `integrations/mail/`    | Use `MailModule`, don't touch internals                                                           |
+| `integrations/queue/`   | Add new jobs/queues, don't change infra                                                           |
+| `integrations/export/`  | HTML/Markdown/DOCX export — extend via `ExportService`; `docx-utils.ts` for DOCX preprocessing   |
+| `integrations/import/`  | MD/HTML/DOCX import — extend via `ImportService`                                                  |
 
 ---
 
@@ -342,7 +356,7 @@ New tables go in new migration files. Never alter existing migrations.
 ### Work areas
 
 | Path                           | What it is                       |
-| ------------------------------ | -------------------------------- |
+| ------------------------------- | --------------------------------- |
 | `features/auth/`               | Login/signup UI                  |
 | `features/workspace/`          | Workspace settings               |
 | `features/space/`              | Space listing, settings, members |
@@ -358,7 +372,7 @@ New tables go in new migration files. Never alter existing migrations.
 ### Black boxes
 
 | Path                     | Why hands-off      |
-| ------------------------ | ------------------ |
+| ------------------------- | -------------------- |
 | `features/editor/`       | TipTap integration |
 | `features/transclusion/` | Page embedding     |
 | `features/websocket/`    | Real-time sync     |
@@ -367,7 +381,8 @@ New tables go in new migration files. Never alter existing migrations.
 
 ## Signup Behaviour
 
-⚠️ **Correction (2026-08-21): the claim below that workspace creation is "always enabled" is stale/wrong — verified against current source, not fixed.** `GET /api/auth/setup-config` does always return `{ allowSignup: true }` (that part is accurate — it's just a UI signal to show the sign-up link). But the actual workspace-creation endpoint, `POST /auth/setup`, is gated by `SetupGuard` (`core/auth/guards/setup.guard.ts`):
+`GET /api/auth/setup-config` always returns `{ allowSignup: true }` — that's just a UI signal to show the sign-up link, not a guarantee. The actual workspace-creation endpoint, `POST /auth/setup`, is gated by `SetupGuard` (`core/auth/guards/setup.guard.ts`):
+
 ```ts
 async canActivate(): Promise<boolean> {
   if (this.environmentService.isCloud()) return false;
@@ -375,42 +390,22 @@ async canActivate(): Promise<boolean> {
   return count === 0;
 }
 ```
-This only succeeds once, ever, per deployment — the very first workspace. Once Gameloops exists, `/auth/setup` is permanently blocked (and it's blocked unconditionally in `isCloud()` mode regardless of count). See "Multi-Tenancy Status" below — this is the mechanism behind why self-hosted Workion cannot create a second workspace today.
 
-- **Frontend**: Default landing (`/`) redirects to `/setup/register`. Login page has a "Sign up" link. Signup page has a "Sign in" link. These UI elements are misleading beyond the first workspace — they render regardless of whether signup will actually succeed.
-- Invitations (joining an *existing* workspace via `invite-link/*` or `workspace_invitations`) and login always work regardless — only *creating a new workspace* is limited to the first one.
+This succeeds only once, ever, per deployment — the very first workspace. Once Gameloops exists, `/auth/setup` is permanently blocked (and unconditionally blocked in `isCloud()` mode regardless of count). See "Multi-Tenancy Status" for why self-hosted Workion can't create a second workspace today.
+
+- **Frontend**: `/` redirects to `/setup/register`; login and signup pages cross-link. These render regardless of whether signup will actually succeed — misleading beyond the first workspace.
+- Invitations (joining an *existing* workspace via `invite-link/*` or `workspace_invitations`) and login always work — only *creating* a new workspace is limited to the first one.
 
 ---
 
-## Multi-Tenancy Status (verified 2026-08-21 — read before any "separate paid workspace" work)
+## Multi-Tenancy Status (read before any "separate paid workspace" work)
 
-**Self-hosted Workion, as currently built, is architecturally single-workspace. This is not a config flag — it needs real implementation work before "different paid Workion workspaces" is possible.** Two independent blockers, both verified against source:
+Self-hosted Workion, as built, is architecturally single-workspace — not a config flag, real implementation work was required. Two independent blockers, both still true of the codebase today:
 
-1. **No way to create a second workspace.** `POST /auth/setup` is a one-time bootstrap gated by `SetupGuard` (see "Signup Behaviour" above) — blocked forever once workspace #1 exists. The frontend also references a second creation path (`apps/client/src/ee/pages/create-workspace.tsx`, the `/create` and `/select` routes in `App.tsx`, calling `POST /workspace/create`) — but that's Docmost's own Enterprise/Cloud signup flow, and **`apps/server/src/ee/` does not exist in this repo at all**. That endpoint has no backend implementation here; it would 404.
-2. **No per-request tenant routing.** `DomainMiddleware` (`common/middlewares/domain.middleware.ts`) resolves the workspace for every request:
-   ```ts
-   if (this.environmentService.isSelfHosted()) {
-     const workspace = await this.workspaceRepo.findFirst(); // always the same one
-     ...
-   } else if (this.environmentService.isCloud()) {
-     const subdomain = req.headers.host.split('.')[0];
-     const workspace = await this.workspaceRepo.findByHostname(subdomain);
-     ...
-   }
-   ```
-   In self-hosted mode (how Workion runs today — `CLOUD` unset), **every request resolves to `findFirst()` — literally the first workspace ever created, unconditionally.** Even if a second workspace row existed in the database, nothing would ever route a request to it. Hostname-based per-tenant routing (`findByHostname`) only exists in the `isCloud()` branch.
+1. **No way to create a second workspace.** `POST /auth/setup` is a one-time bootstrap (see "Signup Behaviour"). Docmost's own second-workspace flow (`apps/client/src/ee/pages/create-workspace.tsx`, `/create` and `/select` routes, `POST /workspace/create`) has no backend in this repo — **`apps/server/src/ee/` doesn't exist here** — the endpoint would 404.
+2. **No per-request tenant routing.** `DomainMiddleware` (`common/middlewares/domain.middleware.ts`) resolves the workspace for every request. In self-hosted mode (`CLOUD` unset — how Gameloops runs), it always calls `workspaceRepo.findFirst()` regardless of how many workspace rows exist. Hostname-based routing (`findByHostname`) only exists in the `isCloud()` branch.
 
-**What this means for "paid Workion workspaces with different permissions, Gameloops stays internal":** the [[EDITION_ENTITLEMENT_SPEC.md|entitlement/plan system]] (`common/entitlement/`) is real and necessary — it's the layer that differentiates *what a workspace can do* once you know which workspace you're in. But it assumes workspace resolution works, which it currently doesn't beyond workspace #1. Building real separation requires, at minimum: a working workspace-create/signup flow (the missing EE piece), and either (a) `CLOUD`-mode-style hostname/subdomain routing on a single shared deployment, or (b) one deployment per paid workspace. **Decision (2026-08-21), see `specs/MULTI_TENANCY_SPEC.md`:** a hybrid — a second, separate deployment (own DB, own Redis, `CLOUD=true`) that itself does real subdomain-based multi-tenant routing for paid customers, while Gameloops' existing production deployment stays untouched. This satisfies "real multi-tenancy" and "don't touch Gameloops" simultaneously by isolating at the deployment level, not the request-routing level.
-
-**Update (2026-08-21): all four slices are done, including the real second deployment.** `specs/MULTI_TENANCY_SPEC.md` is fully implemented — cloud signup/verification/exchange (Slices 1–3), and a live second `CLOUD=true` deployment at `https://workionlive.gameloops.io` (Slice 4), on the same VPS as Gameloops but its own containers/database/secret, reusing Gameloops' shared Caddy instance. Proven end-to-end through the real public URL. See the spec for the full slice-by-slice record, including three pre-existing bugs (unrelated to this work, just never exercised before) that only surfaced once a second host/domain actually existed: a URL-rewrite hook that mistook tenant subdomains for blog custom domains, a hardcoded route allowlist that 404'd Caddy's cert-authorization calls, and a client redirect that pointed at a never-built page. Nothing here changes Gameloops' own behavior — none of it is reachable while `CLOUD` is unset, which Gameloops' deployment leaves unset.
-
-**Known follow-up, not yet done:** the Caddy container currently has a runtime/on-disk config drift unrelated to multi-tenancy — it's still serving an old `auth.gameloops.io` (zitadel) block that isn't in the on-disk `Caddyfile` anymore (an existing uncommitted edit there, never reloaded). Deliberately left alone rather than decided for you; see the spec's Slice 4 section.
-
-**Post-launch fixes, found by an actual signup on `workionlive` (2026-08-21):**
-1. **Verification emails were silently rejected by Resend** — `MAIL_FROM_ADDRESS` on the `workion-live` deployment's `.env` was `noreply@workionlive.gameloops.io`, a subdomain never added/verified as its own domain in the Resend account (only `workion.gameloops.io` is verified there). Every send failed with `550 ... domain is not verified`. Fixed by pointing `MAIL_FROM_ADDRESS` at the already-verified `workion.gameloops.io` instead — env-only change, `docker compose restart app`, no rebuild. (Proper long-term fix, not done: verify `workionlive.gameloops.io` in Resend with its own SPF/DKIM records.)
-2. **Cloud signup always created a workspace named "My workspace"** — `SetupWorkspaceForm` (`apps/client/src/features/auth/components/setup-workspace-form.tsx`) only rendered the Workspace Name input when `!isCloud()`, i.e. it was hidden specifically for cloud signups, the one case that actually needs it. The form always submitted `workspaceName: ""`, so `createCloudWorkspace` fell back to the literal default `'My workspace'`, slugified to a `myworkspace-NNNN` hostname regardless of what the user typed for their name/email. Fixed by rendering the field unconditionally (commit `d5e391a`).
-
-**Git push access note:** this dev machine's cached GitHub credential (Git Credential Manager) is for an account without push rights to `rakibj/workion` (403 on `git push origin main`). The `d5e391a` fix above was delivered straight to the `workion-live` VPS checkout via `git bundle` + `scp` + `git fetch`/`merge --ff-only` over SSH, bypassing GitHub entirely — so **GitHub `origin/main` is currently behind what's actually running on `workion-live`** until someone re-authenticates GCM with the correct account and pushes.
+**Spec (source of truth):** `docs/specs/done/MULTI_TENANCY_SPEC.md` — Done. Architecture decision, all four implementation slices, the live second deployment (`https://workionlive.gameloops.io`), bugs found and fixed, known follow-ups, and the git-push-access gotcha are all recorded there, not here.
 
 ---
 
@@ -418,9 +413,9 @@ This only succeeds once, ever, per deployment — the very first workspace. Once
 
 ### Space Invite Links (Guest Access)
 
-Shareable invite links for spaces. Backend: `core/space/services/space-invite-link.service.ts`, controller at `spaces/invite-links/*`, `space_invite_links` table (token, spaceRole, expiresAt, maxUses, useCount). Auth endpoints: `GET /auth/invite-link/:token` (public info), `POST /auth/invite-link/signup` (new guest account), `POST /auth/invite-link/join` (existing user). `spaceRole` is `reader | commenter | writer` — `commenter` (can read + comment, no Settings access) is the typical guest role; joining always adds the user to the workspace as `UserRole.GUEST` and to the space with the given role. "Space Settings" UI is hidden when `spaceAbility.cannot(Read, Settings)` — commenter has no Settings ability. Frontend: `SpaceInviteLinks` component in space settings, `InviteLinkPage` at `/invite/:token`.
+Shareable invite links for spaces. Backend: `core/space/services/space-invite-link.service.ts`, controller at `spaces/invite-links/*`, `space_invite_links` table (token, spaceRole, expiresAt, maxUses, useCount). Auth endpoints: `GET /auth/invite-link/:token` (public info), `POST /auth/invite-link/signup` (new guest account), `POST /auth/invite-link/join` (existing user). `spaceRole` is `reader | commenter | writer` — `commenter` (read + comment, no Settings access) is the typical guest role; joining always adds the user to the workspace as `UserRole.GUEST`. "Space Settings" UI is hidden when `spaceAbility.cannot(Read, Settings)`. Frontend: `SpaceInviteLinks` in space settings, `InviteLinkPage` at `/invite/:token`.
 
-**Comment permission system:** `SpaceRole.COMMENTER` (commenter) added alongside reader/writer/admin. `SpaceCaslSubject.Comment` added; only admin/writer/commenter get `can(Create, Comment)` — readers cannot comment. `PagePermissionRole.COMMENTER` added for page-level overrides. Backend `validateCanComment` enforces: unrestricted pages → CASL `Create Comment` ability required; restricted pages → page-level role must be commenter or writer. `page.permissions.canComment` returned from both page info endpoints and used on frontend to gate: inline comment dialog (page-editor), comment sidebar panel (comment-list-with-tabs), reply editors, and `@mention`. The `Share` option in the page header is hidden for workspace guests (`user.role === 'guest'`).
+**Comment permission system:** `SpaceRole.COMMENTER` added alongside reader/writer/admin, plus `PagePermissionRole.COMMENTER` for page-level overrides. Only admin/writer/commenter get CASL `can(Create, Comment)`; readers cannot comment. `validateCanComment`: unrestricted pages need the CASL ability, restricted pages need a commenter/writer page-level role. `page.permissions.canComment` gates the inline comment dialog, comment sidebar, reply editors, and `@mention` on the frontend. The `Share` header option is hidden for workspace guests.
 
 ### AI Chat (BYOK via OpenRouter)
 
@@ -428,23 +423,21 @@ OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backen
 
 ### Kanban Board Page
 
-`kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room; filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
+`kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room, filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
 
-### Entitlement / Edition Gating
+### Entitlement / Edition Gating — Workspace Module Config
 
-Workspace-level plan/feature gating, independent of Docmost's own upstream EE `Feature`/`LicenseCheckService` system (which stays untouched — see "Editions: Internal vs Public"). Core: `apps/server/src/common/entitlement/` — `WorkionPlan`/`WorkionFeature` enums and `PLAN_FEATURES`/`PLAN_LIMITS` maps (`entitlement.ts`), `EntitlementService.resolvePlan/hasFeature/getLimits` (`entitlement.service.ts`, pure/DB-less), registered via a `@Global()` `EntitlementModule` in `app.module.ts`. Resolution reuses the existing (currently always-null) `workspaces.plan` column: `null`/unset → `WorkionPlan.INTERNAL` (everything on, no limits) — this is what every existing workspace has today, so internal usage is unaffected by construction; an unrecognized plan string fails safe to the most-restrictive plan rather than crashing or granting everything. Route-level enforcement is a reusable `@RequireFeature(WorkionFeature.BLOG)` decorator + `EntitlementGuard` (Reflector-based, same shape for any future gated feature) — currently applied only to `BlogController` (the authenticated create/settings/publish/unpublish path). Plan values and limit numbers are unvalidated placeholders per CLAUDE.md's editions note. Full design and slice-by-slice status: `specs/EDITION_ENTITLEMENT_SPEC.md`.
+Workspace-level plan/module gating, independent of Docmost's own upstream EE `Feature` system (untouched, see "Editions"). Core: `apps/server/src/common/entitlement/`.
 
-### Blog Publishing Platform (in progress — internal-only)
+**Spec (source of truth):** `docs/specs/done/WORKSPACE_MODULE_CONFIG_SPEC.md` (the module-config mechanism, Done) and `docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md` (entitlement-resolution design; Slices 3–4 blocked on the Client entity). Read those before touching this system — don't rely on a summary here.
 
-> **Edition note:** blog/publishing is not part of the planned public build. Gated via `EntitlementGuard` on `BlogController` (see "Entitlement / Edition Gating" above) — a workspace whose plan lacks the `blog` feature gets a 403 on create/settings/publish/unpublish. **Known gap:** the unauthenticated public-read routes (`BlogPublicController`/`BlogRenderController`/`BlogSeoController`) are not yet gated — a workspace downgraded after already publishing keeps serving those old posts. See Slice 2 in the entitlement spec.
+**Only Blog is actually wired to this system** — Kanban, AI Chat, Page Templates, DOCX import/export, and the HTML Artifact block are all ungated/always-on. Check `PLAN_FEATURES` (in the spec) before assuming a module differs by plan.
 
-`blog` is a page type with per-post metadata in `blog_post_settings` and a per-space hostname at `spaces.settings.blog.domain`/`basePath`. The authenticated API lives in `core/blog/`: `GET`/`POST /blog/posts/:pageId/settings`, `POST /blog/posts/:pageId/publish`, and `POST /blog/posts/:pageId/unpublish`; **publishing requires a `shares` row for the page** — `findPublishedBySlug`/`findPublishedBySlugAnywhere` inner-join `shares`, so a post with saved settings but no share (never published, or unpublished) 404s as "Blog post not found" even though its settings exist. Space administrators update the hostname through `PATCH /spaces/:spaceId/blog-settings`. The client exposes Blog Post creation, a post settings modal (`blog-settings-modal.tsx`, shows the live published URL with copy/open-in-new-tab once a `shares` row exists), and a Blog tab in space settings (`space-blog-settings.tsx`, warns when `basePath` is set without a `domain` since basePath is ignored without one). Public JSON endpoints are at `/api/public/blog/posts`; custom domains and `/blog/:slug` render server-side via `BlogRenderController`. Domain-resolved `/sitemap.xml`, `/rss.xml`, and `/robots.txt` complete the technical-SEO routes. Refer to `specs/BLOG_MASTER_SPEC.md` for the implementation record.
+### Blog Publishing Platform (internal-only)
 
-**Custom-domain routing (`BlogRenderController`) is resolved by the NestJS server directly via the request `Host` header** — it does not go through the Vite dev proxy (only `/api` and `/blog` are proxied in `vite.config.ts`). On the primary app domain (`APP_URL`'s hostname), every space's published posts are served at the shared `/blog/:slug` path regardless of any per-space `basePath` — `basePath` only applies once a custom domain is configured for that space.
+Not part of the planned public build. `blog` is a page type (`core/blog/`) with per-post metadata and a per-space custom hostname.
 
-To test a custom blog domain locally: add a hosts-file entry for a dotted hostname (e.g. `blog.local` — the domain validator rejects single-label names like `localhost`) pointing at a loopback address, set it as the space's "Blog domain", and hit the backend directly on its own port — `http://blog.local:3000/...` (or with `basePath`, `http://blog.local:3000/<basePath>/<slug>`) — not through the Vite dev server on 5173. The client's `getBlogDomainOrigin()` (`lib/config.ts`) builds this automatically for the live-link display in the settings modal, using `SERVER_URL` (now exposed to the client bundle via `vite.config.ts`'s `define`) in dev and a bare `https://` origin in prod (Caddy terminates TLS there). In prod, a new custom domain also needs a DNS record pointing at the VPS and a new Caddyfile site block reverse-proxying to `app:3000` — no automation for that yet.
-
-**Blog post custom fields.** Space admins define an arbitrary metadata schema at `spaces.settings.blog.customFields` (`{ key, label, type: 'boolean'|'number'|'text' }[]`, edited in the "Custom fields" section of `space-blog-settings.tsx`, unique keys enforced in `SpaceService.updateBlogSettings`). Per-post values live in the new `blog_post_settings.custom_fields` JSONB column (migration `20260729T000000-blog-post-custom-fields.ts`), edited in `blog-settings-modal.tsx` via inputs generated from the space's schema. `BlogPostSettingsService.upsert()` strictly validates incoming `customFields` against the space's schema (unknown key or type mismatch → 400) before persisting. `BlogPublicService.serializePost()` always includes `customFields` in both list and single-post responses at `/api/public/blog/posts`, so consumers can pull fields like `isFeatured`/`priority` straight from the public JSON API and filter/sort client-side — there is no server-side filter/sort query param for this in v1. Removing or renaming a schema field does not scrub already-stored post values (they just stop rendering in the settings modal).
+**Spec (source of truth):** `docs/specs/ongoing/BLOG_MASTER_SPEC.md` — publish flow, public JSON API, SSR/custom-domain rendering, sitemap/RSS/robots, entitlement gating and known gaps (Addendum A), custom fields (Addendum B). Also see `docs/specs/done/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md` (stable image URLs) and "Blog — Live Custom Domain Setup" above for the production DNS/Caddy runbook.
 
 ### In-App Notifications
 
@@ -468,7 +461,7 @@ Bell icon with unread badge. Backend: `core/notification/` — BullMQ processor 
 
 ### Comment Resolve + Realtime Toast
 
-`POST /comments/resolve` → `CommentService.resolve()` — sets `resolvedAt`/`resolvedById`, emits `commentResolved` WS event, queues notification. `use-query-subscription.ts` shows toast on `commentCreated` from other users (filtered via `queryClient.getQueryData(["currentUser"])`).
+`POST /comments/resolve` → `CommentService.resolve()` — sets `resolvedAt`/`resolvedById`, emits `commentResolved` WS event, queues notification. `use-query-subscription.ts` shows a toast on `commentCreated` from other users (filtered via `queryClient.getQueryData(["currentUser"])`).
 
 ### Logo
 
@@ -476,41 +469,24 @@ SVG at `apps/client/src/assets/logo-workion.svg`, imported in `auth-layout.tsx` 
 
 ### Sidebar Inline Page Rename — DONE
 
-`...` context menu on sidebar page items includes a "Rename" option (canEdit only). Clicking it replaces the page title `<span>` with an inline `<input>` pre-filled and auto-focused. Enter/blur → saves via existing `handleRename()` (skips API if unchanged or empty). Escape → reverts. Files: `space-tree-node-menu.tsx`, `space-tree-row.tsx`, `tree.module.css`.
+Sidebar `...` menu "Rename" (canEdit only) swaps the title `<span>` for an auto-focused `<input>`. Enter/blur saves via existing `handleRename()` (skips API if unchanged/empty); Escape reverts. Files: `space-tree-node-menu.tsx`, `space-tree-row.tsx`, `tree.module.css`.
 
 ### Unread Page Notification Badge — DONE
 
-Blue number badge on sidebar page items for pages with unread notifications directed at the current user. Clears when the user navigates to the page.
-
-- **DB**: new `page_reads` table (migration `20260607T000000-page-reads.ts`). `page_id` was already on `notifications`.
-- **Backend**: `PageReadsRepo` — `upsert`, `getUnreadCounts`, `getUnreadCount`. `NotificationService.create()` emits `pageUnreadCountChanged` WS event after inserting a page-scoped notification. Two new endpoints: `POST /pages/unread-counts` and `POST /pages/mark-read`.
-- **Frontend**: `pageUnreadCountsAtom` (Jotai). Initial fetch + WS subscription in `use-notification-socket.ts`. Badge in `SpaceTreeRow`. `useMarkPageRead` called in `PageContent` on page ID change.
+Blue count badge on sidebar page items for pages with unread notifications directed at the current user; clears when the user navigates to the page. DB: `page_reads` table (migration `20260607T000000-page-reads.ts`). Backend: `PageReadsRepo` (`upsert`, `getUnreadCounts`, `getUnreadCount`); `NotificationService.create()` emits `pageUnreadCountChanged` after inserting a page-scoped notification; `POST /pages/unread-counts` and `POST /pages/mark-read`. Frontend: `pageUnreadCountsAtom` (Jotai), initial fetch + WS subscription in `use-notification-socket.ts`, badge in `SpaceTreeRow`, `useMarkPageRead` called in `PageContent` on page ID change.
 
 ### Toggle Heading 1 / 2 / 3 — DONE
 
-Collapsible headings (H1/H2/H3) where the heading text is the toggle trigger, similar to Notion's toggle headings.
-
-- **Extension files:** `packages/editor-ext/src/lib/toggle-heading/` — `ToggleHeading` (outer wrapper node, `data-type="toggleHeading"`, attrs: `level: 1|2|3`, `open: bool`), `ToggleHeadingTitle` (inline heading content, styled via CSS per level), `ToggleHeadingContent` (collapsible body, `block*`).
-- **Commands:** `setToggleHeading({ level })` (wraps current block; updates level if already in toggleHeading), `unsetToggleHeading()` (converts back to heading + body blocks), `toggleToggleHeading({ level })` (toggle/change level).
-- **Input rules:** `#> ` → Toggle H1, `##> ` → Toggle H2, `###> ` → Toggle H3.
-- **CSS:** `apps/client/src/features/editor/styles/toggle-heading.css` — heading-size styling per level via `data-level` attribute, open/close via `[open]` attribute, content indented 1.5rem when open, caret rotates 90° when open, search-result auto-expand.
-- **No keyboard shortcuts** — conflicts with `Mod-Alt-1/2/3` which are bound to plain headings by the StarterKit Heading extension.
-- **Keyboard UX:** `Enter` in title → opens toggle + moves cursor into content; `Backspace` at title start → `unsetToggleHeading()`.
-- **Slash menu:** "Toggle Heading 1/2/3" entries (search terms include "toggle", "h1/h2/h3", "collapsible", "expand").
-- **Turn-into menu (block menu) + bubble menu (node selector):** Toggle H1/H2/H3 entries added.
-- **Placeholder:** level-aware ("Heading 1" / "Heading 2" / "Heading 3") via parent node lookup in `Placeholder.configure()`.
-- **`open` state is local only** — not synced across users (same as toggle block).
+Collapsible headings (H1–H3) where the heading text is the toggle trigger, similar to Notion's toggle headings. Extension: `packages/editor-ext/src/lib/toggle-heading/` (`ToggleHeading` wrapper node with `level`/`open` attrs, `ToggleHeadingTitle`, `ToggleHeadingContent`). Commands: `setToggleHeading`, `unsetToggleHeading`, `toggleToggleHeading`. Input rules `#> `/`##> `/`###> ` for H1/H2/H3. Wired into the slash menu, turn-into/bubble menus, and level-aware placeholder text. **No keyboard shortcut** — would conflict with StarterKit's `Mod-Alt-1/2/3` on plain headings. `Enter` in the title opens the toggle and moves into content; `Backspace` at title start unsets. `open` state is local-only, not synced across users (same as toggle blocks). CSS: `features/editor/styles/toggle-heading.css`.
 
 ### DOCX Export & Import — DONE
 
-Single-page DOCX export and DOCX import via `mammoth`. No round-trip fidelity guarantee — DOCX is an exchange format.
+Single-page export, full import, via `mammoth`/`html-to-docx`/`katex`. No round-trip fidelity guarantee — DOCX is an exchange format.
 
-- **Dependencies added (server):** `html-to-docx`, `katex`, `mammoth`
-- **Export pipeline:** `pageJson → jsonToHtml() → preprocessHtmlForDocx() → html-to-docx → Buffer`. `preprocessHtmlForDocx` (cheerio-based, in `integrations/export/docx-utils.ts`) runs in order: inline attachment images as base64 data URIs from storage, convert math blocks/inline via KaTeX HTML, callout → styled blockquote, unwrap columns, unwrap attachment nodes to their inner `<a>`, strip unrenderable nodes (subpages, transclusion), strip data-\* attrs.
-- **`ExportFormat.Docx = 'docx'`** added to enum in `export-dto.ts` (backend) and `page.types.ts` (frontend). `ExportPageDto` and `ExportSharedPageDto` `@IsIn` validators include `'docx'`. `ExportSpaceDto` intentionally excludes docx (ZIP multi-page not supported).
-- **`exportPages()`**: docx always treated as single-page (never zipped). `exportPage()` return type widened to `string | Buffer | undefined`.
-- **Import**: `processDocx()` in `import.service.ts` replaced EE dynamic-require with direct `mammoth.convertToHtml({ buffer }, { includeDefaultStyleMap: true })` → `processHTML()`. Signature simplified to `(fileBuffer: Buffer)`. Pre-assigned `pageId` removed for DOCX (still present for PDF/EE).
-- **Frontend**: "Word (.docx)" added to format selector in `ExportModal` (page export only — space export omitted) and `ShareExportModal`. Subpage/attachment toggles hidden when docx is selected.
+- Export: `pageJson → jsonToHtml() → preprocessHtmlForDocx() → html-to-docx → Buffer`. Preprocessing (`integrations/export/docx-utils.ts`, cheerio-based) inlines attachment images as base64 data URIs, converts math via KaTeX HTML, turns callouts into styled blockquotes, unwraps columns and attachment nodes, strips subpages/transclusion nodes and `data-*` attrs.
+- `ExportFormat.Docx` added to both `ExportPageDto`/`ExportSharedPageDto`; `ExportSpaceDto` intentionally excludes docx (no ZIP multi-page support). `exportPage()`/`exportPages()` treat docx as always single-page.
+- Import: `processDocx()` calls `mammoth.convertToHtml({ buffer }, { includeDefaultStyleMap: true })` → `processHTML()` directly, replacing the old EE dynamic-require.
+- Frontend: "Word (.docx)" in the format selector of `ExportModal` (page export only) and `ShareExportModal`; subpage/attachment toggles hidden when docx is selected.
 
 ---
 
@@ -567,19 +543,17 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ## Next Major Direction: Client Layer
 
-⚠️ **Naming collision, resolved 2026-08-21 — read this before touching "client" anything.** "Client Layer" here means an **agency client** — a company Gameloops does work for, nested under the existing Space/permission model. This is a *completely different concept* from **a paid Workion workspace/tenant** (a separate organization paying to use Workion itself, e.g. an AppSumo buyer). A same-session mix-up built a full Client-entity MVP (migration, backend, frontend) in answer to a question that was actually about multi-tenant workspace separation — it was reverted the same session once the misunderstanding surfaced. See "Multi-Tenancy Status" above for the real (and much bigger) architecture question that prompted this. Do not conflate the two: this section is agency clients; multi-tenancy is a workspace/deployment question.
+⚠️ **"Client Layer" = agency client** — a company Gameloops does work for, nested under the existing Space/permission model. This is a *different concept* from **a paid Workion workspace/tenant** (see "Multi-Tenancy Status"). A 2026-08-21 mix-up built a full Client-entity MVP in answer to what was actually a multi-tenant-workspace question — reverted the same session once the misunderstanding surfaced. Don't conflate the two.
 
 The main product gap: a client is currently just a Space + guest users. There is no first-class model for Client, Project, Deliverable, Request, Approval, or client status/timeline. Priority order (from the AppSumo handoff):
 
-1. **Client entity** (critical) — not started. (A working MVP existed briefly on 2026-08-21 and was reverted — see note above. The design was: `clients`/`client_spaces`/`projects` tables, one client can span multiple Spaces, write ops gated by the existing `Space` CASL ability. Worth reusing as a starting point if/when this is actually picked up.)
+1. **Client entity** (critical) — not started. The reverted MVP's design is a reasonable starting point if picked up again: `clients`/`client_spaces`/`projects` tables, one client can span multiple Spaces, writes gated by the existing `Space` CASL ability.
 2. **Projects / Deliverables** (critical) — not started.
-3. **Branded client portal** (critical) — not started.
+3. **Branded client portal** (critical) — not started. **Decision (2026-08):** a filtered view over existing Spaces/permissions, not a separate frontend surface — reuses the Space/CASL model as a scoped, re-skinned view rather than duplicating permission/display logic.
 4. **Approval / request flow** (high) — needs review → changes requested → approved → delivered → published. Not started.
 5. **Agency-focused AI** (high) — brief→tasks, feedback→action items, status summaries, client-context drafting. No generic autonomous agents before this. Not started.
 
-**Decision (2026-08): the client portal is a filtered view over existing Spaces/permissions**, not a separate frontend surface — it reuses the Space/CASL model as a scoped, re-skinned view rather than duplicating permission/display logic in a second surface.
-
-**The edition/entitlement architecture** (`specs/EDITION_ENTITLEMENT_SPEC.md`, Slices 1–2) is done and unrelated to this reverted work — it's the plan/feature-gating layer, currently applied to the blog module, and it's what real multi-tenancy will also need once workspace resolution itself is fixed (see "Multi-Tenancy Status"). Slice 3 (tier limits) is blocked on the Client entity existing, which it currently doesn't.
+The edition/entitlement architecture (`docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md`, Slices 1–2, done, applied to the blog module) is unrelated to this reverted work, but it's what real multi-tenancy will also need once workspace resolution itself is fixed. Slice 3 (tier limits) is blocked on the Client entity existing, which it currently doesn't.
 
 One spec, one feature at a time, per the methodology — do not batch client-layer work without its own spec.
 
@@ -587,14 +561,14 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 ## Pending Features (Approved Specs)
 
-**Active spec:** [specs/BLOG_MASTER_SPEC.md](specs/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. The approved 2026-07-29 implementation batch completes Spec 2 and implements Specs 3–4 as one publish-to-render vertical slice; it tracks per-session scope and progress/handover in its own tracker table.
+**Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
 
-**Proposed, not yet approved (2026-07-29):** three specs written from a list of reported issues/requests, each grounded in a research pass over the actual code (file:line references, root causes verified against source). Nothing in them should be implemented until the individual spec is approved — implement one at a time even within a document, per the methodology above.
+**Done (2026-07-29 batch), specs kept for reference:** four specs written from a list of reported issues/requests, each grounded in a research pass over the actual code (file:line references, root causes verified against source). All four are now implemented — see each file's status line for the landing commit(s).
 
-- [specs/KANBAN_IMPROVEMENTS_SPEC.md](specs/KANBAN_IMPROVEMENTS_SPEC.md) — 5 independent Kanban fixes: GIF image support (5MB cap), a redundant-WS-broadcast cleanup that's the likely root cause of non-instant card/column move sync, live cursor presence on the board, title/description autosave in the card modal, and a Mantine `ScrollArea` `type="hover"` fix for the missing scrollbar in the card detail view.
-- [specs/SPACE_LIST_CACHING_SPEC.md](specs/SPACE_LIST_CACHING_SPEC.md) — brings the space list in line with the `withCache`/`CacheKey` + invalidate-on-write pattern already used for user/space/workspace/page lookups; today it explicitly disables React Query's default caching (`refetchOnMount: true`) and has no server-side cache at all.
-- [specs/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md](specs/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md) — fixes "Turn into" being unreachable for blocks inside a toggle block/toggle heading. Not a schema bug (verified by direct repro) — the global drag-handle's hit-testing never registers toggle content nodes in `customNodes`, so the handle never appears over them.
-- [specs/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md](specs/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md) — fixes blog post images going dead in externally-cached HTML (e.g. a statically built personal site pulling from `/api/public/blog/posts`). Root cause: published post HTML embeds `/files/public/...?jwt=` attachment URLs that expire after 1h (`TokenService.generateAttachmentToken`); replaces them with a stable `/files/blog/:fileId/:fileName` route whose access is checked live against publish state instead of a token deadline.
+- [docs/specs/done/KANBAN_IMPROVEMENTS_SPEC.md](docs/specs/done/KANBAN_IMPROVEMENTS_SPEC.md) — 5 independent Kanban fixes: GIF image support (5MB cap), a redundant-WS-broadcast cleanup that's the likely root cause of non-instant card/column move sync, live cursor presence on the board, title/description autosave in the card modal, and a Mantine `ScrollArea` `type="hover"` fix for the missing scrollbar in the card detail view.
+- [docs/specs/done/SPACE_LIST_CACHING_SPEC.md](docs/specs/done/SPACE_LIST_CACHING_SPEC.md) — brings the space list in line with the `withCache`/`CacheKey` + invalidate-on-write pattern already used for user/space/workspace/page lookups.
+- [docs/specs/done/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md](docs/specs/done/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md) — fixes "Turn into" being unreachable for blocks inside a toggle block/toggle heading. Root cause was the global drag-handle's hit-testing never registering toggle content nodes in `customNodes`.
+- [docs/specs/done/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md](docs/specs/done/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md) — fixes blog post images going dead in externally-cached HTML. Replaced expiring `/files/public/...?jwt=` attachment URLs with a stable `/files/blog/:fileId/:fileName` route whose access is checked live against publish state.
 
 ---
 

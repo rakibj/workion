@@ -277,3 +277,31 @@ Record the hostname, post ID, and the result of each check in the release handov
 **Definition of done:** `curl 'https://workion.gameloops.io/api/public/blog/sitemap.xml?spaceId=<id>&baseUrl=https%3A%2F%2Fyoursite.com%2Fblog'` returns a ready-to-serve sitemap with `yoursite.com` URLs, and the client's own server can pipe that response verbatim at `yoursite.com/sitemap.xml` with no local generation code. **`baseUrl` must be percent-encoded** — `main.ts`'s `ignoreDuplicateSlashes: true` Fastify option collapses `//` across the whole raw URL (path + query) before parsing, so an unencoded `https://` in a query value gets mangled into `https:/` and fails `@IsUrl()`. Any real HTTP client building the query string normally encodes this correctly; only a hand-typed/unencoded curl URL hits it.
 
 **Out of scope:** the client's server actually doing the proxying (that's their infra, not Workion's); sitemap index files / multi-sitemap sharding (fine at current post-count scale).
+
+---
+
+## Addendum A — Entitlement gating (2026-08-22)
+
+**Depends on:** `docs/specs/done/WORKSPACE_MODULE_CONFIG_SPEC.md` (the `WorkionPlan`/`WorkionFeature` mechanism this uses).
+
+Blog became the first (and, as of this writing, only) module wired to the entitlement system. Full mechanism design lives in `docs/specs/done/WORKSPACE_MODULE_CONFIG_SPEC.md` and `docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md` — this addendum only covers the blog-specific gate points, since they're spread across files those specs don't otherwise touch:
+
+- `BlogController` — `@UseGuards(JwtAuthGuard, EntitlementGuard)` + class-level `@RequireFeature(WorkionFeature.BLOG)`. A workspace whose plan lacks `blog` gets `403` on create/settings/publish/unpublish.
+- `PageController.create()` (`apps/server/src/core/page/page.controller.ts`) — inline check (`createPageDto.type === 'blog' && !entitlementService.hasFeature(workspace.plan, WorkionFeature.BLOG)`), since page creation is one generic endpoint shared by every page type and can't carry the class-level decorator.
+- Frontend: sidebar's "Blog Post" create option (`space-sidebar.tsx`) renders only when `useHasWorkionModule('blog')` is true.
+
+**Known gaps, not yet closed:**
+1. The unauthenticated public-read routes (`BlogPublicController`/`BlogRenderController`/`BlogSeoController`) are **not** gated — a workspace downgraded after already publishing keeps serving those old posts. (Originally flagged in `EDITION_ENTITLEMENT_SPEC.md` Slice 2.)
+2. The space settings **Blog tab** (`space-blog-settings.tsx`) and its `PATCH /spaces/:spaceId/blog-settings` endpoint aren't gated either — a tenant space admin can open that tab and save a blog domain/basePath without the module.
+
+## Addendum B — Blog post custom fields (2026-07-29, no prior spec)
+
+Shipped without a preceding spec doc; recorded here after the fact per the "spec docs are the source of truth" rule.
+
+**What it does:** space admins define an arbitrary metadata schema for blog posts.
+
+- Schema lives at `spaces.settings.blog.customFields`: `{ key, label, type: 'boolean' | 'number' | 'text' }[]`, edited in the "Custom fields" section of `space-blog-settings.tsx`. Unique keys enforced in `SpaceService.updateBlogSettings`.
+- Per-post values live in `blog_post_settings.custom_fields` (JSONB column, migration `20260729T000000-blog-post-custom-fields.ts`), edited in `blog-settings-modal.tsx` via inputs generated from the space's schema.
+- `BlogPostSettingsService.upsert()` validates incoming `customFields` strictly against the space's schema — unknown key or type mismatch → `400`.
+- `BlogPublicService.serializePost()` always includes `customFields` in both list and single-post responses at `/api/public/blog/posts` — consumers filter/sort client-side; there's no server-side filter/sort query param in v1.
+- Removing or renaming a schema field does **not** scrub already-stored post values — they just stop rendering in the settings modal.

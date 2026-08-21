@@ -380,7 +380,7 @@ export class WorkspaceController {
 
   /**
    * Caddy on_demand_tls `ask` gate for dynamically-generated tenant
-   * subdomains (specs/MULTI_TENANCY_SPEC.md Slice 4) — called internally by
+   * subdomains (docs/specs/done/MULTI_TENANCY_SPEC.md Slice 4) — called internally by
    * Caddy over the Docker network, never exposed on a public site block.
    * 2xx = cert issuance allowed; any other status = denied. Guards against
    * an attacker forcing unlimited cert issuance for made-up hostnames.

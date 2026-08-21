@@ -41,7 +41,7 @@ function buildService(overrides: Record<string, any> = {}) {
   return { service, deps };
 }
 
-describe('AuthService.exchangeToken (specs/MULTI_TENANCY_SPEC.md Slice 2)', () => {
+describe('AuthService.exchangeToken (docs/specs/done/MULTI_TENANCY_SPEC.md Slice 2)', () => {
   it('sets up a session for a valid, matching-workspace token', async () => {
     const { service, deps } = buildService();
 

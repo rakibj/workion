@@ -31,7 +31,7 @@ import { ThrottleModule } from './integrations/throttle/throttle.module';
 
 // apps/server/src/ee/ is an optional plugin directory (see CLAUDE.md) that
 // does not exist in this fork. Multi-tenancy's cloud signup flow
-// (specs/MULTI_TENANCY_SPEC.md) doesn't depend on it, so a missing EE module
+// (docs/specs/done/MULTI_TENANCY_SPEC.md) doesn't depend on it, so a missing EE module
 // is not fatal in any deployment mode — self-hosted or cloud.
 const enterpriseModules = [];
 try {
