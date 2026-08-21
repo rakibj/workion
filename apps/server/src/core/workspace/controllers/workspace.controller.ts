@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -374,6 +376,24 @@ export class WorkspaceController {
       dto.sig,
       workspace,
     );
+  }
+
+  /**
+   * Caddy on_demand_tls `ask` gate for dynamically-generated tenant
+   * subdomains (specs/MULTI_TENANCY_SPEC.md Slice 4) — called internally by
+   * Caddy over the Docker network, never exposed on a public site block.
+   * 2xx = cert issuance allowed; any other status = denied. Guards against
+   * an attacker forcing unlimited cert issuance for made-up hostnames.
+   */
+  @Public()
+  @UseGuards(CloudGuard)
+  @HttpCode(HttpStatus.OK)
+  @Get('/domain-ask')
+  async domainAsk(@Query('domain') domain: string) {
+    const allowed = await this.workspaceService.isDomainAllowed(domain);
+    if (!allowed) {
+      throw new ForbiddenException();
+    }
   }
 
   @HttpCode(HttpStatus.OK)

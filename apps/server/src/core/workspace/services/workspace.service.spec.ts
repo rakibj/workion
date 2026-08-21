@@ -47,6 +47,7 @@ function buildService(overrides: Record<string, any> = {}) {
       isCloud: jest.fn().mockReturnValue(true),
       getBillingTrialDays: jest.fn().mockReturnValue(14),
       getAppSecret: jest.fn().mockReturnValue('test-secret'),
+      getSubdomainHost: jest.fn().mockReturnValue('workionlive.gameloops.io'),
     },
     domainService: { getUrl: jest.fn().mockReturnValue('https://acme.example.com') },
     licenseCheckService: {},
@@ -274,5 +275,49 @@ describe('WorkspaceService.resendVerificationEmail', () => {
     expect(deps.mailService.sendToQueue).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'jane@acme.com' }),
     );
+  });
+});
+
+describe('WorkspaceService.isDomainAllowed (Caddy on_demand_tls ask gate, Slice 4)', () => {
+  it('allows the bare SUBDOMAIN_HOST apex', async () => {
+    const { service } = buildService();
+    await expect(
+      service.isDomainAllowed('workionlive.gameloops.io'),
+    ).resolves.toBe(true);
+  });
+
+  it('allows a subdomain matching a real workspace hostname', async () => {
+    const { service, deps } = buildService();
+    deps.workspaceRepo.hostnameExists.mockResolvedValue(true);
+
+    await expect(
+      service.isDomainAllowed('acme.workionlive.gameloops.io'),
+    ).resolves.toBe(true);
+    expect(deps.workspaceRepo.hostnameExists).toHaveBeenCalledWith('acme');
+  });
+
+  it('denies a subdomain with no matching workspace', async () => {
+    const { service, deps } = buildService();
+    deps.workspaceRepo.hostnameExists.mockResolvedValue(false);
+
+    await expect(
+      service.isDomainAllowed('nonexistent.workionlive.gameloops.io'),
+    ).resolves.toBe(false);
+  });
+
+  it('denies an unrelated domain entirely (not a subdomain of SUBDOMAIN_HOST)', async () => {
+    const { service, deps } = buildService();
+
+    await expect(
+      service.isDomainAllowed('evil.example.com'),
+    ).resolves.toBe(false);
+    expect(deps.workspaceRepo.hostnameExists).not.toHaveBeenCalled();
+  });
+
+  it('denies a bare-suffix domain with an empty hostname label', async () => {
+    const { service } = buildService();
+    await expect(
+      service.isDomainAllowed('.workionlive.gameloops.io'),
+    ).resolves.toBe(false);
   });
 });

@@ -809,6 +809,34 @@ export class WorkspaceService {
     return { hostname: this.domainService.getUrl(hostname) };
   }
 
+  /**
+   * Backs the Caddy on_demand_tls `ask` gate. Allows the bare SUBDOMAIN_HOST
+   * apex plus any `<hostname>.SUBDOMAIN_HOST` where hostname matches a real
+   * workspace — nothing else, so a stranger can't force cert issuance for
+   * arbitrary subdomains.
+   */
+  async isDomainAllowed(domain: string): Promise<boolean> {
+    const subdomainHost = this.environmentService.getSubdomainHost();
+    if (!subdomainHost || !domain) {
+      return false;
+    }
+    if (domain === subdomainHost) {
+      return true;
+    }
+
+    const suffix = `.${subdomainHost}`;
+    if (!domain.endsWith(suffix)) {
+      return false;
+    }
+
+    const hostname = domain.slice(0, -suffix.length);
+    if (!hostname) {
+      return false;
+    }
+
+    return this.workspaceRepo.hostnameExists(hostname);
+  }
+
   async deactivateUser(
     authUser: User,
     userId: string,
