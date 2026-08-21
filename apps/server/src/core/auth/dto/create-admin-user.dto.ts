@@ -22,10 +22,10 @@ export class CreateAdminUserDto extends CreateUserDto {
   @MaxLength(50)
   @IsString()
   @Transform(({ value }: TransformFnParams) => {
-    // The cloud signup form (SetupWorkspaceForm) doesn't collect this field
-    // and submits "" rather than omitting the key — treat that the same as
-    // not provided so @IsOptional() actually applies, instead of tripping
-    // @MinLength(1). Callers fall back to a default workspace name.
+    // The field is optional client-side and submits "" rather than omitting
+    // the key when left blank — treat that the same as not provided so
+    // @IsOptional() actually applies, instead of tripping @MinLength(1).
+    // Callers fall back to a default workspace name.
     const trimmed = value?.trim();
     return trimmed === '' ? undefined : trimmed;
   })
