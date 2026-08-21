@@ -59,6 +59,7 @@ import {
   verifyEmailSignature,
 } from '../../auth/auth.util';
 import { WorkionPlan } from '../../../common/entitlement/entitlement';
+import { EntitlementService } from '../../../common/entitlement/entitlement.service';
 import EmailVerificationEmail from '@docmost/transactional/emails/email-verification-email';
 
 @Injectable()
@@ -87,6 +88,7 @@ export class WorkspaceService {
     private userTokenRepo: UserTokenRepo,
     private mailService: MailService,
     private sessionService: SessionService,
+    private entitlementService: EntitlementService,
   ) {}
 
   async findById(workspaceId: string) {
@@ -99,7 +101,10 @@ export class WorkspaceService {
       throw new NotFoundException('Workspace not found');
     }
 
-    return workspace;
+    return {
+      ...workspace,
+      enabledModules: this.entitlementService.getFeatures(workspace.plan),
+    };
   }
 
   async getWorkspacePublicData(workspaceId: string) {
@@ -157,7 +162,7 @@ export class WorkspaceService {
             this.environmentService.getBillingTrialDays(),
           );
           status = WorkspaceStatus.Active;
-          plan = WorkionPlan.FREE;
+          plan = WorkionPlan.TENANT_BASIC;
           billingEmail = user.email;
           settings = { ai: { generative: true, chat: true } };
         }
@@ -272,7 +277,7 @@ export class WorkspaceService {
   }
 
   /**
-   * Cloud-only signup path (specs/MULTI_TENANCY_SPEC.md Slice 1). Mirrors
+   * Cloud-only signup path (docs/specs/done/MULTI_TENANCY_SPEC.md Slice 1). Mirrors
    * SignupService.initialSetup() but never marks the email pre-verified —
    * cloud logins are gated on emailVerifiedAt via throwIfEmailNotVerified,
    * so a brand new owner must go through the verify-email flow below first.

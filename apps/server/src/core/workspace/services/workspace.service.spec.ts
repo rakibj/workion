@@ -29,6 +29,7 @@ function buildService(overrides: Record<string, any> = {}) {
       insertWorkspace: jest.fn(),
       updateWorkspace: jest.fn(),
       hostnameExists: jest.fn().mockResolvedValue(false),
+      findById: jest.fn(),
     },
     spaceService: { create: jest.fn() },
     spaceMemberService: {
@@ -66,6 +67,10 @@ function buildService(overrides: Record<string, any> = {}) {
     },
     mailService: { sendToQueue: jest.fn() },
     sessionService: { createSessionAndToken: jest.fn().mockResolvedValue('access-token') },
+    entitlementService: {
+      hasFeature: jest.fn().mockReturnValue(false),
+      getFeatures: jest.fn().mockReturnValue([]),
+    },
     ...overrides,
   };
 
@@ -91,13 +96,60 @@ function buildService(overrides: Record<string, any> = {}) {
     deps.userTokenRepo,
     deps.mailService,
     deps.sessionService,
+    deps.entitlementService,
   ) as WorkspaceService;
 
   return { service, deps, trx, db };
 }
 
+describe('WorkspaceService.getWorkspaceInfo — module entitlement exposure', () => {
+  it('exposes enabledModules for a workspace whose plan grants blog', async () => {
+    const { service, deps } = buildService();
+
+    deps.workspaceRepo.findById.mockResolvedValue({
+      id: 'ws-1',
+      plan: WorkionPlan.INTERNAL,
+    });
+    deps.entitlementService.getFeatures.mockReturnValue(['blog']);
+
+    const result = await service.getWorkspaceInfo('ws-1');
+
+    expect(deps.entitlementService.getFeatures).toHaveBeenCalledWith(
+      WorkionPlan.INTERNAL,
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: 'ws-1', enabledModules: ['blog'] }),
+    );
+  });
+
+  it('exposes an empty enabledModules list for a plan without blog (e.g. a cloud tenant on TENANT_BASIC)', async () => {
+    const { service, deps } = buildService();
+
+    deps.workspaceRepo.findById.mockResolvedValue({
+      id: 'ws-2',
+      plan: WorkionPlan.TENANT_BASIC,
+    });
+    deps.entitlementService.getFeatures.mockReturnValue([]);
+
+    const result = await service.getWorkspaceInfo('ws-2');
+
+    expect(result).toEqual(
+      expect.objectContaining({ id: 'ws-2', enabledModules: [] }),
+    );
+  });
+
+  it('throws NotFoundException when the workspace does not exist', async () => {
+    const { service, deps } = buildService();
+    deps.workspaceRepo.findById.mockResolvedValue(undefined);
+
+    await expect(service.getWorkspaceInfo('missing')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+});
+
 describe('WorkspaceService.create — cloud plan default (Slice 3)', () => {
-  it('assigns WorkionPlan.FREE, not the internal-only default, on a cloud workspace', async () => {
+  it('assigns WorkionPlan.TENANT_BASIC, not the internal-only default, on a cloud workspace', async () => {
     const { service, deps } = buildService();
 
     deps.workspaceRepo.insertWorkspace.mockResolvedValue({
@@ -111,7 +163,7 @@ describe('WorkspaceService.create — cloud plan default (Slice 3)', () => {
     await service.create(user, { name: 'Acme' } as any);
 
     expect(deps.workspaceRepo.insertWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ plan: WorkionPlan.FREE }),
+      expect.objectContaining({ plan: WorkionPlan.TENANT_BASIC }),
       expect.anything(),
     );
   });

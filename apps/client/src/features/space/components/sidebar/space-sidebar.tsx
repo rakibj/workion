@@ -62,6 +62,8 @@ import { useHasFeature } from "@/ee/hooks/use-feature";
 import { useUpgradeLabel } from "@/ee/hooks/use-upgrade-label";
 import { Feature } from "@/ee/features";
 import { ErrorBoundary } from "react-error-boundary";
+import { useHasWorkionModule } from "@/features/workspace/hooks/use-workion-module.ts";
+import { WorkionModule } from "@/features/workspace/workion-modules.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -77,6 +79,7 @@ export function SpaceSidebar() {
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
   const { handleCreate } = useTreeMutation(space?.id ?? "");
+  const hasBlogFeature = useHasWorkionModule(WorkionModule.BLOG);
 
   if (!space) {
     return <></>;
@@ -246,12 +249,14 @@ export function SpaceSidebar() {
                     >
                       {t("Kanban")}
                     </Menu.Item>
-                    <Menu.Item
-                      leftSection={<IconArticle size={14} />}
-                      onClick={handleCreateBlogPost}
-                    >
-                      {t("Blog Post")}
-                    </Menu.Item>
+                    {hasBlogFeature && (
+                      <Menu.Item
+                        leftSection={<IconArticle size={14} />}
+                        onClick={handleCreateBlogPost}
+                      >
+                        {t("Blog Post")}
+                      </Menu.Item>
+                    )}
                     <Menu.Item
                       leftSection={<IconPencil size={14} />}
                       onClick={handleCreateExcalidraw}

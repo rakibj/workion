@@ -61,6 +61,8 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
+import { EntitlementService } from '../../common/entitlement/entitlement.service';
+import { WorkionFeature } from '../../common/entitlement/entitlement';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -79,6 +81,7 @@ export class PageController {
     private readonly kanbanRepo: KanbanRepo,
     private readonly groupUserRepo: GroupUserRepo,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+    private readonly entitlementService: EntitlementService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -218,6 +221,15 @@ export class PageController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    if (
+      createPageDto.type === 'blog' &&
+      !this.entitlementService.hasFeature(workspace.plan, WorkionFeature.BLOG)
+    ) {
+      throw new ForbiddenException(
+        'Blog is not available on the current plan',
+      );
+    }
+
     if (createPageDto.parentPageId) {
       // Creating under a parent page - check edit permission on parent
       const parentPage = await this.pageRepo.findById(

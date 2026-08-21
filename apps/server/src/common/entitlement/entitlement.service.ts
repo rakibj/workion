@@ -14,7 +14,7 @@ const KNOWN_PLANS = new Set<string>(Object.values(WorkionPlan));
  * not toward "internal" (everything on) — a typo or a stale value should never
  * accidentally unlock every feature.
  */
-const MOST_RESTRICTIVE_PLAN = WorkionPlan.FREE;
+const MOST_RESTRICTIVE_PLAN = WorkionPlan.TENANT_BASIC;
 
 @Injectable()
 export class EntitlementService {
@@ -39,6 +39,11 @@ export class EntitlementService {
   ): boolean {
     const plan = this.resolvePlan(planValue);
     return PLAN_FEATURES[plan].includes(feature);
+  }
+
+  getFeatures(planValue: string | null | undefined): WorkionFeature[] {
+    const plan = this.resolvePlan(planValue);
+    return PLAN_FEATURES[plan];
   }
 
   getLimits(planValue: string | null | undefined): WorkionPlanLimits {

@@ -20,6 +20,7 @@ export interface IWorkspace {
   emailDomains: string[];
   memberCount?: number;
   plan?: string;
+  enabledModules?: string[];
   enforceMfa?: boolean;
   aiSearch?: boolean;
   generativeAi?: boolean;
