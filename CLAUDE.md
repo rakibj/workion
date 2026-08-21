@@ -406,6 +406,12 @@ This only succeeds once, ever, per deployment — the very first workspace. Once
 
 **Known follow-up, not yet done:** the Caddy container currently has a runtime/on-disk config drift unrelated to multi-tenancy — it's still serving an old `auth.gameloops.io` (zitadel) block that isn't in the on-disk `Caddyfile` anymore (an existing uncommitted edit there, never reloaded). Deliberately left alone rather than decided for you; see the spec's Slice 4 section.
 
+**Post-launch fixes, found by an actual signup on `workionlive` (2026-08-21):**
+1. **Verification emails were silently rejected by Resend** — `MAIL_FROM_ADDRESS` on the `workion-live` deployment's `.env` was `noreply@workionlive.gameloops.io`, a subdomain never added/verified as its own domain in the Resend account (only `workion.gameloops.io` is verified there). Every send failed with `550 ... domain is not verified`. Fixed by pointing `MAIL_FROM_ADDRESS` at the already-verified `workion.gameloops.io` instead — env-only change, `docker compose restart app`, no rebuild. (Proper long-term fix, not done: verify `workionlive.gameloops.io` in Resend with its own SPF/DKIM records.)
+2. **Cloud signup always created a workspace named "My workspace"** — `SetupWorkspaceForm` (`apps/client/src/features/auth/components/setup-workspace-form.tsx`) only rendered the Workspace Name input when `!isCloud()`, i.e. it was hidden specifically for cloud signups, the one case that actually needs it. The form always submitted `workspaceName: ""`, so `createCloudWorkspace` fell back to the literal default `'My workspace'`, slugified to a `myworkspace-NNNN` hostname regardless of what the user typed for their name/email. Fixed by rendering the field unconditionally (commit `d5e391a`).
+
+**Git push access note:** this dev machine's cached GitHub credential (Git Credential Manager) is for an account without push rights to `rakibj/workion` (403 on `git push origin main`). The `d5e391a` fix above was delivered straight to the `workion-live` VPS checkout via `git bundle` + `scp` + `git fetch`/`merge --ff-only` over SSH, bypassing GitHub entirely — so **GitHub `origin/main` is currently behind what's actually running on `workion-live`** until someone re-authenticates GCM with the correct account and pushes.
+
 ---
 
 ## Implemented Custom Features
