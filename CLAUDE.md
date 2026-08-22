@@ -561,6 +561,11 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 ## Pending Features (Approved Specs)
 
+**Active specs, implementation not yet started:**
+
+- [docs/specs/ongoing/CLIENT_ENTITY_SPEC.md](docs/specs/ongoing/CLIENT_ENTITY_SPEC.md) — Client/Project entities (Clients spanning multiple Spaces, Projects with a status pipeline). Approved 2026-08-22. Unblocks `EDITION_ENTITLEMENT_SPEC.md` Slice 3 (tier limits) once built. Not started.
+- [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — real Stripe integration (checkout, webhooks, billing portal) behind Docmost's dormant EE billing scaffolding, plus a public `/pricing` page. Approved 2026-08-22. Independent of the Client entity spec. Real pricing tiers/amounts still need a business decision before Slice 2+ can run against live Stripe Prices. Not started.
+
 **Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
 
 **Done (2026-07-29 batch), specs kept for reference:** four specs written from a list of reported issues/requests, each grounded in a research pass over the actual code (file:line references, root causes verified against source). All four are now implemented — see each file's status line for the landing commit(s).
