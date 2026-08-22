@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
-import { ScrollArea, Text, Divider, Modal, UnstyledButton, Tooltip } from "@mantine/core";
+import {
+  ScrollArea,
+  Text,
+  Divider,
+  Modal,
+  UnstyledButton,
+  Tooltip,
+} from "@mantine/core";
 import {
   IconHome,
   IconClock,
   IconStar,
   IconLayoutGrid,
+  IconBriefcase,
   IconSettings,
   IconUserPlus,
   IconTemplate,
@@ -40,22 +48,31 @@ export default function GlobalSidebar() {
   const mainNavItems = [
     { label: "Home", icon: IconHome, path: "/home" },
     { label: "Favorites", icon: IconStar, path: "/favorites" },
-    ...(!isGuest ? [
-      { label: "Spaces", icon: IconLayoutGrid, path: "/spaces" },
-      {
-        label: "Templates",
-        icon: IconTemplate,
-        path: "/templates",
-        disabled: !hasTemplates,
-      },
-    ] : []),
+    ...(!isGuest
+      ? [
+          { label: "Spaces", icon: IconLayoutGrid, path: "/spaces" },
+          { label: "Clients", icon: IconBriefcase, path: "/clients" },
+          {
+            label: "Templates",
+            icon: IconTemplate,
+            path: "/templates",
+            disabled: !hasTemplates,
+          },
+        ]
+      : []),
   ];
-  const { data: favoriteSpacesData, isPending: isFavoritesPending } = useFavoritesQuery("space");
-  const favoriteSpaces = favoriteSpacesData?.pages.flatMap((p) => p.items) ?? [];
+  const { data: favoriteSpacesData, isPending: isFavoritesPending } =
+    useFavoritesQuery("space");
+  const favoriteSpaces =
+    favoriteSpacesData?.pages.flatMap((p) => p.items) ?? [];
   const sortedFavoriteSpaces = [...favoriteSpaces]
     .filter((fav) => fav.space)
     .sort((a, b) => {
-      const cmp = (a.space!.name ?? "").localeCompare(b.space!.name ?? "", undefined, { sensitivity: "base" });
+      const cmp = (a.space!.name ?? "").localeCompare(
+        b.space!.name ?? "",
+        undefined,
+        { sensitivity: "base" },
+      );
       return cmp !== 0 ? cmp : a.id.localeCompare(b.id);
     });
   const [inviteOpened, { open: openInvite, close: closeInvite }] =
@@ -152,15 +169,11 @@ export default function GlobalSidebar() {
             </>
           )}
         </div>
-
       </ScrollArea>
 
       <div className={classes.bottomSection}>
         {!isGuest && (
-          <UnstyledButton
-            className={classes.link}
-            onClick={openInvite}
-          >
+          <UnstyledButton className={classes.link} onClick={openInvite}>
             <IconUserPlus className={classes.linkIcon} stroke={2} />
             <span>{t("Invite People")}</span>
           </UnstyledButton>

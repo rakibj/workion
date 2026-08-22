@@ -33,6 +33,8 @@ import { PageReadsRepo } from '@docmost/db/repos/page/page-reads.repo';
 import { PageVerificationRepo } from '@docmost/db/repos/page/page-verification.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { BlogPostSettingsRepo } from './repos/blog/blog-post-settings.repo';
+import { ClientRepo } from './repos/client/client.repo';
+import { ProjectRepo } from './repos/project/project.repo';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
 import { normalizePostgresUrl } from '../common/helpers';
@@ -102,6 +104,8 @@ import { normalizePostgresUrl } from '../common/helpers';
     PageVerificationRepo,
     KanbanRepo,
     BlogPostSettingsRepo,
+    ClientRepo,
+    ProjectRepo,
     PageListener,
   ],
   exports: [
@@ -132,6 +136,8 @@ import { normalizePostgresUrl } from '../common/helpers';
     PageVerificationRepo,
     KanbanRepo,
     BlogPostSettingsRepo,
+    ClientRepo,
+    ProjectRepo,
   ],
 })
 export class DatabaseModule implements OnApplicationBootstrap {

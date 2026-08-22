@@ -1,6 +1,6 @@
 # Client Entity Spec
 
-> Status: **Approved (2026-08-22) — implementation not started.** No code written yet, per CLAUDE.md's spec-then-implement methodology.
+> Status: **In progress (2026-08-22) — Slice 1 (migration + repositories).** Implementation follows CLAUDE.md's spec-then-implement methodology.
 
 > ⚠️ **Naming guardrail (CLAUDE.md):** "Client" here means an **agency client** — a company Workion does work for, nested under the existing Space/permission model. This is unrelated to a **paid Workion workspace/tenant** (see `docs/specs/done/MULTI_TENANCY_SPEC.md`). A 2026-08-21 mix-up built a full Client-entity MVP in answer to what was actually a multi-tenant-workspace question, and was reverted the same session. This spec is the from-scratch replacement, scoped correctly this time.
 
@@ -108,25 +108,35 @@ Status transitions on `PATCH /projects/:id` are **not** state-machine-enforced i
 **What:** Kysely migration for `clients`/`client_spaces`/`projects`, regenerate `db.d.ts`, `ClientRepo`/`ProjectRepo` (`database/repos/`) with basic CRUD + `findVisibleToUser` queries (join through `client_spaces` → `space_members`).
 **DoD:** migration runs up/down cleanly against local Postgres; repo methods unit-tested against a mocked Kysely instance (per this repo's existing test convention — no real DB in tests).
 
+**Status: Done (2026-08-22).** Migration up/down was verified against an isolated local PostgreSQL 18 container. Generated types include the three new tables. Focused mocked-Kysely repository tests pass (4/4). The full server build still has two unrelated existing type errors in `trash-cleanup.service.ts` and `workspace.service.ts`.
+
 ### Slice 2 — `ClientService` + CASL wiring
 **Depends on:** Slice 1.
 **What:** `ClientService` (create/list/get/update/archive/linkSpace/unlinkSpace), each write path checking `spaceAbility.can(Manage, Space)` or equivalent via the existing `SpaceAbilityFactory` — no new ability factory.
 **DoD:** unit tests cover: create succeeds for a space writer, fails (`ForbiddenException`) for a space reader; linking a space the user doesn't control is rejected; list excludes clients with no visible linked space.
+
+**Status: Done (2026-08-22).** `ClientService` reuses `SpaceAbilityFactory` and requires `Manage Page`, which is granted to Space admins and writers. Tests cover writer create, reader rejection, unauthorized-space link rejection, and visibility-filtered list output (4/4 service tests; 8/8 combined Slice 1–2 tests).
 
 ### Slice 3 — `ClientController` + DTOs
 **Depends on:** Slice 2.
 **What:** the six client routes above, DTOs with class-validator decorators, matching the existing controller pattern (e.g. `space.controller.ts`).
 **DoD:** e2e-style controller tests (or integration tests per existing convention) for the 403/404/200 paths.
 
+**Status: Done (2026-08-22).** Added authenticated REST routes for create, list, detail, update, archive, and Space link/unlink, with validated client DTOs. Controller tests cover successful creation plus propagated 403 and 404 responses. Focused Slice 1–3 tests pass (11/11).
+
 ### Slice 4 — `ProjectService` + `ProjectController`
 **Depends on:** Slice 1 (tables), reuses Slice 2's CASL pattern.
 **What:** project CRUD, `space_id` validated as one of `client_id`'s linked spaces at create time.
 **DoD:** unit tests cover: create rejected if `spaceId` isn't linked to `clientId`; status field accepts only the six enum values; filtering by `clientId`/`spaceId`/`status`.
 
+**Status: Done (2026-08-22).** Added guarded project CRUD routes, validated project DTOs (including the six allowed statuses), and a service which exposes only projects whose parent Client is visible through an existing Space membership. Creation validates the selected Space belongs to the Client and requires `Manage Page` there. Focused Client/repository tests pass (17/17); the full server build has the same two pre-existing errors in `trash-cleanup.service.ts` and `workspace.service.ts`.
+
 ### Slice 5 — Frontend
 **Depends on:** Slices 3–4.
 **What:** sidebar entry, list/detail pages, create modals, status badge component — described above.
 **DoD:** manual smoke test — create a client, link a second space, create a project, change its status, confirm a reader-role user can view but not edit.
+
+**Status: In progress (2026-08-22).** The UI is implemented: a Clients navigation entry, client list/detail views, space linking, project creation, status editing, and project detail routes. The production client build passes. An isolated runtime API smoke test completed successfully: create Client → link a second Space → create Project → update status to `in_review`, with the Client detail returning both Spaces. Reader write denial is covered by the focused service tests. The only remaining validation is a browser-level reader-role visual smoke test against a running local stack.
 
 ## Open questions to confirm before implementation (not blocking the spec's approval, but worth a decision)
 

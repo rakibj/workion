@@ -44,6 +44,9 @@ import {
   KanbanCardAssignees,
   KanbanMilestones,
   PageReads as _PageReads,
+  Clients,
+  ClientSpaces,
+  Projects,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
@@ -80,6 +83,20 @@ export type UpdatableUser = Updateable<Omit<Users, 'id'>>;
 export type Space = Selectable<Spaces>;
 export type InsertableSpace = Insertable<Spaces>;
 export type UpdatableSpace = Updateable<Omit<Spaces, 'id'>>;
+
+// Client
+export type Client = Selectable<Clients>;
+export type InsertableClient = Insertable<Clients>;
+export type UpdatableClient = Updateable<Omit<Clients, 'id'>>;
+
+// ClientSpace
+export type ClientSpace = Selectable<ClientSpaces>;
+export type InsertableClientSpace = Insertable<ClientSpaces>;
+
+// Project
+export type Project = Selectable<Projects>;
+export type InsertableProject = Insertable<Projects>;
+export type UpdatableProject = Updateable<Omit<Projects, 'id'>>;
 
 // SpaceMember
 export type SpaceMember = Selectable<SpaceMembers>;

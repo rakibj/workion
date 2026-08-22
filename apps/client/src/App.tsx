@@ -48,6 +48,9 @@ import FavoritesPage from "@/pages/favorites/favorites-page";
 import AiChat from "@/ee/ai-chat/pages/ai-chat.tsx";
 import VerifyEmail from "@/ee/pages/verify-email.tsx";
 import LabelPage from "@/pages/label/label-page";
+import ClientsPage from "@/pages/clients/clients";
+import ClientDetailPage from "@/pages/clients/client-detail";
+import ProjectDetailPage from "@/pages/clients/project-detail";
 
 function RootRedirect() {
   const { data, isLoading } = useCurrentUser();
@@ -102,19 +105,19 @@ export default function App() {
           <Route path={"/ai"} element={<AiChat />} />
           <Route path={"/ai/chat/:chatId"} element={<AiChat />} />
           <Route path={"/spaces"} element={<SpacesPage />} />
+          <Route path={"/clients"} element={<ClientsPage />} />
+          <Route path={"/clients/:clientId"} element={<ClientDetailPage />} />
+          <Route
+            path={"/projects/:projectId"}
+            element={<ProjectDetailPage />}
+          />
           <Route path={"/favorites"} element={<FavoritesPage />} />
           <Route path={"/labels/:labelName"} element={<LabelPage />} />
           <Route path={"/templates"} element={<TemplateList />} />
-          <Route
-            path={"/templates/:templateId"}
-            element={<TemplateEditor />}
-          />
+          <Route path={"/templates/:templateId"} element={<TemplateEditor />} />
           <Route path={"/s/:spaceSlug"} element={<SpaceHome />} />
           <Route path={"/s/:spaceSlug/trash"} element={<SpaceTrash />} />
-          <Route
-            path={"/s/:spaceSlug/p/:pageSlug"}
-            element={<Page />}
-          />
+          <Route path={"/s/:spaceSlug/p/:pageSlug"} element={<Page />} />
 
           <Route path={"/settings"}>
             <Route path={"account/profile"} element={<AccountSettings />} />
