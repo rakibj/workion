@@ -413,6 +413,16 @@ Self-hosted Workion, as built, is architecturally single-workspace — not a con
 
 ## Implemented Custom Features
 
+### Client & Project Entities
+
+Agency Client (a company Workion does work for, spanning one or more Spaces) and Project (belongs to one Client, lives in one of its linked Spaces, six-value status pipeline `planning → in_progress → in_review → approved → delivered → archived`) — see "Next Major Direction: Client Layer" for product context.
+
+**Spec (source of truth):** `docs/specs/done/CLIENT_ENTITY_SPEC.md` (entity design, all 5 slices done) and `docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md` (follow-up: delete/remove UI, showing a Space's linked Client in the Space UX itself, and closing the Blog entitlement leak found during the same review).
+
+Backend: `core/client/` (`ClientController`/`ProjectController`, `ClientService`/`ProjectService`), `database/repos/client/`, tables `clients`/`client_spaces`/`project`s. No new CASL tier — reuses the existing `Space` ability (`Manage Page` required to create/edit/delete). `GET /clients/by-space/:spaceId` resolves the Client (if any) linked to a given Space. Delete is soft (`archive()`/`deleted_at`), matching the rest of the schema. Client/Project has no `WorkionFeature` entry — unlike Blog, it's intentionally available to every workspace/plan (guardrail comment in `entitlement.ts`).
+
+Frontend: top-level "Clients" sidebar entry (`components/layouts/global/global-sidebar.tsx`) and `pages/clients/*` (list, client detail, project detail) — a first-class vertical alongside Spaces, not nested inside one. A Space linked to a Client shows it as a link in Space Settings → General and as a subtitle in the Space sidebar (`useClientBySpaceQuery`). Delete actions on the Client/Project detail pages use the standard `modals.openConfirmModal` pattern.
+
 ### Space Invite Links (Guest Access)
 
 Shareable invite links for spaces. Backend: `core/space/services/space-invite-link.service.ts`, controller at `spaces/invite-links/*`, `space_invite_links` table (token, spaceRole, expiresAt, maxUses, useCount). Auth endpoints: `GET /auth/invite-link/:token` (public info), `POST /auth/invite-link/signup` (new guest account), `POST /auth/invite-link/join` (existing user). `spaceRole` is `reader | commenter | writer` — `commenter` (read + comment, no Settings access) is the typical guest role; joining always adds the user to the workspace as `UserRole.GUEST`. "Space Settings" UI is hidden when `spaceAbility.cannot(Read, Settings)`. Frontend: `SpaceInviteLinks` in space settings, `InviteLinkPage` at `/invite/:token`.
@@ -547,15 +557,15 @@ Cache keys:           apps/server/src/common/helpers/cache-keys.ts
 
 ⚠️ **"Client Layer" = agency client** — a company Gameloops does work for, nested under the existing Space/permission model. This is a *different concept* from **a paid Workion workspace/tenant** (see "Multi-Tenancy Status"). A 2026-08-21 mix-up built a full Client-entity MVP in answer to what was actually a multi-tenant-workspace question — reverted the same session once the misunderstanding surfaced. Don't conflate the two.
 
-The main product gap: a client is currently just a Space + guest users. There is no first-class model for Client, Project, Deliverable, Request, Approval, or client status/timeline. Priority order (from the AppSumo handoff):
+The main product gap: a client used to be just a Space + guest users. Priority order (from the AppSumo handoff):
 
-1. **Client entity** (critical) — not started. The reverted MVP's design is a reasonable starting point if picked up again: `clients`/`client_spaces`/`projects` tables, one client can span multiple Spaces, writes gated by the existing `Space` CASL ability.
-2. **Projects / Deliverables** (critical) — not started.
+1. **Client entity** (critical) — **Done** (2026-08-23). `docs/specs/done/CLIENT_ENTITY_SPEC.md` — `clients`/`client_spaces`/`projects` tables, one Client can span multiple Spaces, writes gated by the existing `Space` CASL ability. See "Client & Project Entities" under Implemented Custom Features.
+2. **Projects** (critical) — **Done**, shipped as part of #1 (status pipeline: `planning → in_progress → in_review → approved → delivered`, plus `archived`). **Deliverables** as a separate entity is still not started — a project's deliverables remain its Space's pages, by design (see the Client Entity spec's scope).
 3. **Branded client portal** (critical) — not started. **Decision (2026-08):** a filtered view over existing Spaces/permissions, not a separate frontend surface — reuses the Space/CASL model as a scoped, re-skinned view rather than duplicating permission/display logic.
 4. **Approval / request flow** (high) — needs review → changes requested → approved → delivered → published. Not started.
 5. **Agency-focused AI** (high) — brief→tasks, feedback→action items, status summaries, client-context drafting. No generic autonomous agents before this. Not started.
 
-The edition/entitlement architecture (`docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md`, Slices 1–2, done, applied to the blog module) is unrelated to this reverted work, but it's what real multi-tenancy will also need once workspace resolution itself is fixed. Slice 3 (tier limits) is blocked on the Client entity existing, which it currently doesn't.
+The edition/entitlement architecture (`docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md`, Slices 1–2, done, applied to the blog module) is unrelated to this reverted work, but it's what real multi-tenancy will also need once workspace resolution itself is fixed. Slice 3 (tier limits) is now unblocked — the Client entity it depends on exists — but still not started. Client/Project themselves have no `WorkionFeature` entry and are intentionally ungated for every workspace/plan (guardrail comment in `entitlement.ts`); Slice 3 should add a count *limit*, not a feature *gate*, on `WorkionPlan.INTERNAL`.
 
 One spec, one feature at a time, per the methodology — do not batch client-layer work without its own spec.
 
@@ -565,7 +575,6 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 **Active specs:**
 
-- [docs/specs/ongoing/CLIENT_ENTITY_SPEC.md](docs/specs/ongoing/CLIENT_ENTITY_SPEC.md) — Client/Project entities (Clients spanning multiple Spaces, Projects with a status pipeline). Approved 2026-08-22; backend Slices 1–4 are complete. The remaining frontend slice unblocks the product UI; the completed Client entity unblocks `EDITION_ENTITLEMENT_SPEC.md` Slice 3 (tier limits).
 - [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — real Stripe integration (checkout, webhooks, billing portal) behind Docmost's dormant EE billing scaffolding, plus a public `/pricing` page. Approved 2026-08-22. Independent of the Client entity spec. Real pricing tiers/amounts still need a business decision before Slice 2+ can run against live Stripe Prices. Not started.
 
 **Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
@@ -576,6 +585,11 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 - [docs/specs/done/SPACE_LIST_CACHING_SPEC.md](docs/specs/done/SPACE_LIST_CACHING_SPEC.md) — brings the space list in line with the `withCache`/`CacheKey` + invalidate-on-write pattern already used for user/space/workspace/page lookups.
 - [docs/specs/done/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md](docs/specs/done/TOGGLE_BLOCK_TURNINTO_FIX_SPEC.md) — fixes "Turn into" being unreachable for blocks inside a toggle block/toggle heading. Root cause was the global drag-handle's hit-testing never registering toggle content nodes in `customNodes`.
 - [docs/specs/done/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md](docs/specs/done/BLOG_STABLE_ATTACHMENT_URLS_SPEC.md) — fixes blog post images going dead in externally-cached HTML. Replaced expiring `/files/public/...?jwt=` attachment URLs with a stable `/files/blog/:fileId/:fileName` route whose access is checked live against publish state.
+
+**Done (2026-08-23):**
+
+- [docs/specs/done/CLIENT_ENTITY_SPEC.md](docs/specs/done/CLIENT_ENTITY_SPEC.md) — Client/Project entities (Clients spanning multiple Spaces, Projects with a status pipeline). All 5 slices complete and verified live on `workion`. See "Client & Project Entities" under Implemented Custom Features.
+- [docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md](docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md) — 4-item punch list found while reviewing the above: the Blog tab leaking past entitlement on `workionlive` (frontend never checked `WorkionFeature.BLOG`, and the settings-write endpoint had no guard at all), a Space giving no indication it belongs to a Client, no delete/remove UI for Client or Project (backend soft-delete already existed), and confirming Client/Project ships live + stays ungated on `workion`.
 
 ---
 
