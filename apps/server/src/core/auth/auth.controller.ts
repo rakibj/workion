@@ -243,7 +243,7 @@ export class AuthController {
     @Res() res: FastifyReply,
   ) {
     if (!token) {
-      res.redirect('/login');
+      res.redirect('/login', 302);
       return;
     }
 
@@ -254,11 +254,11 @@ export class AuthController {
       );
       this.setAuthCookie(res, authToken);
     } catch {
-      res.redirect('/login');
+      res.redirect('/login', 302);
       return;
     }
 
-    res.redirect('/home');
+    res.redirect('/home', 302);
   }
 
   setAuthCookie(res: FastifyReply, token: string) {
