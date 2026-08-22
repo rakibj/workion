@@ -21,6 +21,7 @@ describe('ClientService', () => {
       linkSpace: jest.fn(),
       findVisibleToUser: jest.fn(),
       getLinkedSpaces: jest.fn(),
+      findBySpaceId: jest.fn(),
     };
     abilityFactory = { createForUser: jest.fn() };
 
@@ -96,5 +97,40 @@ describe('ClientService', () => {
     await expect(service.list(user, workspaceId)).resolves.toEqual(
       visibleClients,
     );
+  });
+
+  it('returns the client linked to a space for a member who can read it', async () => {
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(true),
+    });
+    (clientRepo.findBySpaceId as jest.Mock).mockResolvedValue({
+      id: 'client-1',
+    });
+
+    await expect(
+      service.getBySpace(user, workspaceId, spaceId),
+    ).resolves.toEqual({ id: 'client-1' });
+  });
+
+  it('returns null when the space has no linked client', async () => {
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(true),
+    });
+    (clientRepo.findBySpaceId as jest.Mock).mockResolvedValue(undefined);
+
+    await expect(
+      service.getBySpace(user, workspaceId, spaceId),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects reading a client-by-space lookup for a non-member of the space', async () => {
+    (abilityFactory.createForUser as jest.Mock).mockRejectedValue(
+      new Error('not a member'),
+    );
+
+    await expect(
+      service.getBySpace(user, workspaceId, spaceId),
+    ).rejects.toThrow(ForbiddenException);
+    expect(clientRepo.findBySpaceId).not.toHaveBeenCalled();
   });
 });

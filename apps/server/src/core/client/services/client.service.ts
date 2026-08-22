@@ -58,6 +58,24 @@ export class ClientService {
     return this.clientRepo.findVisibleToUser(user.id, workspaceId);
   }
 
+  async getBySpace(
+    user: User,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<Client | null> {
+    let canRead = false;
+    try {
+      const ability = await this.spaceAbility.createForUser(user, spaceId);
+      canRead = ability.can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
+    } catch {
+      // Membership failures are intentionally presented as a permission denial.
+    }
+    if (!canRead) throw new ForbiddenException();
+
+    const client = await this.clientRepo.findBySpaceId(spaceId, workspaceId);
+    return client ?? null;
+  }
+
   async get(user: User, workspaceId: string, clientId: string) {
     const client = await this.findVisibleClient(user, workspaceId, clientId);
     const [spaces, projects] = await Promise.all([

@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Button,
   Container,
   Group,
@@ -11,11 +12,16 @@ import {
   Title,
   Card,
   Badge,
+  Tooltip,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
+import { modals } from "@mantine/modals";
+import { IconTrash } from "@tabler/icons-react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  useArchiveClientMutation,
   useClientQuery,
   useCreateProjectMutation,
   useLinkClientSpaceMutation,
@@ -25,6 +31,7 @@ import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import { getSpaceUrl } from "@/lib/config";
 
 export default function ClientDetailPage() {
+  const { t } = useTranslation();
   const { clientId = "" } = useParams();
   const { data, isLoading } = useClientQuery(clientId);
   const { data: allSpaces } = useGetSpacesQuery({ limit: 100 });
@@ -33,7 +40,27 @@ export default function ClientDetailPage() {
   const linkSpace = useLinkClientSpaceMutation(clientId);
   const unlinkSpace = useUnlinkClientSpaceMutation(clientId);
   const createProject = useCreateProjectMutation(clientId);
+  const archiveClient = useArchiveClientMutation();
   const navigate = useNavigate();
+
+  const handleDeleteClient = () => {
+    if (!data) return;
+    modals.openConfirmModal({
+      title: t("Delete client"),
+      children: (
+        <Text size="sm">
+          {t(
+            "Are you sure you want to delete {{name}}? This does not delete its linked spaces or pages.",
+            { name: data.client.name },
+          )}
+        </Text>
+      ),
+      centered: true,
+      labels: { confirm: t("Delete"), cancel: t("Cancel") },
+      confirmProps: { color: "red" },
+      onConfirm: () => archiveClient.mutate(clientId),
+    });
+  };
   const spaceForm = useForm({ initialValues: { spaceId: "" } });
   const projectForm = useForm({
     initialValues: { name: "", spaceId: "", description: "", dueDate: "" },
@@ -63,6 +90,16 @@ export default function ClientDetailPage() {
             {data.client.status}
           </Badge>
         </div>
+        <Tooltip label={t("Delete client")}>
+          <ActionIcon
+            color="red"
+            variant="subtle"
+            onClick={handleDeleteClient}
+            loading={archiveClient.isPending}
+          >
+            <IconTrash size={18} />
+          </ActionIcon>
+        </Tooltip>
       </Group>
       <Group justify="space-between" mb="sm">
         <Title order={2} size="h4">

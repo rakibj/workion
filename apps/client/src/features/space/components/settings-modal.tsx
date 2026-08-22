@@ -13,6 +13,8 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
 import SpaceBlogSettings from "@/features/space/components/space-blog-settings.tsx";
+import { useHasWorkionModule } from "@/features/workspace/hooks/use-workion-module.ts";
+import { WorkionModule } from "@/features/workspace/workion-modules.ts";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -30,6 +32,7 @@ export default function SpaceSettingsModal({
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+  const hasBlogModule = useHasWorkionModule(WorkionModule.BLOG);
 
   return (
     <>
@@ -70,14 +73,15 @@ export default function SpaceSettingsModal({
                       {t("Security")}
                     </Tabs.Tab>
                   )}
-                  {spaceAbility.can(
-                    SpaceCaslAction.Manage,
-                    SpaceCaslSubject.Settings,
-                  ) && (
-                    <Tabs.Tab fw={500} value="blog">
-                      {t("Blog")}
-                    </Tabs.Tab>
-                  )}
+                  {hasBlogModule &&
+                    spaceAbility.can(
+                      SpaceCaslAction.Manage,
+                      SpaceCaslSubject.Settings,
+                    ) && (
+                      <Tabs.Tab fw={500} value="blog">
+                        {t("Blog")}
+                      </Tabs.Tab>
+                    )}
                   {spaceAbility.can(
                     SpaceCaslAction.Manage,
                     SpaceCaslSubject.Member,

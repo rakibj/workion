@@ -1,10 +1,14 @@
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
+  archiveClient,
   createClient,
   createProject,
+  deleteProject,
   getClient,
+  getClientBySpace,
   getClients,
   getProject,
   linkClientSpace,
@@ -38,6 +42,13 @@ export const useProjectQuery = (projectId: string) =>
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
     enabled: !!projectId,
+  });
+
+export const useClientBySpaceQuery = (spaceId: string) =>
+  useQuery({
+    queryKey: ["client-by-space", spaceId],
+    queryFn: () => getClientBySpace(spaceId),
+    enabled: !!spaceId,
   });
 
 export function useCreateClientMutation() {
@@ -95,6 +106,36 @@ export function useUpdateProjectMutation(clientId: string) {
     }) => updateProject(projectId, data),
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onError: showError,
+  });
+}
+
+export function useArchiveClientMutation() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: (clientId: string) => archiveClient(clientId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      notifications.show({ message: t("Client deleted") });
+      navigate("/clients");
+    },
+    onError: showError,
+  });
+}
+
+export function useDeleteProjectMutation(clientId: string) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: (projectId: string) => deleteProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client", clientId] });
+      notifications.show({ message: t("Project deleted") });
+      navigate(`/clients/${clientId}`);
+    },
     onError: showError,
   });
 }

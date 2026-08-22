@@ -18,6 +18,21 @@ export async function getClient(clientId: string): Promise<IClientDetail> {
   return req.data;
 }
 
+export async function getClientBySpace(
+  spaceId: string,
+): Promise<IClient | null> {
+  const req = await api.get<IClient | null>(`/clients/by-space/${spaceId}`);
+  return req.data;
+}
+
+export async function archiveClient(clientId: string): Promise<void> {
+  await api.delete(`/clients/${clientId}`);
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  await api.delete(`/projects/${projectId}`);
+}
+
 export async function createClient(data: CreateClientInput): Promise<IClient> {
   const req = await api.post<IClient>("/clients", data);
   return req.data;

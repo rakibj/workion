@@ -20,6 +20,7 @@ describe('ClientController', () => {
       archive: jest.fn(),
       linkSpace: jest.fn(),
       unlinkSpace: jest.fn(),
+      getBySpace: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -62,5 +63,30 @@ describe('ClientController', () => {
     await expect(controller.get('missing', user, workspace)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('returns the client linked to a space', async () => {
+    (clientService.getBySpace as jest.Mock).mockResolvedValue({
+      id: 'client-1',
+    });
+
+    await expect(
+      controller.getBySpace('space-1', user, workspace),
+    ).resolves.toEqual({ id: 'client-1' });
+    expect(clientService.getBySpace).toHaveBeenCalledWith(
+      user,
+      workspace.id,
+      'space-1',
+    );
+  });
+
+  it('preserves a forbidden response from the client-by-space lookup', async () => {
+    (clientService.getBySpace as jest.Mock).mockRejectedValue(
+      new ForbiddenException(),
+    );
+
+    await expect(
+      controller.getBySpace('space-1', user, workspace),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

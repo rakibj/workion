@@ -35,4 +35,37 @@ describe('ClientRepo', () => {
     expect(whereWorkspace).toHaveBeenCalledWith('workspaceId', '=', workspaceId);
     expect(whereDeletedAt).toHaveBeenCalledWith('deletedAt', 'is', null);
   });
+
+  it('finds the client linked to a given space, scoped to the workspace', async () => {
+    const spaceId = 'space-1';
+    const executeTakeFirst = jest
+      .fn()
+      .mockResolvedValue({ id: clientId, workspaceId });
+    const whereDeletedAt = jest.fn().mockReturnValue({ executeTakeFirst });
+    const whereWorkspace = jest.fn().mockReturnValue({ where: whereDeletedAt });
+    const whereSpace = jest.fn().mockReturnValue({ where: whereWorkspace });
+    const selectAll = jest.fn().mockReturnValue({ where: whereSpace });
+    const innerJoin = jest.fn().mockReturnValue({ selectAll });
+    const db = { selectFrom: jest.fn().mockReturnValue({ innerJoin }) };
+    const repo = new ClientRepo(db as any);
+
+    await expect(repo.findBySpaceId(spaceId, workspaceId)).resolves.toEqual({
+      id: clientId,
+      workspaceId,
+    });
+
+    expect(db.selectFrom).toHaveBeenCalledWith('clients');
+    expect(innerJoin).toHaveBeenCalledWith(
+      'clientSpaces',
+      'clientSpaces.clientId',
+      'clients.id',
+    );
+    expect(whereSpace).toHaveBeenCalledWith('clientSpaces.spaceId', '=', spaceId);
+    expect(whereWorkspace).toHaveBeenCalledWith(
+      'clients.workspaceId',
+      '=',
+      workspaceId,
+    );
+    expect(whereDeletedAt).toHaveBeenCalledWith('clients.deletedAt', 'is', null);
+  });
 });

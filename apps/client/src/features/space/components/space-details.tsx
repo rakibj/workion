@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import { EditSpaceForm } from "@/features/space/components/edit-space-form.tsx";
+import { useClientBySpaceQuery } from "@/features/client/queries/client-query";
 import { Button, Divider, Text, Title } from "@mantine/core";
 import DeleteSpaceModal from "./delete-space-modal";
 import { useDisclosure } from "@mantine/hooks";
@@ -27,6 +29,7 @@ interface SpaceDetailsProps {
 export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
   const { t } = useTranslation();
   const { data: space, isLoading, refetch } = useSpaceQuery(spaceId);
+  const { data: linkedClient } = useClientBySpaceQuery(spaceId);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [isIconUploading, setIsIconUploading] = useState(false);
@@ -87,6 +90,19 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
           </div>
 
           <EditSpaceForm space={space} readOnly={readOnly} />
+
+          {linkedClient && (
+            <div style={{ marginTop: "20px" }}>
+              <Text size="sm" fw={500} mb={4}>
+                {t("Client")}
+              </Text>
+              <Text size="sm">
+                <Link to={`/clients/${linkedClient.id}`}>
+                  {linkedClient.name}
+                </Link>
+              </Text>
+            </div>
+          )}
 
           {!readOnly && (
             <>

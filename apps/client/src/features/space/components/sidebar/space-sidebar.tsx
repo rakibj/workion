@@ -64,6 +64,7 @@ import { Feature } from "@/ee/features";
 import { ErrorBoundary } from "react-error-boundary";
 import { useHasWorkionModule } from "@/features/workspace/hooks/use-workion-module.ts";
 import { WorkionModule } from "@/features/workspace/workion-modules.ts";
+import { useClientBySpaceQuery } from "@/features/client/queries/client-query";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -80,6 +81,7 @@ export function SpaceSidebar() {
   const spaceAbility = useSpaceAbility(spaceRules);
   const { handleCreate } = useTreeMutation(space?.id ?? "");
   const hasBlogFeature = useHasWorkionModule(WorkionModule.BLOG);
+  const { data: linkedClient } = useClientBySpaceQuery(space?.id ?? "");
 
   if (!space) {
     return <></>;
@@ -124,6 +126,11 @@ export function SpaceSidebar() {
               spaceIcon={space?.logo}
             />
           </Group>
+          {linkedClient && (
+            <Text size="xs" c="dimmed" truncate ml={4}>
+              {linkedClient.name}
+            </Text>
+          )}
         </div>
 
         <div className={classes.section}>

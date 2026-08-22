@@ -37,6 +37,9 @@ import {
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { UpdateSpaceBlogSettingsDto } from './dto/update-space-blog-settings.dto';
+import { EntitlementGuard } from '../../common/entitlement/entitlement.guard';
+import { RequireFeature } from '../../common/entitlement/require-feature.decorator';
+import { WorkionFeature } from '../../common/entitlement/entitlement';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -166,6 +169,8 @@ export class SpaceController {
 
   @HttpCode(HttpStatus.OK)
   @Patch(':spaceId/blog-settings')
+  @UseGuards(EntitlementGuard)
+  @RequireFeature(WorkionFeature.BLOG)
   async updateBlogSettings(
     @Param('spaceId') spaceId: string,
     @Body() dto: UpdateSpaceBlogSettingsDto,

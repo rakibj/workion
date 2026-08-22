@@ -36,6 +36,15 @@ export class ClientController {
     return this.clientService.list(user, workspace.id);
   }
 
+  @Get('by-space/:spaceId')
+  getBySpace(
+    @Param('spaceId') spaceId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.clientService.getBySpace(user, workspace.id, spaceId);
+  }
+
   @Get(':clientId')
   get(
     @Param('clientId') clientId: string,
