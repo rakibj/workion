@@ -132,7 +132,7 @@ export class UserRepo {
     return this.db
       .selectFrom('users')
       .innerJoin('workspaces', 'workspaces.id', 'users.workspaceId')
-      .select(this.baseFields)
+      .select(this.baseFields.map((field) => `users.${field}` as const))
       .select([
         'users.password',
         'workspaces.hostname',
