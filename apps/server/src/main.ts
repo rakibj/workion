@@ -175,6 +175,7 @@ async function bootstrap() {
       // don't require workspaceId for the following paths
       const excludedPaths = [
         '/api/auth/setup',
+        '/api/auth/cloud-login',
         '/api/auth/exchange',
         '/api/health',
         '/api/billing/stripe/webhook',

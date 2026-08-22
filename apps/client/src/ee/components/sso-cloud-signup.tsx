@@ -2,7 +2,11 @@ import { Button, Divider, Stack } from "@mantine/core";
 import { getGoogleSignupUrl } from "@/ee/security/sso.utils.ts";
 import { GoogleIcon } from "@/components/icons/google-icon.tsx";
 
-export default function SsoCloudSignup() {
+export default function SsoCloudSignup({
+  label = "Sign up with Google",
+}: {
+  label?: string;
+}) {
   const handleSsoLogin = () => {
     window.location.href = getGoogleSignupUrl();
   };
@@ -16,7 +20,7 @@ export default function SsoCloudSignup() {
           variant="default"
           fullWidth
         >
-          Signup with Google
+          {label}
         </Button>
       </Stack>
       <Divider my="xs" label="OR" labelPosition="center" />

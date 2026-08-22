@@ -43,6 +43,7 @@ import {
 } from '../../integrations/audit/audit.service';
 import { SpaceInviteLinkService } from '../space/services/space-invite-link.service';
 import { GuestJoinDto, GuestSignupDto } from '../space/dto/space-invite-link.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @SkipThrottle({ [AI_CHAT_THROTTLER]: true })
 @UseGuards(ThrottlerGuard)
@@ -109,6 +110,14 @@ export class AuthController {
 
     const authToken = await this.authService.login(loginInput, workspace.id);
     this.setAuthCookie(res, authToken);
+  }
+
+  @Public()
+  @UseGuards(CloudGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('cloud-login')
+  async cloudLogin(@Body() loginInput: LoginDto) {
+    return this.authService.cloudLogin(loginInput);
   }
 
   @UseGuards(SetupGuard)

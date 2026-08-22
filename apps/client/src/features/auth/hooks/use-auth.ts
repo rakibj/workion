@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   forgotPassword,
+  cloudLogin,
   login,
   logout,
   passwordReset,
@@ -39,6 +40,26 @@ export default function useAuth() {
     setIsLoading(true);
 
     try {
+      if (isCloud()) {
+        const response = await cloudLogin(data);
+        setIsLoading(false);
+
+        if (response.requiresEmailVerification) {
+          window.location.href =
+            getHostnameUrl(response.hostname) +
+            `${APP_ROUTE.AUTH.VERIFY_EMAIL}?email=${encodeURIComponent(data.email)}&sig=${response.emailSignature}`;
+          return;
+        }
+
+        if (response.exchangeToken) {
+          window.location.href = exchangeTokenRedirectUrl(
+            response.hostname,
+            response.exchangeToken,
+          );
+        }
+        return;
+      }
+
       const response = await login(data);
       setIsLoading(false);
 

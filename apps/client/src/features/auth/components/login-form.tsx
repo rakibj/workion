@@ -23,6 +23,8 @@ import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/worksp
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
 import { AuthLayout } from "./auth-layout.tsx";
+import { isCloud } from "@/lib/config.ts";
+import SsoCloudSignup from "@/ee/components/sso-cloud-signup.tsx";
 
 const formSchema = z.object({
   email: z
@@ -35,13 +37,14 @@ type FormValues = z.infer<typeof formSchema>;
 export function LoginForm() {
   const { t } = useTranslation();
   const { signIn, isLoading } = useAuth();
+  const cloudMode = isCloud();
   useRedirectIfAuthenticated();
   const {
     data,
     isLoading: isDataLoading,
     isError,
     error,
-  } = useWorkspacePublicDataQuery();
+  } = useWorkspacePublicDataQuery(!cloudMode);
 
   const form = useForm<FormValues>({
     validate: zod4Resolver(formSchema),
@@ -66,7 +69,7 @@ export function LoginForm() {
    return null;
   }
 
-  if (isError && error?.["response"]?.status === 404) {
+  if (!cloudMode && isError && error?.["response"]?.status === 404) {
     return <Error404 />;
   }
 
@@ -78,9 +81,13 @@ export function LoginForm() {
             {t("Login")}
           </Title>
 
-          <SsoLogin />
+          {cloudMode ? (
+            <SsoCloudSignup label={t("Continue with Google")} />
+          ) : (
+            <SsoLogin />
+          )}
 
-          {!data?.enforceSso && (
+          {(cloudMode || !data?.enforceSso) && (
             <>
               <form onSubmit={form.onSubmit(onSubmit, handleValidationFailure)}>
                 <TextInput
@@ -129,9 +136,13 @@ export function LoginForm() {
           )}
 
           <Text ta="center" mt="md" size="sm" c="dimmed">
-            {t("Don't have an account?")}{" "}
-            <Anchor component={Link} to={APP_ROUTE.AUTH.SETUP} fw={500}>
-              {t("Sign up")}
+            {cloudMode ? t("Don't have a workspace?") : t("Don't have an account?")}{" "}
+            <Anchor
+              component={Link}
+              to={cloudMode ? APP_ROUTE.AUTH.CREATE_WORKSPACE : APP_ROUTE.AUTH.SETUP}
+              fw={500}
+            >
+              {cloudMode ? t("Create workspace") : t("Sign up")}
             </Anchor>
           </Text>
         </Box>

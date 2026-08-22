@@ -42,6 +42,7 @@ import {
   IAuditService,
 } from '../../../integrations/audit/audit.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
+import { computeEmailSignature } from '../auth.util';
 
 @Injectable()
 export class AuthService {
@@ -97,6 +98,68 @@ export class AuthService {
     });
 
     return this.sessionService.createSessionAndToken(user);
+  }
+
+  /**
+   * Authenticates a cloud user from the apex domain, then returns a short-lived
+   * token which is exchanged on the user's own tenant subdomain. Credentials
+   * therefore never travel in a redirect and the session cookie stays scoped
+   * to its workspace.
+   */
+  async cloudLogin(loginDto: LoginDto): Promise<{
+    hostname: string;
+    exchangeToken?: string;
+    requiresEmailVerification?: true;
+    emailSignature?: string;
+  }> {
+    const candidates = await this.userRepo.findCloudUsersByEmail(
+      loginDto.email,
+    );
+    const errorMessage = 'Email or password does not match';
+
+    for (const user of candidates) {
+      if (isUserDisabled(user) || !user.password) continue;
+
+      const isPasswordMatch = await comparePasswordHash(
+        loginDto.password,
+        user.password,
+      );
+      if (!isPasswordMatch) continue;
+
+      if (user.enforceSso) {
+        throw new BadRequestException('This workspace has enforced SSO login.');
+      }
+
+      if (!user.emailVerifiedAt) {
+        return {
+          hostname: user.hostname,
+          requiresEmailVerification: true,
+          emailSignature: computeEmailSignature(
+            user.email,
+            user.workspaceId,
+            this.environmentService.getAppSecret(),
+          ),
+        };
+      }
+
+      await this.userRepo.updateLastLogin(user.id, user.workspaceId);
+      this.auditService.log({
+        event: AuditEvent.USER_LOGIN,
+        resourceType: AuditResource.USER,
+        resourceId: user.id,
+        metadata: { source: 'password' },
+      });
+
+      return {
+        hostname: user.hostname,
+        exchangeToken: await this.tokenService.generateExchangeToken(
+          user.id,
+          user.workspaceId,
+        ),
+      };
+    }
+
+    throw new UnauthorizedException(errorMessage);
   }
 
   async register(createUserDto: CreateUserDto, workspaceId: string) {

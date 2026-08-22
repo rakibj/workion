@@ -120,6 +120,31 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
+  async findCloudUsersByEmail(email: string): Promise<
+    Array<
+      User & {
+        password: string;
+        hostname: string;
+        enforceSso: boolean;
+      }
+    >
+  > {
+    return this.db
+      .selectFrom('users')
+      .innerJoin('workspaces', 'workspaces.id', 'users.workspaceId')
+      .select(this.baseFields)
+      .select([
+        'users.password',
+        'workspaces.hostname',
+        'workspaces.enforceSso',
+      ])
+      .where(sql`LOWER(users.email)`, '=', sql`LOWER(${email})`)
+      .where('users.deletedAt', 'is', null)
+      .where('workspaces.deletedAt', 'is', null)
+      .where('workspaces.hostname', 'is not', null)
+      .execute() as any;
+  }
+
   async invalidateUserCache(userId: string, workspaceId: string): Promise<void> {
     await this.cacheManager
       .del(CacheKey.USER(userId, workspaceId))

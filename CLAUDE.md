@@ -64,6 +64,8 @@ docs/specs/done/      # fully implemented
 
 Move the file (`git mv`) to the matching folder as its status changes — don't just edit a status line while it sits in the wrong folder. Update any links to it (in this file, other specs, or code comments) when it moves.
 
+**Implemented (2026-08-22):** [Cloud Email-First Authentication](docs/specs/done/CLOUD_EMAIL_FIRST_AUTH_SPEC.md) — cloud email/password sign-in resolves the tenant server-side and uses the existing exchange-token handoff.
+
 **Detail lives in the spec, not here.** Once a feature has a spec doc, that doc is the source of truth for its design and status — update it there, including new findings, gaps, or scope changes discovered during implementation. An entry under "Implemented Custom Features" below points to its spec (name + link + one-line summary) instead of restating the spec's content. This is what lets this file — and anyone reading it — always know which spec is active for a given feature without cross-checking two descriptions that can drift apart. Features shipped without ever getting a spec doc keep their full description here until one exists.
 
 ---

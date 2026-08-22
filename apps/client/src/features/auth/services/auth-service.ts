@@ -16,6 +16,16 @@ export async function login(data: ILogin): Promise<ILoginResponse> {
   return response.data;
 }
 
+export async function cloudLogin(data: ILogin): Promise<{
+  hostname: string;
+  exchangeToken?: string;
+  requiresEmailVerification?: true;
+  emailSignature?: string;
+}> {
+  const response = await api.post("/auth/cloud-login", data);
+  return response.data;
+}
+
 export async function logout(): Promise<void> {
   await api.post<void>("/auth/logout");
 }
