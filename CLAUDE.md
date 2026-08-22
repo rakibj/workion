@@ -180,6 +180,8 @@ REDIS_URL=redis://localhost:6379
 
 **Domain:** `workion.gameloops.io` → `157.173.120.4`. TLS via Caddy (Let's Encrypt). `Caddyfile` + `docker-compose.prod.yml` already configured.
 
+**Public billing deployment boundary (2026-08-23):** `workionlive.gameloops.io` is the public Cloud/tenant deployment and the sole destination for Lemon Squeezy checkout/webhook configuration. `workion.gameloops.io` remains the internal Gameloops deployment. Never deploy, configure billing, or otherwise alter the internal deployment without explicit user approval.
+
 **Upstash abandoned** — BullMQ exhausted the free tier in ~10 days. Now using local Redis.
 
 **Neon abandoned (2026-06-13)** — free-tier egress hit 81%. Migrated to a local Postgres container on the VPS. Dump/restore via `pg_dump -Fc --no-owner --no-acl` / `pg_restore --clean --if-exists`. No `sslmode`/pgbouncer params — internal Docker network, plain TCP. Daily backups to R2 via `backup.sh` (cron 2 AM). Postgres 18+ needs its volume mounted at `/var/lib/postgresql` (not `.../data`) — it creates the versioned subdirectory itself.
@@ -575,7 +577,7 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 **Active specs:**
 
-- [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — real Stripe integration (checkout, webhooks, billing portal) behind Docmost's dormant EE billing scaffolding, plus a public `/pricing` page. Approved 2026-08-22. Independent of the Client entity spec. Real pricing tiers/amounts still need a business decision before Slice 2+ can run against live Stripe Prices. Not started.
+- [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — Lemon Squeezy integration (checkout, signed webhooks, subscription-management portal) and a public `/pricing` page. Initial launch pricing is Basic $29/month or $296/year, and Pro $79/month or $806/year. Independent of the Client entity spec. In progress (2026-08-23); live selling remains blocked until Lemon Squeezy identity verification completes.
 
 **Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
 

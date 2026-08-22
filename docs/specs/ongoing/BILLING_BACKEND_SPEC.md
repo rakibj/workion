@@ -1,107 +1,77 @@
-# Billing Backend Spec
+# Lemon Squeezy Billing & Public Pricing
 
-> Status: **Approved (2026-08-22) — implementation not started.** No code written yet, per CLAUDE.md's spec-then-implement methodology.
+> Status: **Approved (2026-08-23) — implementation in progress.**
 
 ## Problem
 
-Self-serve workspace *signup* is live (`docs/specs/done/MULTI_TENANCY_SPEC.md`) and the entitlement engine (`docs/specs/ongoing/EDITION_ENTITLEMENT_SPEC.md`) can gate features by plan — but there's no way to actually charge anyone. What exists today is Docmost's own dormant upstream EE scaffolding, never wired up in this fork:
+Workion Cloud can create a workspace and resolve entitlements, but it cannot sell a subscription. The old upstream Stripe billing UI and database columns are dormant, not a working integration. Workion will use Lemon Squeezy for checkout, payment collection, tax handling, and customer subscription management.
 
-- **DB schema** — `billing` table (Stripe subscription mirror: price/product/period/cancel fields) and `workspaces.stripeCustomerId` already migrated in (`20250106T195516-billing.ts`, `20250623T215045-more-billing-columns.ts`).
-- **Env config** — `EnvironmentService.getStripePublishableKey()/getStripeSecretKey()/getStripeWebhookSecret()` already read `STRIPE_*` vars, unused by anything.
-- **Dependency** — `stripe` npm package (`^17.7.0`) already in `apps/server/package.json`, never imported anywhere (`grep -rn "new Stripe"` returns nothing).
-- **Frontend UI** — `apps/client/src/ee/billing/` has a complete pricing-tier component (`billing-plans.tsx`) calling `getCheckoutLink()`/`useBillingPlans()` — both call server routes that don't exist. It's a dead shell today.
+## Launch offer
 
-This spec builds the missing middle: a real `BillingController`/`BillingService` that uses the Stripe SDK, ties checkout completion to `workspaces.plan` (which `EntitlementService` already reads), and replaces the frontend's fake plan list with real Stripe Price data.
+Flat subscriptions, no per-seat billing:
 
-**Depends on nothing from `CLIENT_ENTITY_SPEC.md`** — this can be built in parallel. It does *not* implement tier-limit enforcement (`clients`/`users`/`domains` counts) — that's `EDITION_ENTITLEMENT_SPEC.md` Slice 3, blocked on the Client entity separately.
+| Plan | Monthly | Annual | Included limits |
+| --- | ---: | ---: | --- |
+| Solo Founder | $9 | — | 3 spaces, 1 client, 3 users |
+| Startup | $19 | — | 10 spaces, 10 clients, 10 users |
 
-## Decisions to confirm before implementation
+`FOUNDER5` reduces the first three Solo Founder payments to $5. `STARTUP9` reduces the first three Startup payments to $9. `INTERNAL` is never exposed for sale. Space limits are enforced before a new space is created; the internal plan remains unlimited.
 
-1. **Real pricing tiers/amounts.** Every number in `PLAN_LIMITS`/`WorkionPlan` (`TENANT_BASIC`, `TENANT_PRO`) is currently a placeholder per CLAUDE.md. This spec needs real Stripe Products/Prices created in the Stripe Dashboard (test mode first) before Slice 2 can point at real price IDs — a business decision, not an engineering one, and the actual blocker for writing real code here.
-2. **Monthly vs. annual, single price vs. seat-based** — the dormant frontend UI already supports monthly/annual toggle and tiered-by-seat-count pricing (`billing-plans.tsx`'s `pricingTiers`/`billingScheme`). Recommend starting flat (one price per plan, monthly + annual, no seat tiers) for v1 and only building the tiered-seat logic if/when it's actually priced that way — the UI component already supports it, so this is a scope decision, not a rewrite risk.
-3. **Trial length** — `MULTI_TENANCY_SPEC.md`'s Slice 1 already sets `trialEndAt` at signup (`addDays(...)`, value not confirmed here) and a `TRIAL_ENDED` queue job constant already exists unused. Confirm the trial period and what "trial ended, no card on file" should do (block login? read-only? downgrade to a `FREE`-equivalent plan?).
+## Lemon Squeezy configuration
 
-None of these block writing the spec's approval — they block Slice 2+ actually running against production Stripe.
+The Workion store contains a monthly subscription product for Solo Founder and Startup. Checkouts are created server-side through the Lemon Squeezy API, so the server can attach the authenticated workspace ID as checkout custom data. The customer-facing app never receives the API key.
+
+Required production environment values:
+
+```env
+LEMON_SQUEEZY_API_KEY=
+LEMON_SQUEEZY_STORE_ID=
+LEMON_SQUEEZY_WEBHOOK_SECRET=
+LEMON_SQUEEZY_VARIANT_BASIC_MONTHLY=2047360
+LEMON_SQUEEZY_VARIANT_PRO_MONTHLY=
+```
+
+The dashboard webhook points to `https://workionlive.gameloops.io/api/billing/lemon-squeezy/webhook` and listens for `subscription_created`, `subscription_updated`, `subscription_cancelled`, `subscription_resumed`, `subscription_expired`, and `subscription_payment_failed`. It signs requests with `LEMON_SQUEEZY_WEBHOOK_SECRET`.
+
+**Deployment boundary:** `workionlive.gameloops.io` is the public, multi-tenant billing deployment. `workion.gameloops.io` is the internal Gameloops deployment and is out of scope for this feature: do not deploy, configure Lemon Squeezy, or change its environment without explicit user approval. `CloudGuard` keeps billing routes unavailable unless `CLOUD=true`.
 
 ## Data model
 
-No new tables — `billing` and `workspaces.stripeCustomerId`/`status`/`plan`/`billingEmail`/`trialEndAt` already exist and are sufficient. One addition:
+A new migration adds Lemon Squeezy identifiers and subscription fields rather than overloading legacy `stripe_*` columns:
 
-- `WorkionPlan` (`common/entitlement/entitlement.ts`) needs a mapping to real Stripe Price IDs. Proposed: a new `PLAN_STRIPE_PRICES: Record<WorkionPlan, { monthly: string; yearly: string } | null>` map (`INTERNAL` → `null`, real workspaces → real price IDs) — env-var-driven (`STRIPE_PRICE_TENANT_BASIC_MONTHLY` etc.) rather than hardcoded, since test-mode and live-mode price IDs differ and this needs to work in both.
+- `workspaces.lemon_squeezy_customer_id`
+- `billing.lemon_squeezy_subscription_id` (unique)
+- `billing.lemon_squeezy_customer_id`, `lemon_squeezy_product_id`, `lemon_squeezy_variant_id`
+- `billing.customer_portal_url`, `update_payment_method_url`
+
+The legacy Stripe columns remain untouched for migration safety and are not written by the new feature.
 
 ## API contract
 
-New `core/billing/` module.
+All endpoints use `CloudGuard`; nothing billing-related is reachable on the internal Gameloops deployment.
 
+```text
+GET  /billing/plans                        public, returns static launch plans and enabled variants
+POST /billing/checkout { variantId }       workspace owner only, returns Lemon checkout URL
+GET  /billing/portal                       workspace owner only, returns signed Lemon customer portal URL
+POST /billing/lemon-squeezy/webhook        public, HMAC-SHA256 signature verified
 ```
-GET  /billing/plans                                    → public: plan names/prices/features, sourced from PLAN_FEATURES + Stripe Price data (or a static mirror — see Slice 1)
-POST /billing/checkout        { priceId }               → authenticated (workspace owner only): creates a Stripe Checkout Session, returns { url }
-GET  /billing/portal                                    → authenticated (workspace owner only): creates a Stripe Billing Portal session, returns { url }
-POST /billing/webhook                                    → Stripe webhook receiver, signature-verified via STRIPE_WEBHOOK_SECRET, no auth guard (Stripe calls this directly)
-```
 
-Matches the existing frontend's expected shape (`ICheckoutLink`, `IBillingPortal`, `IBillingPlan` in `billing.types.ts`) — the dead shell becomes live without a frontend rewrite, only real data underneath.
+`POST /billing/checkout` creates a Lemon Squeezy Checkout for an allowed variant, pre-fills the owner billing email, and includes `{ workspace_id }` as checkout custom data. The success URL returns to the authenticated billing view. The controller never accepts a URL, amount, customer ID, or plan from the browser.
 
-## Webhook handling (the core of this spec)
-
-`POST /billing/webhook` must stay a thin, idempotent dispatcher — Stripe retries on non-2xx and can deliver the same event twice.
-
-- `checkout.session.completed` → look up `workspace` by `client_reference_id` (set to `workspaceId` when creating the Checkout Session in `POST /billing/checkout`), upsert a `billing` row, set `workspaces.plan` to the plan matching the purchased price, set `workspaces.stripeCustomerId` and `status = 'active'`.
-- `customer.subscription.updated` → update the matching `billing` row's `status`/`period_end_at`/`cancel_at_period_end`; if the price changed (upgrade/downgrade), update `workspaces.plan` to match.
-- `customer.subscription.deleted` → set `billing.status = 'canceled'`, `workspaces.plan` back to the most-restrictive real plan (`TENANT_BASIC`) — never silently promote to `INTERNAL`.
-- Every handler upserts on `stripe_subscription_id` (already a unique constraint on `billing`) so a redelivered webhook is a no-op, not a duplicate row.
-- Unrecognized event types: log and return 200 (per Stripe's own guidance — don't fail the endpoint for event types not yet handled).
-
-## Permissions
-
-- **All four routes are gated by the existing `CloudGuard`** (`core/auth/guards/cloud.guard.ts`), the same guard `MULTI_TENANCY_SPEC.md`'s signup routes use — makes every billing route a permanent no-op on Gameloops' own internal deployment (`CLOUD` unset there), by construction rather than by convention. This is the one gap the original draft missed: nothing about the DB schema or env config prevents these routes from being *reachable* on Gameloops otherwise, even though nothing should ever call them there.
-- `POST /billing/checkout` / `GET /billing/portal`: `CloudGuard` + workspace `owner` only (billing is the single most sensitive workspace-level action — matches Docmost's own convention of owner-gating billing UI, visible in the dormant frontend already checking a role before rendering `BillingPlans`).
-- `POST /billing/webhook`: `CloudGuard` + no user auth (can't — Stripe calls it), but Stripe signature verification (`stripe.webhooks.constructEvent`) is mandatory and non-optional, checked before touching any DB row. Belt-and-suspenders: even if a webhook were ever misconfigured to point at Gameloops' domain, `CloudGuard` rejects it before signature verification runs.
-- `GET /billing/plans`: `CloudGuard` + public otherwise, matches the existing unauthenticated pricing page use case (see below). Also naturally returns nothing useful on Gameloops even without the guard (`INTERNAL` plan is excluded from the public list), but the guard makes it explicit rather than incidental.
+Webhook handling is idempotent: it upserts by Lemon subscription ID, derives the plan only from the configured variant mapping, updates `workspaces.plan`, `status`, and customer ID, and stores customer portal URLs sent by Lemon. A cancellation retains access until Lemon's `ends_at`; expiration or a failed payment updates the workspace to the restrictive Basic plan/status. Unknown events return `200` after logging.
 
 ## Public pricing page
 
-Separate from the authenticated `BillingPlans` component in `ee/billing/` (which is post-signup, "manage your subscription"). A self-serve funnel needs an **unauthenticated** pricing page reachable before signup:
+`/pricing` is outside the authenticated layout and available only on Cloud. It presents the Solo Founder and Startup plans, their space limits, and the first-three-month launch offers; CTAs route to `/create`. A workspace must be created before checkout so billing has a tenant to attach to.
 
-- New route, e.g. `/pricing`, outside the authenticated app shell — reuses `GET /billing/plans` (no auth needed) and links each plan's CTA to `/create` (the existing cloud-signup entry point from `MULTI_TENANCY_SPEC.md`), not directly to checkout — checkout requires a `workspaceId` that doesn't exist until signup completes. Post-signup, the new workspace owner lands on the authenticated `BillingPlans` view to actually subscribe.
-- Whether this route lives in the existing `apps/client` app or a separate marketing surface is an open question — recommend building it inside `apps/client` first (fastest, reuses the existing plan-fetching hook) and revisiting only if a proper marketing site becomes a separate need later.
+## Verification
 
-## Slices
-
-### Slice 1 — `GET /billing/plans` + plan/price mapping
-**Depends on:** decision #1 above (real Stripe Products/Prices must exist, at least in test mode).
-**What:** `PLAN_STRIPE_PRICES` map, `BillingController.getPlans()` merging `PLAN_FEATURES` + `PLAN_LIMITS` (already exist) with live Stripe Price amounts (fetched via `stripe.prices.retrieve` at request time, or cached — decide caching approach here, `with-cache.ts` pattern already exists) into the `IBillingPlan[]` shape the frontend already expects.
-**DoD:** unit tests mock the Stripe SDK client (never call real Stripe in tests); `INTERNAL` plan excluded from the public list (nothing to sell internally).
-
-### Slice 2 — Checkout session creation
-**Depends on:** Slice 1.
-**What:** `POST /billing/checkout`, owner-only guard, creates a Stripe Checkout Session with `client_reference_id: workspaceId`, `success_url`/`cancel_url` pointing back into the workspace's own subdomain (per `MULTI_TENANCY_SPEC.md`'s subdomain-per-workspace model).
-**DoD:** unit tests cover owner-only rejection for non-owners; Stripe client mocked, verifying the session is created with the correct `client_reference_id` and price.
-
-### Slice 3 — Webhook receiver
-**Depends on:** Slice 2 (needs `client_reference_id` set to correlate events back to a workspace).
-**What:** `POST /billing/webhook`, signature verification, the three event handlers above, idempotent upsert into `billing` + `workspaces.plan`/`stripeCustomerId`/`status` update.
-**DoD:** unit tests cover: bad signature rejected before any DB write; `checkout.session.completed` sets the right plan; a redelivered (same `stripe_subscription_id`) event doesn't create a duplicate row; `customer.subscription.deleted` never sets plan to `INTERNAL`.
-
-### Slice 4 — Billing portal
-**Depends on:** Slice 3 (needs a real `stripeCustomerId` on the workspace to open a portal session against).
-**What:** `GET /billing/portal`, owner-only, `stripe.billingPortal.sessions.create({ customer: workspace.stripeCustomerId, return_url })`.
-**DoD:** unit test covers the case where `stripeCustomerId` is null (workspace never checked out) — should 400, not throw a raw Stripe SDK error.
-
-### Slice 5 — Wire the frontend to real data
-**Depends on:** Slices 1–4.
-**What:** confirm `apps/client/src/ee/billing/` (already built) works end-to-end against the now-real endpoints — likely no code changes needed, since it was built against this exact contract; this slice is verification, not new UI.
-**DoD:** manual smoke test in Stripe test mode: view plans → checkout → webhook fires → workspace plan updates → `EntitlementService.hasFeature` reflects it → open billing portal → cancel → plan reverts.
-
-### Slice 6 — Public `/pricing` page
-**Depends on:** Slice 1 only (doesn't need checkout to exist yet — CTA can point to `/create` before Slices 2–4 are even done, so this can ship early for marketing purposes).
-**What:** the unauthenticated pricing page described above.
-**DoD:** reachable while logged out, on the apex/marketing domain, links correctly into `/create`.
+Unit tests cover variant allow-listing, owner-only checkout, HMAC rejection before persistence, plan resolution, cancellation/expiry behavior, and webhook replay idempotency. A manual Lemon test-mode smoke test covers pricing → create workspace → checkout → webhook → plan update → customer portal.
 
 ## Explicitly out of scope
 
-- Real pricing/tier decisions (business input required — see "Decisions to confirm").
-- Seat-based/tiered-by-user-count pricing (the frontend supports it; this spec builds flat pricing first).
-- Tier-limit enforcement (`clients`/`users`/`domains` counts) — `EDITION_ENTITLEMENT_SPEC.md` Slice 3, blocked on `CLIENT_ENTITY_SPEC.md`.
-- Dunning/failed-payment email flows beyond what Stripe's own portal/emails already handle.
-- Invoicing/tax (Stripe Tax or manual) — assumed out of scope until a specific jurisdiction requirement surfaces.
+- Lemon identity verification, payout setup, and making the offer publicly sellable.
+- Seat or usage billing.
+- Client/user/domain limits and dunning email flows.
+- Migrating historical Stripe billing records.

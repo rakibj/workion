@@ -51,6 +51,7 @@ import LabelPage from "@/pages/label/label-page";
 import ClientsPage from "@/pages/clients/clients";
 import ClientDetailPage from "@/pages/clients/client-detail";
 import ProjectDetailPage from "@/pages/clients/project-detail";
+import PricingPage from "@/pages/pricing/pricing-page.tsx";
 
 function RootRedirect() {
   const { data, isLoading } = useCurrentUser();
@@ -73,6 +74,7 @@ export default function App() {
         <Route path={"/invite/:token"} element={<InviteLinkPage />} />
         <Route path={"/forgot-password"} element={<ForgotPassword />} />
         <Route path={"/password-reset"} element={<PasswordReset />} />
+        {isCloud() && <Route path={"/pricing"} element={<PricingPage />} />}
         <Route path={"/login/mfa"} element={<MfaChallengePage />} />
         <Route path={"/login/mfa/setup"} element={<MfaSetupRequiredPage />} />
 

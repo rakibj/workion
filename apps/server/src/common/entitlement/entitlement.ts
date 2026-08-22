@@ -12,6 +12,7 @@ export interface WorkionPlanLimits {
   clients: number | null;
   users: number | null;
   domains: number | null;
+  spaces: number | null;
 }
 
 /**
@@ -36,7 +37,7 @@ export const PLAN_FEATURES: Record<WorkionPlan, WorkionFeature[]> = {
 };
 
 export const PLAN_LIMITS: Record<WorkionPlan, WorkionPlanLimits> = {
-  [WorkionPlan.INTERNAL]: { clients: null, users: null, domains: null },
-  [WorkionPlan.TENANT_BASIC]: { clients: 1, users: 3, domains: 0 },
-  [WorkionPlan.TENANT_PRO]: { clients: 20, users: 25, domains: 5 },
+  [WorkionPlan.INTERNAL]: { clients: null, users: null, domains: null, spaces: null },
+  [WorkionPlan.TENANT_BASIC]: { clients: 1, users: 3, domains: 0, spaces: 3 },
+  [WorkionPlan.TENANT_PRO]: { clients: 10, users: 10, domains: 0, spaces: 10 },
 };

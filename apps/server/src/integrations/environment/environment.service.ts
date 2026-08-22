@@ -230,6 +230,39 @@ export class EnvironmentService {
     return this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
   }
 
+  getLemonSqueezyApiKey(): string {
+    return this.configService.get<string>('LEMON_SQUEEZY_API_KEY');
+  }
+
+  getLemonSqueezyStoreId(): string {
+    return this.configService.get<string>('LEMON_SQUEEZY_STORE_ID');
+  }
+
+  getLemonSqueezyWebhookSecret(): string {
+    return this.configService.get<string>('LEMON_SQUEEZY_WEBHOOK_SECRET');
+  }
+
+  getLemonSqueezyVariantIds() {
+    return {
+      tenant_basic: {
+        monthly: this.configService.get<string>(
+          'LEMON_SQUEEZY_VARIANT_BASIC_MONTHLY',
+        ),
+        yearly: this.configService.get<string>(
+          'LEMON_SQUEEZY_VARIANT_BASIC_YEARLY',
+        ),
+      },
+      tenant_pro: {
+        monthly: this.configService.get<string>(
+          'LEMON_SQUEEZY_VARIANT_PRO_MONTHLY',
+        ),
+        yearly: this.configService.get<string>(
+          'LEMON_SQUEEZY_VARIANT_PRO_YEARLY',
+        ),
+      },
+    };
+  }
+
   getBillingTrialDays(): number {
     return parseInt(this.configService.get<string>('BILLING_TRIAL_DAYS', '14'));
   }

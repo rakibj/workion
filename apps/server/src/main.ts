@@ -179,6 +179,7 @@ async function bootstrap() {
         '/api/auth/exchange',
         '/api/health',
         '/api/billing/stripe/webhook',
+        '/api/billing/lemon-squeezy/webhook',
         '/api/workspace/check-hostname',
         '/api/sso/google',
         '/api/workspace/create',

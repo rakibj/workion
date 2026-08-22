@@ -28,7 +28,7 @@ export default function Billing() {
       <BillingTrial />
       <BillingDetails />
 
-      {isBillingError && <BillingPlans />}
+      {!billing && <BillingPlans />}
 
       {billing && (
         <>

@@ -12,7 +12,7 @@ export async function getBilling(): Promise<IBilling> {
 }
 
 export async function getBillingPlans(): Promise<IBillingPlan[]> {
-  const req = await api.post<IBillingPlan[]>("/billing/plans");
+  const req = await api.get<IBillingPlan[]>("/billing/plans");
   return req.data;
 }
 

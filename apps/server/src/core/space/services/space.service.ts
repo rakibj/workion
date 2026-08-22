@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -30,6 +31,7 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../../integrations/audit/audit.service';
+import { EntitlementService } from '../../../common/entitlement/entitlement.service';
 
 @Injectable()
 export class SpaceService {
@@ -41,6 +43,7 @@ export class SpaceService {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+    private readonly entitlementService: EntitlementService,
   ) {}
 
   async createSpace(
@@ -49,6 +52,23 @@ export class SpaceService {
     createSpaceDto: CreateSpaceDto,
     trx?: KyselyTransaction,
   ): Promise<Space> {
+    const workspace = await this.db
+      .selectFrom('workspaces')
+      .select('plan')
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+    const limit = this.entitlementService.getLimits(workspace?.plan).spaces;
+    if (limit !== null) {
+      const { count } = await this.db
+        .selectFrom('spaces')
+        .select((eb) => eb.fn.count('id').as('count'))
+        .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirstOrThrow();
+      if (Number(count) >= limit) {
+        throw new ForbiddenException(`Your plan supports up to ${limit} spaces`);
+      }
+    }
     let space = null;
 
     await executeTx(

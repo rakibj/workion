@@ -29,6 +29,7 @@ import { TemplateModule } from './template/template.module';
 import { ClsMiddleware } from 'nestjs-cls';
 import { BlogModule } from './blog/blog.module';
 import { ClientModule } from './client/client.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ClientModule } from './client/client.module';
     TemplateModule,
     BlogModule,
     ClientModule,
+    BillingModule,
   ],
 })
 export class CoreModule implements NestModule {
@@ -63,6 +65,7 @@ export class CoreModule implements NestModule {
       { path: 'health', method: RequestMethod.GET },
       { path: 'health/live', method: RequestMethod.GET },
       { path: 'billing/stripe/webhook', method: RequestMethod.POST },
+      { path: 'billing/lemon-squeezy/webhook', method: RequestMethod.POST },
     ];
 
     consumer
