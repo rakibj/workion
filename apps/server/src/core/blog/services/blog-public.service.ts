@@ -10,6 +10,8 @@ import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { prepareContentForBlog } from '../../../common/helpers/attachment-share.util';
 import { blogMeta } from '../blog-meta.util';
+import { EntitlementService } from '../../../common/entitlement/entitlement.service';
+import { WorkionFeature } from '../../../common/entitlement/entitlement';
 
 type Selector = { domain?: string; spaceId?: string };
 
@@ -20,6 +22,7 @@ export class BlogPublicService {
     private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly environmentService: EnvironmentService,
+    private readonly entitlementService: EntitlementService,
   ) {}
 
   async resolveSpace({ domain, spaceId }: Selector) {
@@ -29,7 +32,9 @@ export class BlogPublicService {
     const space = domain
       ? await this.blogPostSettingsRepo.findSpaceByBlogDomain(domain)
       : await this.blogPostSettingsRepo.findSpaceById(spaceId);
-    if (!space) throw new NotFoundException('Blog not found');
+    if (!space || !this.hasBlogFeature(space.workspacePlan)) {
+      throw new NotFoundException('Blog not found');
+    }
     return space;
   }
 
@@ -41,6 +46,7 @@ export class BlogPublicService {
     );
     if (
       !post ||
+      !this.hasBlogFeature(post.workspacePlan) ||
       (await this.pagePermissionRepo.hasRestrictedAncestor(post.pageId))
     ) {
       throw new NotFoundException('Blog post not found');
@@ -74,6 +80,7 @@ export class BlogPublicService {
       await this.blogPostSettingsRepo.findPublishedBySlugAnywhere(slug);
     if (
       !post ||
+      !this.hasBlogFeature(post.workspacePlan) ||
       (await this.pagePermissionRepo.hasRestrictedAncestor(post.pageId))
     ) {
       throw new NotFoundException('Blog post not found');
@@ -88,7 +95,10 @@ export class BlogPublicService {
     );
     const items = [];
     for (const row of rows) {
-      if (!(await this.pagePermissionRepo.hasRestrictedAncestor(row.pageId))) {
+      if (
+        this.hasBlogFeature(row.workspacePlan) &&
+        !(await this.pagePermissionRepo.hasRestrictedAncestor(row.pageId))
+      ) {
         items.push(await this.serializePost(row, undefined, false));
       }
     }
@@ -115,11 +125,18 @@ export class BlogPublicService {
   private async visiblePosts(rows: any[], space?: any) {
     const items = [];
     for (const row of rows) {
-      if (!(await this.pagePermissionRepo.hasRestrictedAncestor(row.pageId))) {
+      if (
+        this.hasBlogFeature(row.workspacePlan ?? space?.workspacePlan) &&
+        !(await this.pagePermissionRepo.hasRestrictedAncestor(row.pageId))
+      ) {
         items.push(await this.serializePost(row, space, false));
       }
     }
     return items;
+  }
+
+  private hasBlogFeature(plan: string | null | undefined): boolean {
+    return this.entitlementService.hasFeature(plan, WorkionFeature.BLOG);
   }
 
   private async serializePost(post: any, space?: any, includeHtml = true) {

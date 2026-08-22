@@ -1,9 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
+import { WorkionPlan } from '../../common/entitlement/entitlement';
 import { AttachmentController } from './attachment.controller';
 
 describe('AttachmentController - getBlogFile', () => {
   const attachmentRepo = { findById: jest.fn() };
-  const blogPostSettingsRepo = { isPublished: jest.fn() };
+  const blogPostSettingsRepo = { findPublishedByPageId: jest.fn() };
+  const entitlementService = { hasFeature: jest.fn() };
   const pagePermissionRepo = { hasRestrictedAncestor: jest.fn() };
   const storageService = { readStream: jest.fn(), readRangeStream: jest.fn() };
 
@@ -19,6 +21,7 @@ describe('AttachmentController - getBlogFile', () => {
       {} as any, // tokenService
       {} as any, // pageAccessService
       blogPostSettingsRepo as any,
+      entitlementService as any,
       pagePermissionRepo as any,
       {} as any, // auditService
     );
@@ -32,7 +35,10 @@ describe('AttachmentController - getBlogFile', () => {
 
   const validFileId = '123e4567-e89b-12d3-a456-426614174000';
 
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    entitlementService.hasFeature.mockReturnValue(true);
+  });
 
   it('serves the file with an immutable cache header for a published, unrestricted post', async () => {
     attachmentRepo.findById.mockResolvedValue({
@@ -44,7 +50,9 @@ describe('AttachmentController - getBlogFile', () => {
       fileSize: 100,
       filePath: 'path/to/file',
     });
-    blogPostSettingsRepo.isPublished.mockResolvedValue(true);
+    blogPostSettingsRepo.findPublishedByPageId.mockResolvedValue({
+      workspacePlan: WorkionPlan.INTERNAL,
+    });
     pagePermissionRepo.hasRestrictedAncestor.mockResolvedValue(false);
     storageService.readStream.mockResolvedValue('stream');
 
@@ -56,7 +64,7 @@ describe('AttachmentController - getBlogFile', () => {
       'cover.png',
     );
 
-    expect(blogPostSettingsRepo.isPublished).toHaveBeenCalledWith('page-1');
+    expect(blogPostSettingsRepo.findPublishedByPageId).toHaveBeenCalledWith('page-1');
     expect(res.headers).toHaveBeenCalledWith(
       expect.objectContaining({
         'Cache-Control': 'public, max-age=31536000, immutable',
@@ -70,7 +78,7 @@ describe('AttachmentController - getBlogFile', () => {
       id: validFileId,
       pageId: 'page-1',
     });
-    blogPostSettingsRepo.isPublished.mockResolvedValue(false);
+    blogPostSettingsRepo.findPublishedByPageId.mockResolvedValue(undefined);
     pagePermissionRepo.hasRestrictedAncestor.mockResolvedValue(false);
 
     await expect(
@@ -88,8 +96,31 @@ describe('AttachmentController - getBlogFile', () => {
       id: validFileId,
       pageId: 'page-1',
     });
-    blogPostSettingsRepo.isPublished.mockResolvedValue(true);
+    blogPostSettingsRepo.findPublishedByPageId.mockResolvedValue({
+      workspacePlan: WorkionPlan.INTERNAL,
+    });
     pagePermissionRepo.hasRestrictedAncestor.mockResolvedValue(true);
+
+    await expect(
+      buildController().getBlogFile(
+        {} as any,
+        buildRes() as any,
+        validFileId,
+        'cover.png',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('404s when the published post belongs to a tenant plan without Blog', async () => {
+    attachmentRepo.findById.mockResolvedValue({
+      id: validFileId,
+      pageId: 'page-1',
+    });
+    blogPostSettingsRepo.findPublishedByPageId.mockResolvedValue({
+      workspacePlan: WorkionPlan.TENANT_PRO,
+    });
+    entitlementService.hasFeature.mockReturnValue(false);
+    pagePermissionRepo.hasRestrictedAncestor.mockResolvedValue(false);
 
     await expect(
       buildController().getBlogFile(

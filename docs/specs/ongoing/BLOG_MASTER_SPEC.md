@@ -290,9 +290,7 @@ Blog became the first (and, as of this writing, only) module wired to the entitl
 - `PageController.create()` (`apps/server/src/core/page/page.controller.ts`) — inline check (`createPageDto.type === 'blog' && !entitlementService.hasFeature(workspace.plan, WorkionFeature.BLOG)`), since page creation is one generic endpoint shared by every page type and can't carry the class-level decorator.
 - Frontend: sidebar's "Blog Post" create option (`space-sidebar.tsx`) renders only when `useHasWorkionModule('blog')` is true.
 
-**Known gaps, not yet closed:**
-1. The unauthenticated public-read routes (`BlogPublicController`/`BlogRenderController`/`BlogSeoController`) are **not** gated — a workspace downgraded after already publishing keeps serving those old posts. (Originally flagged in `EDITION_ENTITLEMENT_SPEC.md` Slice 2.)
-2. The space settings **Blog tab** (`space-blog-settings.tsx`) and its `PATCH /spaces/:spaceId/blog-settings` endpoint aren't gated either — a tenant space admin can open that tab and save a blog domain/basePath without the module.
+**Entitlement closure (2026-08-23):** Public reads now gate through `BlogPublicService`: custom-domain/API/SSR/feed requests for a tenant workspace return 404, primary-domain queries exclude tenant-owned historical posts, and stable blog-attachment URLs apply the same check. The Blog settings tab and `PATCH /spaces/:spaceId/blog-settings` are also guarded. Blog remains internal-only: `tenant_basic` and `tenant_pro` do not include `WorkionFeature.BLOG`.
 
 ## Addendum B — Blog post custom fields (2026-07-29, no prior spec)
 

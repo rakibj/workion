@@ -56,6 +56,8 @@ import * as path from 'path';
 import { AttachmentInfoDto, RemoveIconDto } from './dto/attachment.dto';
 import { PageAccessService } from '../page/page-access/page-access.service';
 import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.repo';
+import { EntitlementService } from '../../common/entitlement/entitlement.service';
+import { WorkionFeature } from '../../common/entitlement/entitlement';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
@@ -78,6 +80,7 @@ export class AttachmentController {
     private readonly tokenService: TokenService,
     private readonly pageAccessService: PageAccessService,
     private readonly blogPostSettingsRepo: BlogPostSettingsRepo,
+    private readonly entitlementService: EntitlementService,
     private readonly pagePermissionRepo: PagePermissionRepo,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -296,11 +299,18 @@ export class AttachmentController {
       throw new NotFoundException('File not found');
     }
 
-    const [isPublished, hasRestrictedAncestor] = await Promise.all([
-      this.blogPostSettingsRepo.isPublished(attachment.pageId),
+    const [publishedPost, hasRestrictedAncestor] = await Promise.all([
+      this.blogPostSettingsRepo.findPublishedByPageId(attachment.pageId),
       this.pagePermissionRepo.hasRestrictedAncestor(attachment.pageId),
     ]);
-    if (!isPublished || hasRestrictedAncestor) {
+    if (
+      !publishedPost ||
+      !this.entitlementService.hasFeature(
+        publishedPost.workspacePlan,
+        WorkionFeature.BLOG,
+      ) ||
+      hasRestrictedAncestor
+    ) {
       throw new NotFoundException('File not found');
     }
 

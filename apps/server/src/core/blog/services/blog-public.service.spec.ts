@@ -4,6 +4,8 @@ import { BlogPostSettingsRepo } from '@docmost/db/repos/blog/blog-post-settings.
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
+import { EntitlementService } from '../../../common/entitlement/entitlement.service';
+import { WorkionFeature, WorkionPlan } from '../../../common/entitlement/entitlement';
 import { BlogPublicService } from './blog-public.service';
 
 describe('BlogPublicService', () => {
@@ -13,14 +15,17 @@ describe('BlogPublicService', () => {
     findSpaceById: jest.fn(),
     findPublishedBySlug: jest.fn(),
     listPublished: jest.fn(),
+    listPublishedAnywhere: jest.fn(),
   };
   const permissions = { hasRestrictedAncestor: jest.fn() };
   const attachments = { findById: jest.fn() };
   const environment = { getAppUrl: jest.fn() };
+  const entitlement = { hasFeature: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
     environment.getAppUrl.mockReturnValue('https://workion.example');
+    entitlement.hasFeature.mockReturnValue(true);
     const module = await Test.createTestingModule({
       providers: [
         BlogPublicService,
@@ -28,9 +33,54 @@ describe('BlogPublicService', () => {
         { provide: PagePermissionRepo, useValue: permissions },
         { provide: AttachmentRepo, useValue: attachments },
         { provide: EnvironmentService, useValue: environment },
+        { provide: EntitlementService, useValue: entitlement },
       ],
     }).compile();
     service = module.get(BlogPublicService);
+  });
+
+  it('does not resolve a public blog for a tenant workspace', async () => {
+    repo.findSpaceById.mockResolvedValue({
+      id: 'space',
+      workspacePlan: WorkionPlan.TENANT_PRO,
+    });
+    entitlement.hasFeature.mockReturnValue(false);
+
+    await expect(service.resolveSpace({ spaceId: 'space' })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(entitlement.hasFeature).toHaveBeenCalledWith(
+      WorkionPlan.TENANT_PRO,
+      WorkionFeature.BLOG,
+    );
+  });
+
+  it('excludes tenant-plan posts from the primary public blog', async () => {
+    repo.listPublishedAnywhere.mockResolvedValue([
+      {
+        pageId: 'internal-post',
+        workspacePlan: WorkionPlan.INTERNAL,
+        title: 'Internal',
+        slug: 'internal',
+        content: { type: 'doc', content: [] },
+      },
+      {
+        pageId: 'tenant-post',
+        workspacePlan: WorkionPlan.TENANT_BASIC,
+        title: 'Tenant',
+        slug: 'tenant',
+        content: { type: 'doc', content: [] },
+      },
+    ]);
+    entitlement.hasFeature.mockImplementation(
+      (plan, feature) =>
+        feature === WorkionFeature.BLOG && plan === WorkionPlan.INTERNAL,
+    );
+    permissions.hasRestrictedAncestor.mockResolvedValue(false);
+
+    const result = await service.listPrimaryPosts(1, 20);
+
+    expect(result.items.map((post) => post.slug)).toEqual(['internal']);
   });
 
   it('rewrites inline attachments and supplies public OG and SEO metadata', async () => {

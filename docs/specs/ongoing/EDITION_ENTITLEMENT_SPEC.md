@@ -51,19 +51,19 @@ No new tables. One repurposed column, one new concept:
 
 **Definition of Done:** ✅ `EntitlementService.hasFeature`/`getLimits` covered for internal/null plan (everything on), a restricted plan missing a feature, and an unknown/garbage plan string (fails safe to the most-restrictive plan — `FREE` — never crashes, never grants). 11 tests in `entitlement.service.spec.ts`, all passing. Server build (`tsc --noEmit`) clean.
 
-### Slice 2 — Wire blog module to the entitlement check — **Done (2026-08-21), partial scope**
+### Slice 2 — Wire blog module to the entitlement check — **Done (2026-08-23)**
 
 **Depends on:** Slice 1.
 
 **What it does:** Added a reusable `@RequireFeature(WorkionFeature.BLOG)` decorator + `EntitlementGuard` (`common/entitlement/require-feature.decorator.ts`, `entitlement.guard.ts`) — a Reflector-based Nest guard, same shape as any other metadata-driven guard, meant to be reused by future gated features, not just blog. Applied to `BlogController` (`@UseGuards(JwtAuthGuard, EntitlementGuard)` + class-level `@RequireFeature(WorkionFeature.BLOG)`) — this is the authenticated create/settings/publish/unpublish path, i.e. the actual editorial gate. A workspace whose resolved plan doesn't include `blog` gets a `403 ForbiddenException` on every route in that controller; internal/null-plan workspaces are unaffected (`resolvePlan(null) → INTERNAL → has blog`).
 
-**Scope note — deliberately not covered by this slice:** `BlogPublicController`, `BlogRenderController`, and `BlogSeoController` (the unauthenticated public JSON API / SSR / sitemap-rss-robots routes) are **not gated**. They resolve a space (and its workspace) dynamically per request via `BlogPublicService.resolveSpace`/`findPublishedBySlugAnywhere`, including primary-domain routes that search across every workspace with no single workspace in scope — gating those needs its own design pass (an extra lookup or join per request, and a decision on what the "anywhere" primary-domain routes even mean once multiple workspaces with different plans share one deployment). Since a plan without the `blog` feature can never produce a published post in the first place (publishing is blocked at the source in `BlogController`), the practical exposure is narrow: a workspace downgraded *after* already publishing keeps serving those old posts publicly until this gap is closed. Flagged here as follow-up work, not silently dropped.
+**Public-read closure (2026-08-23):** `BlogPublicService` now applies the same entitlement resolution to every public selector and to every row returned by primary-domain queries; it returns a 404 for a tenant workspace or a tenant-owned historical post. `BlogPostSettingsRepo` joins `workspaces` to provide the plan for that decision. Stable `/files/blog/*` attachment access uses the same check, so old tenant-owned posts cannot remain partially exposed through cached image URLs.
 
 **Definition of Done:** ✅ internal-plan (and null-plan, i.e. every existing workspace) behavior provably unchanged — verified via the full `entitlement` and `blog` Jest suites (11 + 19 tests) and `tsc --noEmit`. A workspace on a plan without `blog` gets a 403 from `EntitlementGuard`, not a silent 500 or a leak.
 
 ### Slice 3 — Tier limit enforcement (clients/users/domains)
 
-**Blocked** on the Client entity spec (can't enforce a "clients per workspace" limit before "client" is a countable thing in the data model). Not in scope until then — listed here only so the entitlement data model above is designed with it in mind.
+**Unblocked** — Client entities are now countable. Detailed implementation design is approved in `docs/specs/ongoing/EDITION_ENTITLEMENT_LIMITS_SPEC.md`; implementation has not started.
 
 ### Slice 4 — Admin-visible plan/limits UI
 
@@ -71,4 +71,4 @@ No new tables. One repurposed column, one new concept:
 
 ---
 
-**Status:** Slices 1–2 implemented (2026-08-21). Slices 3–4 remain blocked on the Client entity spec. The open sub-question above (single shared instance vs. a second deployment for the public edition) is still unresolved and doesn't block Slices 1–2, but should be settled before any public/AppSumo workspace actually exists — it determines how much the BlogPublic* gating gap (noted under Slice 2) actually matters in practice.
+**Status:** Slices 1–2 implemented. Slice 3 is unblocked with an approved implementation spec; Slice 4 remains blocked on Slice 3. The open sub-question above (single shared instance vs. a second deployment for the public edition) is still unresolved and should be settled before any public/AppSumo workspace actually exists.

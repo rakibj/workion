@@ -64,7 +64,9 @@ export class BlogPostSettingsRepo {
   async findSpaceByBlogDomain(domain: string) {
     return this.db
       .selectFrom('spaces')
+      .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
       .selectAll()
+      .select('workspaces.plan as workspacePlan')
       .where(sql`LOWER(settings->'blog'->>'domain')`, '=', domain.toLowerCase())
       .executeTakeFirst();
   }
@@ -72,7 +74,9 @@ export class BlogPostSettingsRepo {
   async findSpaceById(spaceId: string) {
     return this.db
       .selectFrom('spaces')
+      .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
       .selectAll()
+      .select('workspaces.plan as workspacePlan')
       .where('id', '=', spaceId)
       .executeTakeFirst();
   }
@@ -117,11 +121,10 @@ export class BlogPostSettingsRepo {
       .execute();
   }
 
-  async isPublished(pageId: string): Promise<boolean> {
-    const result = await this.basePublishedQuery()
+  async findPublishedByPageId(pageId: string) {
+    return this.basePublishedQuery()
       .where('pages.id', '=', pageId)
       .executeTakeFirst();
-    return !!result;
   }
 
   private basePublishedQuery(spaceId?: string) {
@@ -129,10 +132,12 @@ export class BlogPostSettingsRepo {
       .selectFrom('blogPostSettings')
       .innerJoin('pages', 'pages.id', 'blogPostSettings.pageId')
       .innerJoin('shares', 'shares.pageId', 'pages.id')
+      .innerJoin('workspaces', 'workspaces.id', 'pages.workspaceId')
       .leftJoin('users', 'users.id', 'pages.creatorId')
       .select([
         'pages.id as pageId',
         'pages.workspaceId',
+        'workspaces.plan as workspacePlan',
         'pages.title',
         'pages.content',
         'pages.updatedAt',
