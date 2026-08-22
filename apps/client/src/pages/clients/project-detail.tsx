@@ -89,7 +89,7 @@ export default function ProjectDetailPage() {
             label="Status"
             data={PROJECT_STATUSES.map((status) => ({
               value: status,
-              label: status.replaceAll("_", " "),
+              label: status.replace(/_/g, " "),
             }))}
             {...form.getInputProps("status")}
           />

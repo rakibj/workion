@@ -110,7 +110,15 @@ export class WorkspaceService {
   async getWorkspacePublicData(workspaceId: string) {
     const workspace = await this.db
       .selectFrom('workspaces')
-      .select(['id', 'name', 'logo', 'hostname', 'enforceSso', 'licenseKey', 'plan'])
+      .select([
+        'id',
+        'name',
+        'logo',
+        'hostname',
+        'enforceSso',
+        'licenseKey',
+        'plan',
+      ])
       .select((eb) =>
         jsonArrayFrom(
           eb
@@ -513,7 +521,7 @@ export class WorkspaceService {
 
       if (
         typeof updateWorkspaceDto.trashRetentionDays !== 'undefined' &&
-        updateWorkspaceDto.trashRetentionDays !== ws.trashRetentionDays
+        updateWorkspaceDto.trashRetentionDays !== Number(ws.trashRetentionDays)
       ) {
         before.trashRetentionDays = ws.trashRetentionDays;
         after.trashRetentionDays = updateWorkspaceDto.trashRetentionDays;
