@@ -69,3 +69,6 @@ idempotent, and reversible without losing the Client's contact record.
 - Focused service test suite: **7/7 passing** (`client-contact.service.spec.ts`).
 - Client TypeScript check: passed.
 - Server Nest build: passed.
+- Follow-up fix (2026-08-24): successful add/remove mutations update the
+  active client-member ID query cache directly before invalidating it, so the
+  Space member tag and action switch immediately without a page refresh.

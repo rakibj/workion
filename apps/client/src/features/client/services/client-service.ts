@@ -2,14 +2,15 @@ import api from "@/lib/api-client";
 import {
   CreateClientInput,
   IClient,
+  IClientListItem,
   IClientDetail,
   IClientContact,
   CreateClientContactInput,
   UpdateClientContactInput,
 } from "../types/client.types";
 
-export async function getClients(): Promise<IClient[]> {
-  const req = await api.get<IClient[]>("/clients");
+export async function getClients(): Promise<IClientListItem[]> {
+  const req = await api.get<IClientListItem[]>("/clients");
   return req.data;
 }
 

@@ -1,4 +1,5 @@
 import {
+  Anchor,
   Button,
   Card,
   Container,
@@ -22,6 +23,7 @@ import {
   useCreateClientMutation,
 } from "@/features/client/queries/client-query";
 import { getAppName } from "@/lib/config";
+import { getSpaceUrl } from "@/lib/config";
 
 export default function ClientsPage() {
   const [opened, { open, close }] = useDisclosure(false);
@@ -54,14 +56,14 @@ export default function ClientsPage() {
           {clients.map((client) => (
             <Card
               key={client.id}
-              component={Link}
-              to={`/clients/${client.id}`}
               withBorder
               radius="md"
               p="lg"
             >
               <Group justify="space-between">
-                <Text fw={600}>{client.name}</Text>
+                <Anchor component={Link} to={`/clients/${client.id}`} fw={600}>
+                  {client.name}
+                </Anchor>
                 <Text
                   size="xs"
                   c={client.status === "active" ? "green" : "dimmed"}
@@ -69,6 +71,27 @@ export default function ClientsPage() {
                   {client.status}
                 </Text>
               </Group>
+              <Text size="xs" c="dimmed" mt="md" mb={4}>
+                Linked spaces
+              </Text>
+              {client.spaces.length ? (
+                <Group gap="xs">
+                  {client.spaces.map((space) => (
+                    <Anchor
+                      key={space.id}
+                      component={Link}
+                      to={getSpaceUrl(space.slug)}
+                      size="sm"
+                    >
+                      {space.name}
+                    </Anchor>
+                  ))}
+                </Group>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  No linked spaces
+                </Text>
+              )}
             </Card>
           ))}
         </SimpleGrid>

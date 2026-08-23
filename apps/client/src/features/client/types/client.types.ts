@@ -12,6 +12,10 @@ export interface IClient {
   contactCount?: number;
 }
 
+export interface IClientListItem extends IClient {
+  spaces: ISpace[];
+}
+
 export type ClientContactSource = "manual" | "guest_invite";
 
 export interface IClientContact {

@@ -6,7 +6,7 @@ import {
 import { InjectKysely } from 'nestjs-kysely';
 import { ClientRepo } from '@docmost/db/repos/client/client.repo';
 import { ClientContactRepo } from '@docmost/db/repos/client/client-contact.repo';
-import { Client, User } from '@docmost/db/types/entity.types';
+import { Client, Space, User } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -54,8 +54,14 @@ export class ClientService {
     });
   }
 
-  async list(user: User, workspaceId: string): Promise<Client[]> {
-    return this.clientRepo.findVisibleToUser(user.id, workspaceId);
+  async list(user: User, workspaceId: string) {
+    const clients = await this.clientRepo.findVisibleToUser(user.id, workspaceId);
+    return Promise.all(
+      clients.map(async (client) => ({
+        ...client,
+        spaces: await this.getReadableLinkedSpaces(user, client.id),
+      })),
+    );
   }
 
   async getBySpace(
@@ -188,5 +194,25 @@ export class ClientService {
       // Membership failures are intentionally presented as a permission denial.
     }
     throw new ForbiddenException();
+  }
+
+  private async getReadableLinkedSpaces(
+    user: User,
+    clientId: string,
+  ): Promise<Space[]> {
+    const spaces = await this.clientRepo.getLinkedSpaces(clientId);
+    const visibleSpaces = await Promise.all(
+      spaces.map(async (space) => {
+        try {
+          const ability = await this.spaceAbility.createForUser(user, space.id);
+          return ability.can(SpaceCaslAction.Read, SpaceCaslSubject.Page)
+            ? space
+            : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return visibleSpaces.filter((space): space is Space => space !== null);
   }
 }

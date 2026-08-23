@@ -601,6 +601,7 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 **Done (2026-08-24):**
 
 - [docs/specs/done/CLIENT_MEMBER_STATUS_AND_REMOVAL_SPEC.md](docs/specs/done/CLIENT_MEMBER_STATUS_AND_REMOVAL_SPEC.md) — client-member status is visible in both Space Members and Client Contacts; member association can be added/removed without deleting the preserved contact record or changing Space access.
+- [docs/specs/done/CLIENT_LIST_LINKED_SPACES_SPEC.md](docs/specs/done/CLIENT_LIST_LINKED_SPACES_SPEC.md) — Clients overview cards show each visible Client's readable linked Spaces.
 
 ---
 

@@ -88,15 +88,37 @@ describe('ClientService', () => {
     expect(clientRepo.linkSpace).not.toHaveBeenCalled();
   });
 
-  it('lists only clients returned as visible by the repository', async () => {
+  it('lists visible clients with only their readable linked spaces', async () => {
     const visibleClients = [{ id: 'client-1', name: 'Acme' }];
     (clientRepo.findVisibleToUser as jest.Mock).mockResolvedValue(
       visibleClients,
     );
+    (clientRepo.getLinkedSpaces as jest.Mock).mockResolvedValue([
+      { id: spaceId, name: 'Website' },
+    ]);
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(true),
+    });
 
     await expect(service.list(user, workspaceId)).resolves.toEqual(
-      visibleClients,
+      [{ ...visibleClients[0], spaces: [{ id: spaceId, name: 'Website' }] }],
     );
+  });
+
+  it('does not expose linked spaces the requester cannot read', async () => {
+    (clientRepo.findVisibleToUser as jest.Mock).mockResolvedValue([
+      { id: 'client-1', name: 'Acme' },
+    ]);
+    (clientRepo.getLinkedSpaces as jest.Mock).mockResolvedValue([
+      { id: 'private-space', name: 'Private' },
+    ]);
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(false),
+    });
+
+    await expect(service.list(user, workspaceId)).resolves.toEqual([
+      { id: 'client-1', name: 'Acme', spaces: [] },
+    ]);
   });
 
   it('returns the client linked to a space for a member who can read it', async () => {

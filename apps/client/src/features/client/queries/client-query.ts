@@ -29,6 +29,9 @@ const showError = (error: any) =>
     color: "red",
   });
 
+const clientMemberUserIdsKey = (clientId: string, spaceId: string) =>
+  ["client-member-user-ids", clientId, spaceId] as const;
+
 export const useClientsQuery = () =>
   useQuery({ queryKey: ["clients"], queryFn: getClients });
 
@@ -63,8 +66,10 @@ export function useLinkClientSpaceMutation(clientId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (spaceId: string) => linkClientSpace(clientId, spaceId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["client", clientId] });
+      client.invalidateQueries({ queryKey: ["clients"] });
+    },
     onError: showError,
   });
 }
@@ -73,8 +78,10 @@ export function useUnlinkClientSpaceMutation(clientId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (spaceId: string) => unlinkClientSpace(clientId, spaceId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["client", clientId] });
+      client.invalidateQueries({ queryKey: ["clients"] });
+    },
     onError: showError,
   });
 }
@@ -136,10 +143,17 @@ export function useAddClientMemberMutation(clientId: string, spaceId: string) {
   const { t } = useTranslation();
   return useMutation({
     mutationFn: (userId: string) => addClientMember(clientId, spaceId, userId),
-    onSuccess: () => {
+    onSuccess: (_data, userId) => {
+      client.setQueryData<string[]>(
+        clientMemberUserIdsKey(clientId, spaceId),
+        (memberUserIds = []) =>
+          memberUserIds.includes(userId)
+            ? memberUserIds
+            : [...memberUserIds, userId],
+      );
       client.invalidateQueries({ queryKey: ["client", clientId] });
       client.invalidateQueries({
-        queryKey: ["client-member-user-ids", clientId, spaceId],
+        queryKey: clientMemberUserIdsKey(clientId, spaceId),
       });
       notifications.show({ message: t("Added to client") });
     },
@@ -152,7 +166,7 @@ export const useClientMemberUserIdsQuery = (
   spaceId: string,
 ) =>
   useQuery({
-    queryKey: ["client-member-user-ids", clientId, spaceId],
+    queryKey: clientMemberUserIdsKey(clientId, spaceId),
     queryFn: () => getClientMemberUserIds(clientId, spaceId),
     enabled: !!clientId && !!spaceId,
   });
@@ -166,10 +180,15 @@ export function useRemoveClientMemberMutation(
   return useMutation({
     mutationFn: (userId: string) =>
       removeClientMember(clientId, spaceId, userId),
-    onSuccess: () => {
+    onSuccess: (_data, userId) => {
+      client.setQueryData<string[]>(
+        clientMemberUserIdsKey(clientId, spaceId),
+        (memberUserIds = []) =>
+          memberUserIds.filter((memberId) => memberId !== userId),
+      );
       client.invalidateQueries({ queryKey: ["client", clientId] });
       client.invalidateQueries({
-        queryKey: ["client-member-user-ids", clientId, spaceId],
+        queryKey: clientMemberUserIdsKey(clientId, spaceId),
       });
       notifications.show({ message: t("Removed from client") });
     },
