@@ -209,6 +209,45 @@ export class ClientContactService {
     await this.upsertPortalUser(user, workspaceId, clientId);
   }
 
+  async removeExistingSpaceMember(
+    actor: User,
+    workspaceId: string,
+    clientId: string,
+    spaceId: string,
+    memberUserId: string,
+  ): Promise<void> {
+    await this.assertCanManageClient(actor, workspaceId, clientId);
+    if (!(await this.clientRepo.isSpaceLinked(clientId, spaceId))) {
+      throw new BadRequestException('Client is not linked to this space');
+    }
+    const contact = await this.clientContactRepo.findByUserId(
+      clientId,
+      workspaceId,
+      memberUserId,
+    );
+    if (!contact) throw new NotFoundException('Client member not found');
+    await this.clientContactRepo.clearUserId(contact.id, clientId, workspaceId);
+  }
+
+  async listMemberUserIds(
+    actor: User,
+    workspaceId: string,
+    clientId: string,
+    spaceId: string,
+  ): Promise<string[]> {
+    await this.assertCanViewClient(actor, workspaceId, clientId);
+    if (!(await this.clientRepo.isSpaceLinked(clientId, spaceId))) {
+      throw new BadRequestException('Client is not linked to this space');
+    }
+    const contacts = await this.clientContactRepo.findByClientId(
+      clientId,
+      workspaceId,
+    );
+    return contacts.flatMap((contact) =>
+      contact.userId ? [contact.userId] : [],
+    );
+  }
+
   private async getContact(
     contactId: string,
     clientId: string,

@@ -31,6 +31,7 @@ describe('ClientContactService', () => {
       findByEmail: jest.fn(),
       update: jest.fn(),
       createGuestInvite: jest.fn(),
+      clearUserId: jest.fn(),
     };
     userRepo = { findById: jest.fn() };
     spaceMemberRepo = { getSpaceMemberByTypeId: jest.fn() };
@@ -182,5 +183,53 @@ describe('ClientContactService', () => {
       },
       undefined,
     );
+  });
+
+  it('removes a client-member association while preserving the contact', async () => {
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(true),
+    });
+    (clientRepo.isSpaceLinked as jest.Mock).mockResolvedValue(true);
+    (contactRepo.findByUserId as jest.Mock).mockResolvedValue({
+      id: 'contact-1',
+      userId: 'member-1',
+    });
+    (contactRepo.clearUserId as jest.Mock).mockResolvedValue({
+      id: 'contact-1',
+      userId: null,
+    });
+
+    await expect(
+      service.removeExistingSpaceMember(
+        user,
+        workspaceId,
+        clientId,
+        'space-1',
+        'member-1',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(contactRepo.clearUserId).toHaveBeenCalledWith(
+      'contact-1',
+      clientId,
+      workspaceId,
+    );
+    expect(spaceMemberRepo.getSpaceMemberByTypeId).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reader from removing a client-member association', async () => {
+    (abilityFactory.createForUser as jest.Mock).mockResolvedValue({
+      can: jest.fn().mockReturnValue(false),
+    });
+
+    await expect(
+      service.removeExistingSpaceMember(
+        user,
+        workspaceId,
+        clientId,
+        'space-1',
+        'member-1',
+      ),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

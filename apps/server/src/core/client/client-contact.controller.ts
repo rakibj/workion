@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -54,6 +55,38 @@ export class ClientContactController {
       clientId,
       dto.spaceId,
       dto.userId,
+    );
+  }
+
+  @Get('members')
+  listMemberUserIds(
+    @Param('clientId') clientId: string,
+    @Query('spaceId') spaceId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.clientContactService.listMemberUserIds(
+      user,
+      workspace.id,
+      clientId,
+      spaceId,
+    );
+  }
+
+  @Delete('members/:userId')
+  async removeExistingSpaceMember(
+    @Param('clientId') clientId: string,
+    @Param('userId') userId: string,
+    @Body() dto: AddClientMemberDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.clientContactService.removeExistingSpaceMember(
+      user,
+      workspace.id,
+      clientId,
+      dto.spaceId,
+      userId,
     );
   }
 

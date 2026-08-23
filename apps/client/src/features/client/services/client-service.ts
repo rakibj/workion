@@ -85,3 +85,23 @@ export async function addClientMember(
 ): Promise<void> {
   await api.post(`/clients/${clientId}/contacts/members`, { spaceId, userId });
 }
+
+export async function getClientMemberUserIds(
+  clientId: string,
+  spaceId: string,
+): Promise<string[]> {
+  const req = await api.get<string[]>(`/clients/${clientId}/contacts/members`, {
+    params: { spaceId },
+  });
+  return req.data;
+}
+
+export async function removeClientMember(
+  clientId: string,
+  spaceId: string,
+  userId: string,
+): Promise<void> {
+  await api.delete(`/clients/${clientId}/contacts/members/${userId}`, {
+    data: { spaceId },
+  });
+}

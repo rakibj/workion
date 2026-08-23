@@ -17,7 +17,12 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
 import { modals } from "@mantine/modals";
-import { IconPencil, IconStar, IconTrash } from "@tabler/icons-react";
+import {
+  IconPencil,
+  IconStar,
+  IconTrash,
+  IconUserMinus,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
@@ -29,6 +34,7 @@ import {
   useCreateClientContactMutation,
   useDeleteClientContactMutation,
   useUpdateClientContactMutation,
+  useRemoveClientMemberMutation,
 } from "@/features/client/queries/client-query";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import { useCreateSpaceInviteLinkMutation } from "@/features/space/queries/space-invite-link-query";
@@ -52,6 +58,10 @@ export default function ClientDetailPage() {
   const updateContact = useUpdateClientContactMutation(clientId);
   const deleteContact = useDeleteClientContactMutation(clientId);
   const createInvite = useCreateSpaceInviteLinkMutation();
+  const removeClientMember = useRemoveClientMemberMutation(
+    clientId,
+    data?.spaces[0]?.id ?? "",
+  );
 
   const handleDeleteClient = () => {
     if (!data) return;
@@ -166,6 +176,11 @@ export default function ClientDetailPage() {
                 <div>
                   <Group gap="xs">
                     <Text fw={600}>{contact.name}</Text>
+                    {contact.userId && (
+                      <Badge variant="light" color="blue">
+                        Client member
+                      </Badge>
+                    )}
                     {contact.source === "guest_invite" && (
                       <Badge variant="light">Portal user</Badge>
                     )}
@@ -224,6 +239,36 @@ export default function ClientDetailPage() {
                       <IconPencil size={18} />
                     </ActionIcon>
                   )}
+                  {data.canManage &&
+                    contact.userId &&
+                    data.spaces.length > 0 && (
+                      <Tooltip label="Remove client member">
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          loading={removeClientMember.isPending}
+                          onClick={() =>
+                            modals.openConfirmModal({
+                              title: "Remove client member",
+                              children: (
+                                <Text size="sm">
+                                  Remove {contact.name} as a client member?
+                                  Their contact information and Space access
+                                  will remain.
+                                </Text>
+                              ),
+                              centered: true,
+                              labels: { confirm: "Remove", cancel: "Cancel" },
+                              confirmProps: { color: "red" },
+                              onConfirm: () =>
+                                removeClientMember.mutate(contact.userId!),
+                            })
+                          }
+                        >
+                          <IconUserMinus size={18} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
                   {data.canManage && (
                     <ActionIcon
                       color="red"

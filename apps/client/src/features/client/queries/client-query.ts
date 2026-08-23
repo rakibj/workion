@@ -14,6 +14,8 @@ import {
   updateClientContact,
   deleteClientContact,
   addClientMember,
+  getClientMemberUserIds,
+  removeClientMember,
 } from "../services/client-service";
 import {
   CreateClientInput,
@@ -131,10 +133,46 @@ export function useDeleteClientContactMutation(clientId: string) {
 
 export function useAddClientMemberMutation(clientId: string, spaceId: string) {
   const client = useQueryClient();
+  const { t } = useTranslation();
   return useMutation({
     mutationFn: (userId: string) => addClientMember(clientId, spaceId, userId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["client", clientId] });
+      client.invalidateQueries({
+        queryKey: ["client-member-user-ids", clientId, spaceId],
+      });
+      notifications.show({ message: t("Added to client") });
+    },
+    onError: showError,
+  });
+}
+
+export const useClientMemberUserIdsQuery = (
+  clientId: string,
+  spaceId: string,
+) =>
+  useQuery({
+    queryKey: ["client-member-user-ids", clientId, spaceId],
+    queryFn: () => getClientMemberUserIds(clientId, spaceId),
+    enabled: !!clientId && !!spaceId,
+  });
+
+export function useRemoveClientMemberMutation(
+  clientId: string,
+  spaceId: string,
+) {
+  const client = useQueryClient();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      removeClientMember(clientId, spaceId, userId),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["client", clientId] });
+      client.invalidateQueries({
+        queryKey: ["client-member-user-ids", clientId, spaceId],
+      });
+      notifications.show({ message: t("Removed from client") });
+    },
     onError: showError,
   });
 }

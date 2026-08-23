@@ -129,4 +129,12 @@ export class ClientContactRepo {
   ): Promise<ClientContact | undefined> {
     return this.update(id, clientId, workspaceId, { deletedAt: new Date() });
   }
+
+  async clearUserId(
+    id: string,
+    clientId: string,
+    workspaceId: string,
+  ): Promise<ClientContact | undefined> {
+    return this.update(id, clientId, workspaceId, { userId: null });
+  }
 }

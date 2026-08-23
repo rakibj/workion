@@ -31,6 +31,8 @@ import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
 import {
   useAddClientMemberMutation,
   useClientBySpaceQuery,
+  useClientMemberUserIdsQuery,
+  useRemoveClientMemberMutation,
 } from "@/features/client/queries/client-query";
 
 type MemberType = "user" | "group";
@@ -75,6 +77,15 @@ export default function SpaceMembersList({
   const changeSpaceMemberRoleMutation = useChangeSpaceMemberRoleMutation();
   const { data: client } = useClientBySpaceQuery(spaceId);
   const addClientMember = useAddClientMemberMutation(client?.id ?? "", spaceId);
+  const removeClientMember = useRemoveClientMemberMutation(
+    client?.id ?? "",
+    spaceId,
+  );
+  const { data: clientMemberUserIds = [] } = useClientMemberUserIdsQuery(
+    client?.id ?? "",
+    spaceId,
+  );
+  const clientMemberUserIdSet = new Set(clientMemberUserIds);
 
   const handleRoleChange = async (
     memberId: string,
@@ -183,6 +194,12 @@ export default function SpaceMembersList({
                           {member.type == "group" &&
                             `${t("Group")} - ${formatMemberCount(member?.memberCount, t)}`}
                         </Text>
+                        {member.type === "user" &&
+                          clientMemberUserIdSet.has(member.id) && (
+                            <Text fz="xs" c="blue">
+                              {t("Client member")}
+                            </Text>
+                          )}
                       </div>
                     </Group>
                   </Table.Td>
@@ -227,14 +244,32 @@ export default function SpaceMembersList({
                         </Menu.Target>
 
                         <Menu.Dropdown>
-                          {member.type === "user" && client && (
-                            <Menu.Item
-                              onClick={() => addClientMember.mutate(member.id)}
-                              disabled={addClientMember.isPending}
-                            >
-                              {t("Add to {{client}}", { client: client.name })}
-                            </Menu.Item>
-                          )}
+                          {member.type === "user" &&
+                            client &&
+                            (clientMemberUserIdSet.has(member.id) ? (
+                              <Menu.Item
+                                color="red"
+                                onClick={() =>
+                                  removeClientMember.mutate(member.id)
+                                }
+                                disabled={removeClientMember.isPending}
+                              >
+                                {t("Remove from {{client}}", {
+                                  client: client.name,
+                                })}
+                              </Menu.Item>
+                            ) : (
+                              <Menu.Item
+                                onClick={() =>
+                                  addClientMember.mutate(member.id)
+                                }
+                                disabled={addClientMember.isPending}
+                              >
+                                {t("Add to {{client}}", {
+                                  client: client.name,
+                                })}
+                              </Menu.Item>
+                            ))}
                           <Menu.Item
                             onClick={() =>
                               openRemoveModal(member.id, member.type)

@@ -598,6 +598,10 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 - [docs/specs/done/CLIENT_CONTACTS_SPEC.md](docs/specs/done/CLIENT_CONTACTS_SPEC.md) — Client contacts, including manual agency contacts and automatic portal-user links when guests join Client-linked Spaces.
 - [docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md](docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md) — 4-item punch list found while reviewing the above: the Blog tab leaking past entitlement on `workionlive` (frontend never checked `WorkionFeature.BLOG`, and the settings-write endpoint had no guard at all), a Space giving no indication it belongs to a Client, no delete/remove UI for Client or Project (backend soft-delete already existed), and confirming Client/Project ships live + stays ungated on `workion`.
 
+**Done (2026-08-24):**
+
+- [docs/specs/done/CLIENT_MEMBER_STATUS_AND_REMOVAL_SPEC.md](docs/specs/done/CLIENT_MEMBER_STATUS_AND_REMOVAL_SPEC.md) — client-member status is visible in both Space Members and Client Contacts; member association can be added/removed without deleting the preserved contact record or changing Space access.
+
 ---
 
 ## Completed Integrations
