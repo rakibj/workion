@@ -31,6 +31,12 @@ export class BillingController {
     return this.billingService.getPlans();
   }
 
+  @Get('info')
+  async info(@AuthUser() user: User, @AuthWorkspace() workspace: Workspace) {
+    this.requireOwner(user);
+    return this.billingService.getBilling(workspace.id);
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('checkout')
   async checkout(

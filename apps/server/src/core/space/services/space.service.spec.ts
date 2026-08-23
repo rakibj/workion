@@ -10,10 +10,12 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { QueueName } from '../../../integrations/queue/constants';
 import { AUDIT_SERVICE } from '../../../integrations/audit/audit.service';
 import { BlogCustomFieldType } from '../dto/update-space-blog-settings.dto';
+import { UsageLimitService } from '../../../common/entitlement/usage-limit.service';
 
 describe('SpaceService', () => {
   let service: SpaceService;
   let spaceRepo: jest.Mocked<Partial<SpaceRepo>>;
+  let usageLimitService: { assertCanCreateSpace: jest.Mock };
 
   const spaceId = '00000000-0000-0000-0000-000000000001';
   const workspaceId = '00000000-0000-0000-0000-000000000002';
@@ -22,13 +24,16 @@ describe('SpaceService', () => {
     spaceRepo = {
       findById: jest.fn(),
       updateBlogSettings: jest.fn(),
+      slugExists: jest.fn(),
+      insertSpace: jest.fn(),
     };
+    usageLimitService = { assertCanCreateSpace: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SpaceService,
         { provide: SpaceRepo, useValue: spaceRepo },
-        { provide: SpaceMemberService, useValue: {} },
+        { provide: SpaceMemberService, useValue: { addUserToSpace: jest.fn() } },
         { provide: SpaceMemberRepo, useValue: {} },
         { provide: ShareRepo, useValue: {} },
         {
@@ -37,6 +42,7 @@ describe('SpaceService', () => {
         },
         { provide: getQueueToken(QueueName.ATTACHMENT_QUEUE), useValue: {} },
         { provide: AUDIT_SERVICE, useValue: { log: jest.fn() } },
+        { provide: UsageLimitService, useValue: usageLimitService },
       ],
     }).compile();
 
@@ -45,6 +51,26 @@ describe('SpaceService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('checks the space limit inside the transaction before inserting', async () => {
+    const trx = {} as any;
+    (spaceRepo.slugExists as jest.Mock).mockResolvedValue(false);
+    (spaceRepo.insertSpace as jest.Mock).mockResolvedValue({
+      id: spaceId,
+      name: 'Client work',
+      slug: 'client-work',
+    });
+
+    await service.createSpace(
+      { id: 'user-id' } as any,
+      workspaceId,
+      { name: 'Client work', slug: 'client-work' } as any,
+      trx,
+    );
+
+    expect(usageLimitService.assertCanCreateSpace).toHaveBeenCalledWith(workspaceId, trx);
+    expect(spaceRepo.insertSpace).toHaveBeenCalled();
   });
 
   describe('updateBlogSettings', () => {

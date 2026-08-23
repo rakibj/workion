@@ -5,7 +5,7 @@ import {
 } from "@/ee/billing/services/billing-service.ts";
 import { IBilling, IBillingPlan } from "@/ee/billing/types/billing.types.ts";
 
-export function useBillingQuery(): UseQueryResult<IBilling, Error> {
+export function useBillingQuery(): UseQueryResult<IBilling | null, Error> {
   return useQuery({
     queryKey: ["billing"],
     queryFn: () => getBilling(),

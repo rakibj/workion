@@ -577,7 +577,7 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 **Active specs:**
 
-- [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — Lemon Squeezy integration (checkout, signed webhooks, subscription-management portal) and a public `/pricing` page. Initial launch pricing is Basic $29/month or $296/year, and Pro $79/month or $806/year. Independent of the Client entity spec. In progress (2026-08-23); live selling remains blocked until Lemon Squeezy identity verification completes.
+- [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — Lemon Squeezy checkout, signed webhooks, portal, `/pricing`, and transaction-safe tenant Space limits. Solo Founder is $9/month (first three payments $5 with `FOUNDER5`); Startup is $19/month (first three payments $9 with `STARTUP9`). Implementation is locally verified (2026-08-23); the only remaining gate is a configured Lemon test-mode smoke test on `workionlive`. Live selling remains blocked until Lemon Squeezy identity verification completes.
 
 **Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
 

@@ -1,6 +1,6 @@
 # Client Layer Cleanup Spec
 
-> Status: **Approved (2026-08-22). Slices A–D implemented and locally verified (server + client typecheck, server + client build, focused Jest suite all green). Slice E (deploy gate) is next — awaiting explicit go-ahead per its own DoD, not yet pushed or deployed.**
+> Status: **Done (2026-08-23).** All five slices complete: A–D implemented and locally verified (typecheck, build, focused Jest suite), Slice E's deploy gate cleared with explicit user go-ahead, pushed to `origin/main` at `a4cd239`, deployed to both `workion` and `workionlive`, and the user confirmed the live visual checks (Blog tab gone from `workionlive`, Client/Project working end-to-end on `workion`) on 2026-08-23.
 
 ## Problem
 
@@ -31,7 +31,7 @@ It is not purely cosmetic: `PATCH /spaces/:spaceId/blog-settings` (`apps/server/
 
 **DoD:** on a `TENANT_BASIC`/`TENANT_PRO` workspace (`workionlive`), the Blog tab is absent from Space Settings, and `PATCH /spaces/:id/blog-settings` returns 403 even if called directly. On `workion` (plan `null` → `WorkionPlan.INTERNAL`), no visible change.
 
-**Status: Done (2026-08-22, local).** `settings-modal.tsx` now gates the Blog tab with `useHasWorkionModule(WorkionModule.BLOG)`; `updateBlogSettings` in `space.controller.ts` now carries `@UseGuards(EntitlementGuard)` + `@RequireFeature(WorkionFeature.BLOG)`. Not yet verified against the live `workionlive` deployment — pending Slice E.
+**Status: Done (2026-08-23).** `settings-modal.tsx` now gates the Blog tab with `useHasWorkionModule(WorkionModule.BLOG)`; `updateBlogSettings` in `space.controller.ts` now carries `@UseGuards(EntitlementGuard)` + `@RequireFeature(WorkionFeature.BLOG)`. Verified live on `workionlive` — Blog tab confirmed absent from Space Settings.
 
 ### Slice B — Surface a Space's linked Client in the Space UX
 
@@ -48,7 +48,7 @@ It is not purely cosmetic: `PATCH /spaces/:spaceId/blog-settings` (`apps/server/
 
 **DoD:** linking/unlinking a Space to a Client (existing `POST/DELETE /clients/:id/spaces/:spaceId`) is reflected in both spots after a refetch; a Space with no linked Client renders unchanged from today.
 
-**Status: Done (2026-08-22, local).** `ClientRepo.findBySpaceId`, `ClientService.getBySpace` (membership-gated via `SpaceCaslAction.Read`/`Page`), and `GET /clients/by-space/:spaceId` shipped with unit tests. Frontend: `useClientBySpaceQuery`, a read-only "Client" field in Space Settings → General (`space-details.tsx`), and a muted Client-name subtitle under the Space name in the sidebar (`space-sidebar.tsx`).
+**Status: Done (2026-08-23).** `ClientRepo.findBySpaceId`, `ClientService.getBySpace` (membership-gated via `SpaceCaslAction.Read`/`Page`), and `GET /clients/by-space/:spaceId` shipped with unit tests. Frontend: `useClientBySpaceQuery`, a read-only "Client" field in Space Settings → General (`space-details.tsx`), and a muted Client-name subtitle under the Space name in the sidebar (`space-sidebar.tsx`).
 
 ### Slice C — Delete/remove Client and Project from the UI
 
@@ -62,7 +62,7 @@ Backend already supports this (`DELETE /clients/:clientId` → `ClientService.ar
 
 **DoD:** deleting a Client with linked Projects still succeeds (soft-delete is independent of children per the existing schema — no FK cascade block); a `reader`-role user does not see the delete action and a direct API call still 403s (already covered by existing service tests).
 
-**Status: Done (2026-08-22, local).** `archiveClient`/`deleteProject` added to `client-service.ts`; `useArchiveClientMutation`/`useDeleteProjectMutation` added to `client-query.ts`. `client-detail.tsx` and `project-detail.tsx` each get a red trash `ActionIcon` in the page header, gated behind a Mantine `modals.openConfirmModal` confirmation, matching the existing `space-invite-links.tsx` pattern. On success, invalidates the relevant query and navigates back up a level.
+**Status: Done (2026-08-23).** `archiveClient`/`deleteProject` added to `client-service.ts`; `useArchiveClientMutation`/`useDeleteProjectMutation` added to `client-query.ts`. `client-detail.tsx` and `project-detail.tsx` each get a red trash `ActionIcon` in the page header, gated behind a Mantine `modals.openConfirmModal` confirmation, matching the existing `space-invite-links.tsx` pattern. On success, invalidates the relevant query and navigates back up a level.
 
 ### Slice D — Confirm Client/Project stays live and ungated on `workion` (internal)
 
@@ -72,7 +72,7 @@ Backend already supports this (`DELETE /clients/:clientId` → `ClientService.ar
 
 **DoD:** `CLIENT_ENTITY_SPEC.md` Slice 5 status line updated to "Done" once verified live on `workion`; the guardrail comment is in place.
 
-**Status: Partially done (2026-08-22).** Guardrail comment added next to `PLAN_FEATURES` in `entitlement.ts`. The "confirm live on `workion`" half is not done — blocked on Slice E's deploy; `CLIENT_ENTITY_SPEC.md` Slice 5 stays "In progress" until that manual check happens post-deploy.
+**Status: Done (2026-08-23).** Guardrail comment added next to `PLAN_FEATURES` in `entitlement.ts`. Confirmed live on `workion` — Clients nav, linked-Client display, and delete actions verified working; `docs/specs/done/CLIENT_ENTITY_SPEC.md` Slice 5 updated to Done.
 
 ### Slice E — Deploy gate (hold point, not automatic)
 
@@ -85,6 +85,8 @@ When asked to proceed, the deploy touches two independent targets — remember t
 - If both deployments share `infra-net`, the `infra_net_app_alias_collision` memory applies to any Caddyfile touch — not expected for this spec's changes, but worth keeping in mind since Slice B/C touch no Caddy config and Slice A/D don't either.
 
 **DoD:** user has explicitly said to proceed, both `workion` and `workionlive` are confirmed updated (Blog tab gone from `workionlive`'s Space Settings, Client/Project confirmed live on `workion`), and this spec's status line and `CLIENT_ENTITY_SPEC.md` Slice 5 are updated to reflect reality.
+
+**Status: Done (2026-08-23).** User confirmed go-ahead. `git push origin main` hit the known credential gap (403, wrong cached GitHub account) — user pushed directly themselves rather than using the bundle workaround. Both VPS checkouts fast-forwarded to `a4cd239` (via `sudo`, since both `.git` dirs are root-owned) and redeployed: `workion` via its `deploy.sh` (clean, no pending migrations, `workion.gameloops.io` → 200), `workionlive` via its own `deploy.sh` targeting `workion-live-app`/`workion-live-redis` (clean, `workionlive.gameloops.io` → 200). User confirmed both live visual checks on 2026-08-23.
 
 ## API contract (new/changed only)
 
@@ -107,9 +109,9 @@ No pricing, tier-limit, or `PLAN_LIMITS`/`PLAN_FEATURES` value changes. This spe
 
 ## Completion (Definition of Done)
 
-- [x] Slice A: Blog tab + write endpoint gated by `WorkionFeature.BLOG`. Implemented and locally verified; live absence on `workionlive` still pending Slice E's deploy.
+- [x] Slice A: Blog tab + write endpoint gated by `WorkionFeature.BLOG`. Implemented, deployed, and verified absent on `workionlive`.
 - [x] Slice B: `GET /clients/by-space/:spaceId` shipped; linked Client visible in Space Settings → General and the Space sidebar.
 - [x] Slice C: Delete actions for Client and Project wired in the UI, confirmation modal, correct query invalidation/navigation.
-- [x] Slice D (code half): guardrail comment added. [ ] (verification half): `CLIENT_ENTITY_SPEC.md` Slice 5 confirmed live and updated to "Done" — pending Slice E.
-- [ ] Slice E: user explicitly asked and confirmed before any push/deploy; both `workion` and `workionlive` verified updated after.
-- [ ] This spec's status line moved from Draft → and the file moved `draft/` → `ongoing/` → `done/` as work proceeds, per CLAUDE.md's spec-folder convention.
+- [x] Slice D: guardrail comment added; `CLIENT_ENTITY_SPEC.md` Slice 5 confirmed live and updated to "Done".
+- [x] Slice E: user explicitly asked and confirmed before push/deploy; both `workion` and `workionlive` verified updated (200 responses) and confirmed via user visual check.
+- [x] This spec's status line updated to Done and the file moved `ongoing/` → `done/`, per CLAUDE.md's spec-folder convention.

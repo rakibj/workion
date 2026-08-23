@@ -43,6 +43,16 @@ export class BillingService {
     }));
   }
 
+  async getBilling(workspaceId: string) {
+    return this.db
+      .selectFrom('billing')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .orderBy('updatedAt', 'desc')
+      .executeTakeFirst();
+  }
+
   async createCheckout(workspace: Workspace, user: User, variantId: string) {
     const plan = this.findPlanByVariant(variantId);
     const apiKey = this.environmentService.getLemonSqueezyApiKey();
@@ -86,13 +96,13 @@ export class BillingService {
   }
 
   async getPortal(workspaceId: string) {
-    const billing = await this.db
+    const billing = (await this.db
       .selectFrom('billing')
       .select('customerPortalUrl' as any)
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null)
       .orderBy('updatedAt', 'desc')
-      .executeTakeFirst();
+      .executeTakeFirst()) as { customerPortalUrl?: string | null } | undefined;
     if (!billing?.customerPortalUrl) {
       throw new BadRequestException('No active subscription was found');
     }

@@ -41,24 +41,16 @@ export interface IBillingPortal {
 }
 
 export interface IBillingPlan {
+  id: string;
+  /** Legacy display component compatibility; Lemon plans identify variants instead. */
+  productId?: string;
   name: string;
   description: string;
-  productId: string;
-  monthlyId: string;
-  yearlyId: string;
-  currency: string;
-  price?: {
+  monthlyId: string | null;
+  yearlyId: string | null;
+  price: {
     monthly: string;
-    yearly: string;
+    yearly: string | null;
   };
   features: string[];
-  billingScheme: string | null;
-  pricingTiers?: PricingTier[];
-}
-
-interface PricingTier {
-  upTo: number;
-  monthly?: number;
-  yearly?: number;
-  custom?: boolean;
 }

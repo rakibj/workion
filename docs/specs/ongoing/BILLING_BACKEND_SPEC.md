@@ -1,6 +1,6 @@
 # Lemon Squeezy Billing & Public Pricing
 
-> Status: **Approved (2026-08-23) — implementation in progress.**
+> Status: **Implementation complete and locally verified (2026-08-23).** The remaining completion gate is the documented Lemon Squeezy test-mode smoke test against the authorized public deployment; it cannot be run from a checkout with no Lemon configuration.
 
 ## Problem
 
@@ -15,7 +15,7 @@ Flat subscriptions, no per-seat billing:
 | Solo Founder | $9 | — | 3 spaces, 1 client, 3 users |
 | Startup | $19 | — | 10 spaces, 10 clients, 10 users |
 
-`FOUNDER5` reduces the first three Solo Founder payments to $5. `STARTUP9` reduces the first three Startup payments to $9. `INTERNAL` is never exposed for sale. Space limits are enforced before a new space is created; the internal plan remains unlimited.
+`FOUNDER5` reduces the first three Solo Founder payments to $5. `STARTUP9` reduces the first three Startup payments to $9. `INTERNAL` is never exposed for sale. Space limits are enforced before a new space is created; the internal plan remains unlimited. The count and insert share a transaction-scoped PostgreSQL advisory lock keyed by workspace ID, so concurrent creates cannot exceed the cap.
 
 ## Lemon Squeezy configuration
 
@@ -68,6 +68,8 @@ Webhook handling is idempotent: it upserts by Lemon subscription ID, derives the
 ## Verification
 
 Unit tests cover variant allow-listing, owner-only checkout, HMAC rejection before persistence, plan resolution, cancellation/expiry behavior, and webhook replay idempotency. A manual Lemon test-mode smoke test covers pricing → create workspace → checkout → webhook → plan update → customer portal.
+
+**Local verification complete (2026-08-23):** focused billing/space Jest suites, server type-check, client type-check, and production client build all pass. The space limit is asserted inside the same transaction as the Space insert. The test-mode smoke test remains the only unchecked item because it requires configured Lemon credentials and the public `workionlive` environment.
 
 ## Explicitly out of scope
 

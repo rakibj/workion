@@ -1,6 +1,6 @@
 # Client Entity Spec
 
-> Status: **In progress (2026-08-22) — Slice 1 (migration + repositories).** Implementation follows CLAUDE.md's spec-then-implement methodology.
+> Status: **Done (2026-08-23) — Slices 1–5 complete and verified live on `workion` production.** Implementation followed CLAUDE.md's spec-then-implement methodology. Deliverable entity, approval workflow, branded client portal, and agency AI remain explicitly out of scope (see below) — each is its own future spec.
 
 > ⚠️ **Naming guardrail (CLAUDE.md):** "Client" here means an **agency client** — a company Workion does work for, nested under the existing Space/permission model. This is unrelated to a **paid Workion workspace/tenant** (see `docs/specs/done/MULTI_TENANCY_SPEC.md`). A 2026-08-21 mix-up built a full Client-entity MVP in answer to what was actually a multi-tenant-workspace question, and was reverted the same session. This spec is the from-scratch replacement, scoped correctly this time.
 
@@ -136,7 +136,7 @@ Status transitions on `PATCH /projects/:id` are **not** state-machine-enforced i
 **What:** sidebar entry, list/detail pages, create modals, status badge component — described above.
 **DoD:** manual smoke test — create a client, link a second space, create a project, change its status, confirm a reader-role user can view but not edit.
 
-**Status: In progress (2026-08-22).** The UI is implemented: a Clients navigation entry, client list/detail views, space linking, project creation, status editing, and project detail routes. The production client build passes. An isolated runtime API smoke test completed successfully: create Client → link a second Space → create Project → update status to `in_review`, with the Client detail returning both Spaces. Reader write denial is covered by the focused service tests. The only remaining validation is a browser-level reader-role visual smoke test against a running local stack.
+**Status: Done (2026-08-23).** The UI is implemented: a Clients navigation entry, client list/detail views, space linking, project creation, status editing, and project detail routes. The production client build passes. An isolated runtime API smoke test completed successfully: create Client → link a second Space → create Project → update status to `in_review`, with the Client detail returning both Spaces. Reader write denial is covered by the focused service tests. Live-deployment verification (`docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md` Slice D/E) confirmed the Clients nav, linked-Client display, and delete actions work end-to-end on `workion` production. Deliverable/approval-flow/portal work remains out of scope per this spec's original boundaries.
 
 ## Open questions to confirm before implementation (not blocking the spec's approval, but worth a decision)
 
