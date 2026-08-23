@@ -113,3 +113,11 @@ export async function deleteClientContact(
 ): Promise<void> {
   await api.delete(`/clients/${clientId}/contacts/${contactId}`);
 }
+
+export async function addClientMember(
+  clientId: string,
+  spaceId: string,
+  userId: string,
+): Promise<void> {
+  await api.post(`/clients/${clientId}/contacts/members`, { spaceId, userId });
+}

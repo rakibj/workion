@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ClientContactRepo } from '@docmost/db/repos/client/client-contact.repo';
 import { ClientRepo } from '@docmost/db/repos/client/client.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import { ClientContactService } from './client-contact.service';
 
@@ -26,6 +28,8 @@ describe('ClientContactService', () => {
         ClientContactService,
         { provide: ClientRepo, useValue: clientRepo },
         { provide: ClientContactRepo, useValue: contactRepo },
+        { provide: UserRepo, useValue: {} },
+        { provide: SpaceMemberRepo, useValue: {} },
         { provide: SpaceAbilityFactory, useValue: abilityFactory },
       ],
     }).compile();

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { ClientContactRepo } from '@docmost/db/repos/client/client-contact.repo';
 import { ClientRepo } from '@docmost/db/repos/client/client.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import {
   ClientContact,
   InsertableClientContact,
@@ -37,6 +39,8 @@ export class ClientContactService {
   constructor(
     private readonly clientRepo: ClientRepo,
     private readonly clientContactRepo: ClientContactRepo,
+    private readonly userRepo: UserRepo,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
@@ -170,6 +174,26 @@ export class ClientContactService {
       },
       trx,
     );
+  }
+
+  async addExistingSpaceMember(
+    actor: User,
+    workspaceId: string,
+    clientId: string,
+    spaceId: string,
+    memberUserId: string,
+  ): Promise<void> {
+    await this.assertCanManageClient(actor, workspaceId, clientId);
+    if (!(await this.clientRepo.isSpaceLinked(clientId, spaceId))) {
+      throw new BadRequestException('Client is not linked to this space');
+    }
+    const member = await this.spaceMemberRepo.getSpaceMemberByTypeId(spaceId, {
+      userId: memberUserId,
+    });
+    if (!member) throw new NotFoundException('Space member not found');
+    const user = await this.userRepo.findById(memberUserId, workspaceId);
+    if (!user) throw new NotFoundException('User not found');
+    await this.upsertPortalUser(user, workspaceId, clientId);
   }
 
   private async getContact(

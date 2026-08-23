@@ -17,6 +17,7 @@ import {
   createClientContact,
   updateClientContact,
   deleteClientContact,
+  addClientMember,
 } from "../services/client-service";
 import {
   CreateClientInput,
@@ -176,6 +177,16 @@ export function useDeleteClientContactMutation(clientId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (contactId: string) => deleteClientContact(clientId, contactId),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onError: showError,
+  });
+}
+
+export function useAddClientMemberMutation(clientId: string, spaceId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => addClientMember(clientId, spaceId, userId),
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ["client", clientId] }),
     onError: showError,

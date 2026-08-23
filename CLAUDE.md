@@ -591,6 +591,7 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 **Done (2026-08-23):**
 
+- [docs/specs/done/CLIENT_MEMBER_MANAGEMENT_SPEC.md](docs/specs/done/CLIENT_MEMBER_MANAGEMENT_SPEC.md) — lets agency users associate existing Space members with the parent Client without changing their Space role.
 - [docs/specs/done/CLIENT_ENTITY_SPEC.md](docs/specs/done/CLIENT_ENTITY_SPEC.md) — Client/Project entities (Clients spanning multiple Spaces, Projects with a status pipeline). All 5 slices complete and verified live on `workion`. See "Client & Project Entities" under Implemented Custom Features.
 - [docs/specs/done/CLIENT_CONTACTS_SPEC.md](docs/specs/done/CLIENT_CONTACTS_SPEC.md) — Client contacts, including manual agency contacts and automatic portal-user links when guests join Client-linked Spaces.
 - [docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md](docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md) — 4-item punch list found while reviewing the above: the Blog tab leaking past entitlement on `workionlive` (frontend never checked `WorkionFeature.BLOG`, and the settings-write endpoint had no guard at all), a Space giving no indication it belongs to a Client, no delete/remove UI for Client or Project (backend soft-delete already existed), and confirming Client/Project ships live + stays ungated on `workion`.

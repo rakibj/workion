@@ -28,6 +28,10 @@ import { formatMemberCount } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { SearchInput } from "@/components/common/search-input.tsx";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
+import {
+  useAddClientMemberMutation,
+  useClientBySpaceQuery,
+} from "@/features/client/queries/client-query";
 
 type MemberType = "user" | "group";
 
@@ -69,6 +73,8 @@ export default function SpaceMembersList({
 
   const removeSpaceMember = useRemoveSpaceMemberMutation();
   const changeSpaceMemberRoleMutation = useChangeSpaceMemberRoleMutation();
+  const { data: client } = useClientBySpaceQuery(spaceId);
+  const addClientMember = useAddClientMemberMutation(client?.id ?? "", spaceId);
 
   const handleRoleChange = async (
     memberId: string,
@@ -161,7 +167,13 @@ export default function SpaceMembersList({
 
                       {member.type === "group" && <IconGroupCircle />}
 
-                      <div style={{ minWidth: 0, overflow: "hidden", maxWidth: 260 }}>
+                      <div
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          maxWidth: 260,
+                        }}
+                      >
                         <AutoTooltipText fz="sm" fw={500}>
                           {member?.name}
                         </AutoTooltipText>
@@ -177,9 +189,7 @@ export default function SpaceMembersList({
 
                   <Table.Td>
                     {readOnly ? (
-                      <Text fz="sm">
-                        {t(getSpaceRoleLabel(member.role))}
-                      </Text>
+                      <Text fz="sm">{t(getSpaceRoleLabel(member.role))}</Text>
                     ) : (
                       <RoleSelectMenu
                         roles={spaceRoleData}
@@ -217,6 +227,14 @@ export default function SpaceMembersList({
                         </Menu.Target>
 
                         <Menu.Dropdown>
+                          {member.type === "user" && client && (
+                            <Menu.Item
+                              onClick={() => addClientMember.mutate(member.id)}
+                              disabled={addClientMember.isPending}
+                            >
+                              {t("Add to {{client}}", { client: client.name })}
+                            </Menu.Item>
+                          )}
                           <Menu.Item
                             onClick={() =>
                               openRemoveModal(member.id, member.type)

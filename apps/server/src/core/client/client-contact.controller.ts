@@ -13,6 +13,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateClientContactDto } from './dto/create-client-contact.dto';
+import { AddClientMemberDto } from './dto/add-client-member.dto';
 import { UpdateClientContactDto } from './dto/update-client-contact.dto';
 import { ClientContactService } from './services/client-contact.service';
 
@@ -38,6 +39,22 @@ export class ClientContactController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.clientContactService.create(user, workspace.id, clientId, dto);
+  }
+
+  @Post('members')
+  async addExistingSpaceMember(
+    @Param('clientId') clientId: string,
+    @Body() dto: AddClientMemberDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.clientContactService.addExistingSpaceMember(
+      user,
+      workspace.id,
+      clientId,
+      dto.spaceId,
+      dto.userId,
+    );
   }
 
   @Patch(':contactId')
