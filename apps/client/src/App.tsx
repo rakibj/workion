@@ -50,7 +50,6 @@ import VerifyEmail from "@/ee/pages/verify-email.tsx";
 import LabelPage from "@/pages/label/label-page";
 import ClientsPage from "@/pages/clients/clients";
 import ClientDetailPage from "@/pages/clients/client-detail";
-import ProjectDetailPage from "@/pages/clients/project-detail";
 import PricingPage from "@/pages/pricing/pricing-page.tsx";
 
 function RootRedirect() {
@@ -109,10 +108,6 @@ export default function App() {
           <Route path={"/spaces"} element={<SpacesPage />} />
           <Route path={"/clients"} element={<ClientsPage />} />
           <Route path={"/clients/:clientId"} element={<ClientDetailPage />} />
-          <Route
-            path={"/projects/:projectId"}
-            element={<ProjectDetailPage />}
-          />
           <Route path={"/favorites"} element={<FavoritesPage />} />
           <Route path={"/labels/:labelName"} element={<LabelPage />} />
           <Route path={"/templates"} element={<TemplateList />} />

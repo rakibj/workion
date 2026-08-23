@@ -2,7 +2,6 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { KYSELY_MODULE_CONNECTION_TOKEN } from 'nestjs-kysely';
 import { ClientRepo } from '@docmost/db/repos/client/client.repo';
-import { ProjectRepo } from '@docmost/db/repos/project/project.repo';
 import { ClientContactRepo } from '@docmost/db/repos/client/client-contact.repo';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import { ClientService } from './client.service';
@@ -30,7 +29,6 @@ describe('ClientService', () => {
       providers: [
         ClientService,
         { provide: ClientRepo, useValue: clientRepo },
-        { provide: ProjectRepo, useValue: {} },
         { provide: ClientContactRepo, useValue: { findByClientId: jest.fn() } },
         { provide: SpaceAbilityFactory, useValue: abilityFactory },
         {

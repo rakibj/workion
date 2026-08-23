@@ -47,7 +47,6 @@ import {
   Clients,
   ClientContacts,
   ClientSpaces,
-  Projects,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
@@ -98,11 +97,6 @@ export type UpdatableClientContact = Updateable<Omit<ClientContacts, 'id'>>;
 // ClientSpace
 export type ClientSpace = Selectable<ClientSpaces>;
 export type InsertableClientSpace = Insertable<ClientSpaces>;
-
-// Project
-export type Project = Selectable<Projects>;
-export type InsertableProject = Insertable<Projects>;
-export type UpdatableProject = Updateable<Omit<Projects, 'id'>>;
 
 // SpaceMember
 export type SpaceMember = Selectable<SpaceMembers>;

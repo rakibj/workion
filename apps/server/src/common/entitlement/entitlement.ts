@@ -24,7 +24,7 @@ export interface WorkionPlanLimits {
  * EntitlementService, and getWorkspaceInfo()'s enabledModules array all read this
  * map generically.
  *
- * Client/Project (core/client/) intentionally has no WorkionFeature entry — it's
+ * Client (core/client/) intentionally has no WorkionFeature entry — it's
  * unconditionally available to every workspace, unlike Blog. If a future slice
  * (tier limits, EDITION_ENTITLEMENT_SPEC.md Slice 3) ever adds one, it must not be
  * excluded from WorkionPlan.INTERNAL's list — a count *limit* on internal is fine,

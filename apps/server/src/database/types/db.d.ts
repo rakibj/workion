@@ -491,21 +491,6 @@ export interface PageVerifiers {
   userId: string;
 }
 
-export interface Projects {
-  clientId: string;
-  createdAt: Generated<Timestamp>;
-  createdById: string;
-  deletedAt: Timestamp | null;
-  description: string | null;
-  dueDate: Timestamp | null;
-  id: Generated<string>;
-  name: string;
-  spaceId: string;
-  status: Generated<string>;
-  updatedAt: Generated<Timestamp>;
-  workspaceId: string;
-}
-
 export interface ScimTokens {
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
@@ -744,7 +729,6 @@ export interface DB {
   pageTransclusions: PageTransclusions;
   pageVerifications: PageVerifications;
   pageVerifiers: PageVerifiers;
-  projects: Projects;
   scimTokens: ScimTokens;
   shares: Shares;
   spaceInviteLinks: SpaceInviteLinks;

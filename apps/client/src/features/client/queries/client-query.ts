@@ -5,15 +5,11 @@ import { useNavigate } from "react-router-dom";
 import {
   archiveClient,
   createClient,
-  createProject,
-  deleteProject,
   getClient,
   getClientBySpace,
   getClients,
-  getProject,
   linkClientSpace,
   unlinkClientSpace,
-  updateProject,
   createClientContact,
   updateClientContact,
   deleteClientContact,
@@ -21,8 +17,6 @@ import {
 } from "../services/client-service";
 import {
   CreateClientInput,
-  CreateProjectInput,
-  IProject,
   CreateClientContactInput,
   UpdateClientContactInput,
 } from "../types/client.types";
@@ -41,13 +35,6 @@ export const useClientQuery = (clientId: string) =>
     queryKey: ["client", clientId],
     queryFn: () => getClient(clientId),
     enabled: !!clientId,
-  });
-
-export const useProjectQuery = (projectId: string) =>
-  useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => getProject(projectId),
-    enabled: !!projectId,
   });
 
 export const useClientBySpaceQuery = (spaceId: string) =>
@@ -90,32 +77,6 @@ export function useUnlinkClientSpaceMutation(clientId: string) {
   });
 }
 
-export function useCreateProjectMutation(clientId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateProjectInput) => createProject(data),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["client", clientId] }),
-    onError: showError,
-  });
-}
-
-export function useUpdateProjectMutation(clientId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      projectId,
-      data,
-    }: {
-      projectId: string;
-      data: Partial<IProject>;
-    }) => updateProject(projectId, data),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["client", clientId] }),
-    onError: showError,
-  });
-}
-
 export function useArchiveClientMutation() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -126,21 +87,6 @@ export function useArchiveClientMutation() {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       notifications.show({ message: t("Client deleted") });
       navigate("/clients");
-    },
-    onError: showError,
-  });
-}
-
-export function useDeleteProjectMutation(clientId: string) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-  return useMutation({
-    mutationFn: (projectId: string) => deleteProject(projectId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client", clientId] });
-      notifications.show({ message: t("Project deleted") });
-      navigate(`/clients/${clientId}`);
     },
     onError: showError,
   });

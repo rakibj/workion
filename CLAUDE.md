@@ -415,15 +415,17 @@ Self-hosted Workion, as built, is architecturally single-workspace — not a con
 
 ## Implemented Custom Features
 
-### Client & Project Entities
+### Client Entity
 
-Agency Client (a company Workion does work for, spanning one or more Spaces) and Project (belongs to one Client, lives in one of its linked Spaces, six-value status pipeline `planning → in_progress → in_review → approved → delivered → archived`) — see "Next Major Direction: Client Layer" for product context.
+Agency Client (a company Workion does work for, spanning one or more Spaces) — see "Next Major Direction: Client Layer" for product context. A Space **is** the unit of client work (a "project") — there is no separate Project entity; a Client simply links to one or more Spaces.
+
+**Decision (2026-08-23): the Project entity was removed.** It duplicated what a linked Space already represents, so `core/client/project.controller.ts`/`ProjectService`/`ProjectRepo`, the `projects` table, and the client-detail "Projects" section were all deleted (migration `20260823T140000-drop-projects.ts`). Deliverables continue to live as a Space's pages, unchanged.
 
 **Spec (source of truth):** `docs/specs/done/CLIENT_ENTITY_SPEC.md` (entity design, all 5 slices done) and `docs/specs/done/CLIENT_LAYER_CLEANUP_SPEC.md` (follow-up: delete/remove UI, showing a Space's linked Client in the Space UX itself, and closing the Blog entitlement leak found during the same review).
 
-Backend: `core/client/` (`ClientController`/`ProjectController`, `ClientService`/`ProjectService`), `database/repos/client/`, tables `clients`/`client_spaces`/`project`s. No new CASL tier — reuses the existing `Space` ability (`Manage Page` required to create/edit/delete). `GET /clients/by-space/:spaceId` resolves the Client (if any) linked to a given Space. Delete is soft (`archive()`/`deleted_at`), matching the rest of the schema. Client/Project has no `WorkionFeature` entry — unlike Blog, it's intentionally available to every workspace/plan (guardrail comment in `entitlement.ts`).
+Backend: `core/client/` (`ClientController`, `ClientService`), `database/repos/client/`, tables `clients`/`client_spaces`. No new CASL tier — reuses the existing `Space` ability (`Manage Page` required to create/edit/delete). `GET /clients/by-space/:spaceId` resolves the Client (if any) linked to a given Space. Delete is soft (`archive()`/`deleted_at`), matching the rest of the schema. Client has no `WorkionFeature` entry — unlike Blog, it's intentionally available to every workspace/plan (guardrail comment in `entitlement.ts`).
 
-Frontend: top-level "Clients" sidebar entry (`components/layouts/global/global-sidebar.tsx`) and `pages/clients/*` (list, client detail, project detail) — a first-class vertical alongside Spaces, not nested inside one. A Space linked to a Client shows it as a link in Space Settings → General and as a subtitle in the Space sidebar (`useClientBySpaceQuery`). Delete actions on the Client/Project detail pages use the standard `modals.openConfirmModal` pattern.
+Frontend: top-level "Clients" sidebar entry (`components/layouts/global/global-sidebar.tsx`) and `pages/clients/*` (list, client detail) — a first-class vertical alongside Spaces, not nested inside one. A Space linked to a Client shows it as a link in Space Settings → General and as a subtitle in the Space sidebar (`useClientBySpaceQuery`). Delete actions on the Client detail page use the standard `modals.openConfirmModal` pattern.
 
 ### Space Invite Links (Guest Access)
 

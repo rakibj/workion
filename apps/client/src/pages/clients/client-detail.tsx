@@ -20,11 +20,10 @@ import { modals } from "@mantine/modals";
 import { IconPencil, IconStar, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   useArchiveClientMutation,
   useClientQuery,
-  useCreateProjectMutation,
   useLinkClientSpaceMutation,
   useUnlinkClientSpaceMutation,
   useCreateClientContactMutation,
@@ -42,20 +41,17 @@ export default function ClientDetailPage() {
   const { data, isLoading } = useClientQuery(clientId);
   const { data: allSpaces } = useGetSpacesQuery({ limit: 100 });
   const [spaceOpened, spaceModal] = useDisclosure(false);
-  const [projectOpened, projectModal] = useDisclosure(false);
   const [contactOpened, contactModal] = useDisclosure(false);
   const [inviteOpened, inviteModal] = useDisclosure(false);
   const [inviteSpaceId, setInviteSpaceId] = useState<string | null>(null);
   const [editContact, setEditContact] = useState<IClientContact | null>(null);
   const linkSpace = useLinkClientSpaceMutation(clientId);
   const unlinkSpace = useUnlinkClientSpaceMutation(clientId);
-  const createProject = useCreateProjectMutation(clientId);
   const archiveClient = useArchiveClientMutation();
   const createContact = useCreateClientContactMutation(clientId);
   const updateContact = useUpdateClientContactMutation(clientId);
   const deleteContact = useDeleteClientContactMutation(clientId);
   const createInvite = useCreateSpaceInviteLinkMutation();
-  const navigate = useNavigate();
 
   const handleDeleteClient = () => {
     if (!data) return;
@@ -76,13 +72,6 @@ export default function ClientDetailPage() {
     });
   };
   const spaceForm = useForm({ initialValues: { spaceId: "" } });
-  const projectForm = useForm({
-    initialValues: { name: "", spaceId: "", description: "", dueDate: "" },
-    validate: {
-      name: (v) => (v.trim().length >= 2 ? null : "Enter a project name"),
-      spaceId: (v) => (v ? null : "Select a space"),
-    },
-  });
   const contactForm = useForm({
     initialValues: { name: "", email: "", phone: "", title: "" },
     validate: {
@@ -266,38 +255,6 @@ export default function ClientDetailPage() {
           <Text c="dimmed">No contacts yet.</Text>
         )}
       </Stack>
-      <Group justify="space-between" mb="sm">
-        <Title order={2} size="h4">
-          Projects
-        </Title>
-        {data.canManage && (
-          <Button onClick={projectModal.open}>New project</Button>
-        )}
-      </Group>
-      <Stack>
-        {data.projects.length ? (
-          data.projects.map((project) => (
-            <Card key={project.id} withBorder>
-              <Group justify="space-between">
-                <div>
-                  <Text fw={600}>{project.name}</Text>
-                  <Text size="sm" c="dimmed">
-                    {project.description}
-                  </Text>
-                </div>
-                <Button
-                  variant="subtle"
-                  onClick={() => navigate(`/projects/${project.id}`)}
-                >
-                  Open project
-                </Button>
-              </Group>
-            </Card>
-          ))
-        ) : (
-          <Text c="dimmed">No projects yet.</Text>
-        )}
-      </Stack>
       <Modal
         opened={spaceOpened}
         onClose={spaceModal.close}
@@ -442,50 +399,6 @@ export default function ClientDetailPage() {
             <TextInput label="Phone" {...contactForm.getInputProps("phone")} />
             <Button type="submit" loading={createContact.isPending}>
               Add contact
-            </Button>
-          </Stack>
-        </form>
-      </Modal>
-      <Modal
-        opened={projectOpened}
-        onClose={projectModal.close}
-        title="New project"
-        centered
-      >
-        <form
-          onSubmit={projectForm.onSubmit((values) =>
-            createProject.mutate(
-              { ...values, clientId, dueDate: values.dueDate || undefined },
-              { onSuccess: projectModal.close },
-            ),
-          )}
-        >
-          <Stack>
-            <TextInput
-              label="Project name"
-              required
-              {...projectForm.getInputProps("name")}
-            />
-            <TextInput
-              label="Description"
-              {...projectForm.getInputProps("description")}
-            />
-            <Select
-              label="Space"
-              required
-              data={data.spaces.map((space) => ({
-                value: space.id,
-                label: space.name,
-              }))}
-              {...projectForm.getInputProps("spaceId")}
-            />
-            <TextInput
-              label="Due date"
-              type="date"
-              {...projectForm.getInputProps("dueDate")}
-            />
-            <Button type="submit" loading={createProject.isPending}>
-              Create project
             </Button>
           </Stack>
         </form>
