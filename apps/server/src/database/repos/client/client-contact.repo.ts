@@ -34,6 +34,7 @@ export class ClientContactRepo {
       .onConflict((oc) =>
         oc
           .columns(['clientId', 'userId'])
+          .where('userId', 'is not', null)
           .where('deletedAt', 'is', null)
           .doNothing(),
       )
