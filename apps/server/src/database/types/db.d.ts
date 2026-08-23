@@ -535,6 +535,7 @@ export interface Shares {
 }
 
 export interface SpaceInviteLinks {
+  clientId: string | null;
   createdAt: Generated<Timestamp>;
   createdBy: string;
   disabled: Generated<boolean>;

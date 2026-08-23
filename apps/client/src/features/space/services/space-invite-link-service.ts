@@ -6,6 +6,7 @@ export interface ISpaceInviteLink {
   workspaceId: string;
   token: string;
   spaceRole: string;
+  clientId: string | null;
   expiresAt: string | null;
   maxUses: number | null;
   useCount: number;
@@ -19,6 +20,7 @@ export interface ICreateSpaceInviteLink {
   spaceRole: "reader" | "commenter" | "writer";
   expiresAt?: string;
   maxUses?: number;
+  clientId?: string;
 }
 
 export interface IInviteLinkPublicInfo {

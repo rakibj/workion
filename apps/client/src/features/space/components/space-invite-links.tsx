@@ -27,6 +27,7 @@ import {
   useSpaceInviteLinksQuery,
 } from "@/features/space/queries/space-invite-link-query";
 import { ISpaceInviteLink } from "@/features/space/services/space-invite-link-service";
+import { useClientsQuery } from "@/features/client/queries/client-query";
 
 interface Props {
   spaceId: string;
@@ -37,12 +38,15 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
   const { data: links = [], isLoading } = useSpaceInviteLinksQuery(spaceId);
   const createMutation = useCreateSpaceInviteLinkMutation();
   const deleteMutation = useDeleteSpaceInviteLinkMutation();
+  const { data: clients = [] } = useClientsQuery();
 
   const [createOpened, { open: openCreate, close: closeCreate }] =
     useDisclosure(false);
   const [role, setRole] = useState<string>("reader");
   const [expiresAt, setExpiresAt] = useState<Date | null | string>(null);
   const [maxUses, setMaxUses] = useState<number | string>("");
+  const [clientId, setClientId] = useState<string | null>(null);
+  const linkedClients = clients.filter((client) => client.id);
 
   const handleCreate = async () => {
     await createMutation.mutateAsync({
@@ -50,10 +54,12 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
       spaceRole: role as "reader" | "commenter" | "writer",
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       maxUses: maxUses !== "" ? Number(maxUses) : undefined,
+      clientId: clientId ?? undefined,
     });
     setRole("reader");
     setExpiresAt(null);
     setMaxUses("");
+    setClientId(null);
     closeCreate();
   };
 
@@ -70,8 +76,7 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
       centered: true,
       labels: { confirm: t("Delete"), cancel: t("Cancel") },
       confirmProps: { color: "red" },
-      onConfirm: () =>
-        deleteMutation.mutate({ spaceId, linkId: link.id }),
+      onConfirm: () => deleteMutation.mutate({ spaceId, linkId: link.id }),
     });
   };
 
@@ -124,7 +129,12 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
                         size="xs"
                         ff="monospace"
                         c="dimmed"
-                        style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        style={{
+                          maxWidth: 160,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
                       >
                         {link.inviteUrl}
                       </Text>
@@ -234,16 +244,27 @@ export default function SpaceInviteLinks({ spaceId }: Props) {
             onChange={setMaxUses}
           />
 
+          <Select
+            label={t("Client")}
+            description={t(
+              "Optional. Client invites are one-use and grant comment access to all Client spaces.",
+            )}
+            clearable
+            data={linkedClients.map((client) => ({
+              value: client.id,
+              label: client.name,
+            }))}
+            value={clientId}
+            onChange={setClientId}
+          />
+
           <Divider />
 
           <Group justify="flex-end">
             <Button variant="default" onClick={closeCreate}>
               {t("Cancel")}
             </Button>
-            <Button
-              onClick={handleCreate}
-              loading={createMutation.isPending}
-            >
+            <Button onClick={handleCreate} loading={createMutation.isPending}>
               {t("Create link")}
             </Button>
           </Group>

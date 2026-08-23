@@ -14,6 +14,7 @@ import { EnvironmentService } from '../../../integrations/environment/environmen
 import { randomBytes } from 'crypto';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { ClientRepo } from '@docmost/db/repos/client/client.repo';
 
 @Injectable()
 export class SpaceInviteLinkService {
@@ -22,6 +23,7 @@ export class SpaceInviteLinkService {
     private spaceRepo: SpaceRepo,
     private spaceMemberRepo: SpaceMemberRepo,
     private environmentService: EnvironmentService,
+    private clientRepo: ClientRepo,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -35,6 +37,17 @@ export class SpaceInviteLinkService {
       throw new NotFoundException('Space not found');
     }
 
+    if (dto.clientId) {
+      const client = await this.clientRepo.findById(dto.clientId, workspaceId);
+      if (
+        !client ||
+        !(await this.clientRepo.isSpaceLinked(client.id, dto.spaceId))
+      ) {
+        throw new BadRequestException(
+          'Client must be linked to the selected space',
+        );
+      }
+    }
     const token = randomBytes(32).toString('hex');
 
     const link = await this.spaceInviteLinkRepo.insert({
@@ -42,9 +55,10 @@ export class SpaceInviteLinkService {
       workspaceId,
       createdBy,
       token,
-      spaceRole: dto.spaceRole,
+      spaceRole: dto.clientId ? 'commenter' : dto.spaceRole,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-      maxUses: dto.maxUses ?? null,
+      maxUses: dto.clientId ? 1 : (dto.maxUses ?? null),
+      clientId: dto.clientId ?? null,
     });
 
     return { ...link, inviteUrl: this.buildInviteUrl(token) };
@@ -59,8 +73,14 @@ export class SpaceInviteLinkService {
       throw new NotFoundException('Space not found');
     }
 
-    const links = await this.spaceInviteLinkRepo.findBySpaceId(spaceId, workspaceId);
-    return links.map((l) => ({ ...l, inviteUrl: this.buildInviteUrl(l.token) }));
+    const links = await this.spaceInviteLinkRepo.findBySpaceId(
+      spaceId,
+      workspaceId,
+    );
+    return links.map((l) => ({
+      ...l,
+      inviteUrl: this.buildInviteUrl(l.token),
+    }));
   }
 
   async deleteLink(
@@ -81,7 +101,9 @@ export class SpaceInviteLinkService {
       throw new NotFoundException('Invite link not found');
     }
 
-    const isExpired = link.expiresAt ? new Date() > new Date(link.expiresAt) : false;
+    const isExpired = link.expiresAt
+      ? new Date() > new Date(link.expiresAt)
+      : false;
     const isMaxedOut = link.maxUses !== null && link.useCount >= link.maxUses;
 
     return {
@@ -114,7 +136,10 @@ export class SpaceInviteLinkService {
   }
 
   async checkAlreadyMember(userId: string, spaceId: string): Promise<void> {
-    const existing = await this.spaceMemberRepo.getSpaceMemberByTypeId(spaceId, { userId });
+    const existing = await this.spaceMemberRepo.getSpaceMemberByTypeId(
+      spaceId,
+      { userId },
+    );
     if (existing) {
       throw new ConflictException('You are already a member of this space');
     }

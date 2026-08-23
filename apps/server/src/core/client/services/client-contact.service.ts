@@ -132,6 +132,46 @@ export class ClientContactService {
     );
   }
 
+  async upsertPortalUser(
+    user: Pick<User, 'id' | 'name' | 'email'>,
+    workspaceId: string,
+    clientId: string,
+    trx?: any,
+  ): Promise<void> {
+    const existing = await this.clientContactRepo.findByEmail(
+      clientId,
+      workspaceId,
+      user.email,
+      trx,
+    );
+    if (existing) {
+      await this.clientContactRepo.update(
+        existing.id,
+        clientId,
+        workspaceId,
+        {
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          source: 'guest_invite',
+        },
+        trx,
+      );
+      return;
+    }
+    await this.clientContactRepo.createGuestInvite(
+      {
+        workspaceId,
+        clientId,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        source: 'guest_invite',
+      },
+      trx,
+    );
+  }
+
   private async getContact(
     contactId: string,
     clientId: string,

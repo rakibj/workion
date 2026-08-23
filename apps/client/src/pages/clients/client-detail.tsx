@@ -32,6 +32,7 @@ import {
   useUpdateClientContactMutation,
 } from "@/features/client/queries/client-query";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
+import { useCreateSpaceInviteLinkMutation } from "@/features/space/queries/space-invite-link-query";
 import { getSpaceUrl } from "@/lib/config";
 import { IClientContact } from "@/features/client/types/client.types";
 
@@ -43,6 +44,8 @@ export default function ClientDetailPage() {
   const [spaceOpened, spaceModal] = useDisclosure(false);
   const [projectOpened, projectModal] = useDisclosure(false);
   const [contactOpened, contactModal] = useDisclosure(false);
+  const [inviteOpened, inviteModal] = useDisclosure(false);
+  const [inviteSpaceId, setInviteSpaceId] = useState<string | null>(null);
   const [editContact, setEditContact] = useState<IClientContact | null>(null);
   const linkSpace = useLinkClientSpaceMutation(clientId);
   const unlinkSpace = useUnlinkClientSpaceMutation(clientId);
@@ -51,6 +54,7 @@ export default function ClientDetailPage() {
   const createContact = useCreateClientContactMutation(clientId);
   const updateContact = useUpdateClientContactMutation(clientId);
   const deleteContact = useDeleteClientContactMutation(clientId);
+  const createInvite = useCreateSpaceInviteLinkMutation();
   const navigate = useNavigate();
 
   const handleDeleteClient = () => {
@@ -157,7 +161,12 @@ export default function ClientDetailPage() {
           Contacts
         </Title>
         {data.canManage && (
-          <Button onClick={contactModal.open}>Add contact</Button>
+          <Group gap="xs">
+            <Button variant="light" onClick={inviteModal.open}>
+              Invite client member
+            </Button>
+            <Button onClick={contactModal.open}>Add contact</Button>
+          </Group>
         )}
       </Group>
       <Stack mb="xl">
@@ -314,6 +323,44 @@ export default function ClientDetailPage() {
             </Button>
           </Stack>
         </form>
+      </Modal>
+      <Modal
+        opened={inviteOpened}
+        onClose={inviteModal.close}
+        title="Invite client member"
+        centered
+      >
+        <Stack>
+          <Select
+            label="Landing space"
+            description="They will join every linked Client space as a commenter."
+            required
+            data={data.spaces.map((space) => ({
+              value: space.id,
+              label: space.name,
+            }))}
+            value={inviteSpaceId}
+            onChange={setInviteSpaceId}
+          />
+          <Button
+            disabled={!inviteSpaceId}
+            loading={createInvite.isPending}
+            onClick={() => {
+              if (!inviteSpaceId) return;
+              createInvite.mutate(
+                { spaceId: inviteSpaceId, spaceRole: "commenter", clientId },
+                {
+                  onSuccess: () => {
+                    setInviteSpaceId(null);
+                    inviteModal.close();
+                  },
+                },
+              );
+            }}
+          >
+            Create one-use invite
+          </Button>
+        </Stack>
       </Modal>
       <Modal
         opened={!!editContact}

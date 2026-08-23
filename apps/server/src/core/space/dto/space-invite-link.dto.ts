@@ -25,6 +25,10 @@ export class CreateSpaceInviteLinkDto {
   @IsInt()
   @IsPositive()
   maxUses?: number;
+
+  @IsOptional()
+  @IsUUID()
+  clientId?: string;
 }
 
 export class DeleteSpaceInviteLinkDto {

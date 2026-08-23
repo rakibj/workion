@@ -19,6 +19,9 @@ import { SpaceInviteLinkService } from '../../space/services/space-invite-link.s
 import { SpaceMemberService } from '../../space/services/space-member.service';
 import { GuestSignupDto } from '../../../core/space/dto/space-invite-link.dto';
 import { ClientContactService } from '../../client/services/client-contact.service';
+import { ClientRepo } from '@docmost/db/repos/client/client.repo';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { SpaceRole } from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class SignupService {
@@ -29,6 +32,8 @@ export class SignupService {
     private spaceInviteLinkService: SpaceInviteLinkService,
     private spaceMemberService: SpaceMemberService,
     private clientContactService: ClientContactService,
+    private clientRepo: ClientRepo,
+    private spaceMemberRepo: SpaceMemberRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -128,20 +133,17 @@ export class SignupService {
         trx,
       );
 
-      await this.spaceMemberService.addUserToSpace(
-        newUser.id,
-        link.spaceId,
-        link.spaceRole,
-        workspaceId,
-        trx,
-      );
-
-      await this.clientContactService.linkGuestToSpaceClients(
-        newUser,
-        workspaceId,
-        link.spaceId,
-        trx,
-      );
+      if (link.clientId) {
+        await this.joinClientSpaces(newUser, workspaceId, link.clientId, trx);
+      } else {
+        await this.spaceMemberService.addUserToSpace(
+          newUser.id,
+          link.spaceId,
+          link.spaceRole,
+          workspaceId,
+          trx,
+        );
+      }
 
       await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
 
@@ -168,29 +170,60 @@ export class SignupService {
   ): Promise<void> {
     const link = await this.spaceInviteLinkService.validateToken(token);
 
-    await this.spaceInviteLinkService.checkAlreadyMember(userId, link.spaceId);
-
-    await executeTx(this.db, async (trx) => {
-      await this.spaceMemberService.addUserToSpace(
+    if (!link.clientId) {
+      await this.spaceInviteLinkService.checkAlreadyMember(
         userId,
         link.spaceId,
-        link.spaceRole,
-        workspaceId,
-        trx,
       );
+    }
 
+    await executeTx(this.db, async (trx) => {
       const user = await this.userRepo.findById(userId, workspaceId, { trx });
-      if (user) {
-        await this.clientContactService.linkGuestToSpaceClients(
-          user,
-          workspaceId,
+      if (link.clientId && user) {
+        await this.joinClientSpaces(user, workspaceId, link.clientId, trx);
+      } else {
+        await this.spaceMemberService.addUserToSpace(
+          userId,
           link.spaceId,
+          link.spaceRole,
+          workspaceId,
           trx,
         );
       }
 
       await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
     });
+  }
+
+  private async joinClientSpaces(
+    user: Pick<User, 'id' | 'name' | 'email'>,
+    workspaceId: string,
+    clientId: string,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    await this.clientContactService.upsertPortalUser(
+      user,
+      workspaceId,
+      clientId,
+      trx,
+    );
+    const spaces = await this.clientRepo.getLinkedSpaces(clientId);
+    for (const space of spaces) {
+      const existing = await this.spaceMemberRepo.getSpaceMemberByTypeId(
+        space.id,
+        { userId: user.id },
+        trx,
+      );
+      if (!existing) {
+        await this.spaceMemberService.addUserToSpace(
+          user.id,
+          space.id,
+          SpaceRole.COMMENTER,
+          workspaceId,
+          trx,
+        );
+      }
+    }
   }
 
   async initialSetup(
