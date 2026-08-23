@@ -142,15 +142,28 @@ export class ClientContactService {
     clientId: string,
     trx?: any,
   ): Promise<void> {
-    const existing = await this.clientContactRepo.findByEmail(
+    // The database uniqueness rule is client + user, not client + email. Check
+    // that identity first so re-associating a member whose email changed stays
+    // idempotent instead of causing a unique-constraint error.
+    const existingByUserId = await this.clientContactRepo.findByUserId(
+      clientId,
+      workspaceId,
+      user.id,
+      trx,
+    );
+    if (existingByUserId) {
+      return;
+    }
+
+    const existingByEmail = await this.clientContactRepo.findByEmail(
       clientId,
       workspaceId,
       user.email,
       trx,
     );
-    if (existing) {
+    if (existingByEmail) {
       await this.clientContactRepo.update(
-        existing.id,
+        existingByEmail.id,
         clientId,
         workspaceId,
         {

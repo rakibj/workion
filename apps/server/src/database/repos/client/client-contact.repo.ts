@@ -87,6 +87,22 @@ export class ClientContactRepo {
       .executeTakeFirst();
   }
 
+  async findByUserId(
+    clientId: string,
+    workspaceId: string,
+    userId: string,
+    trx?: KyselyTransaction,
+  ): Promise<ClientContact | undefined> {
+    return dbOrTx(this.db, trx)
+      .selectFrom('clientContacts')
+      .selectAll()
+      .where('clientId', '=', clientId)
+      .where('workspaceId', '=', workspaceId)
+      .where('userId', '=', userId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
   async update(
     id: string,
     clientId: string,
