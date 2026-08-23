@@ -18,6 +18,7 @@ import {
 import { SpaceInviteLinkService } from '../../space/services/space-invite-link.service';
 import { SpaceMemberService } from '../../space/services/space-member.service';
 import { GuestSignupDto } from '../../../core/space/dto/space-invite-link.dto';
+import { ClientContactService } from '../../client/services/client-contact.service';
 
 @Injectable()
 export class SignupService {
@@ -27,6 +28,7 @@ export class SignupService {
     private groupUserRepo: GroupUserRepo,
     private spaceInviteLinkService: SpaceInviteLinkService,
     private spaceMemberService: SpaceMemberService,
+    private clientContactService: ClientContactService,
     @InjectKysely() private readonly db: KyselyDB,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -97,10 +99,7 @@ export class SignupService {
     return user;
   }
 
-  async guestSignup(
-    dto: GuestSignupDto,
-    workspaceId: string,
-  ): Promise<User> {
+  async guestSignup(dto: GuestSignupDto, workspaceId: string): Promise<User> {
     const link = await this.spaceInviteLinkService.validateToken(dto.token);
 
     const existing = await this.userRepo.findByEmail(dto.email, workspaceId);
@@ -134,6 +133,13 @@ export class SignupService {
         link.spaceId,
         link.spaceRole,
         workspaceId,
+        trx,
+      );
+
+      await this.clientContactService.linkGuestToSpaceClients(
+        newUser,
+        workspaceId,
+        link.spaceId,
         trx,
       );
 
@@ -172,6 +178,16 @@ export class SignupService {
         workspaceId,
         trx,
       );
+
+      const user = await this.userRepo.findById(userId, workspaceId, { trx });
+      if (user) {
+        await this.clientContactService.linkGuestToSpaceClients(
+          user,
+          workspaceId,
+          link.spaceId,
+          trx,
+        );
+      }
 
       await this.spaceInviteLinkService.incrementUseCount(link.id, trx);
     });

@@ -14,11 +14,16 @@ import {
   linkClientSpace,
   unlinkClientSpace,
   updateProject,
+  createClientContact,
+  updateClientContact,
+  deleteClientContact,
 } from "../services/client-service";
 import {
   CreateClientInput,
   CreateProjectInput,
   IProject,
+  CreateClientContactInput,
+  UpdateClientContactInput,
 } from "../types/client.types";
 
 const showError = (error: any) =>
@@ -136,6 +141,43 @@ export function useDeleteProjectMutation(clientId: string) {
       notifications.show({ message: t("Project deleted") });
       navigate(`/clients/${clientId}`);
     },
+    onError: showError,
+  });
+}
+
+export function useCreateClientContactMutation(clientId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateClientContactInput) =>
+      createClientContact(clientId, data),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onError: showError,
+  });
+}
+
+export function useUpdateClientContactMutation(clientId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      contactId,
+      data,
+    }: {
+      contactId: string;
+      data: UpdateClientContactInput;
+    }) => updateClientContact(clientId, contactId, data),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["client", clientId] }),
+    onError: showError,
+  });
+}
+
+export function useDeleteClientContactMutation(clientId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (contactId: string) => deleteClientContact(clientId, contactId),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["client", clientId] }),
     onError: showError,
   });
 }

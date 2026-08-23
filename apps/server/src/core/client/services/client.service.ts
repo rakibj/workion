@@ -6,6 +6,7 @@ import {
 import { InjectKysely } from 'nestjs-kysely';
 import { ClientRepo } from '@docmost/db/repos/client/client.repo';
 import { ProjectRepo } from '@docmost/db/repos/project/project.repo';
+import { ClientContactRepo } from '@docmost/db/repos/client/client-contact.repo';
 import { Client, User } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
@@ -30,6 +31,7 @@ export class ClientService {
   constructor(
     private readonly clientRepo: ClientRepo,
     private readonly projectRepo: ProjectRepo,
+    private readonly clientContactRepo: ClientContactRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
@@ -78,11 +80,18 @@ export class ClientService {
 
   async get(user: User, workspaceId: string, clientId: string) {
     const client = await this.findVisibleClient(user, workspaceId, clientId);
-    const [spaces, projects] = await Promise.all([
+    const [spaces, projects, contacts] = await Promise.all([
       this.clientRepo.getLinkedSpaces(client.id),
       this.projectRepo.list(workspaceId, { clientId: client.id }),
+      this.clientContactRepo.findByClientId(client.id, workspaceId),
     ]);
-    return { client, spaces, projects };
+    return {
+      client: { ...client, contactCount: contacts.length },
+      spaces,
+      projects,
+      contacts,
+      canManage: await this.canManageClient(user, client.id),
+    };
   }
 
   async update(
@@ -149,6 +158,14 @@ export class ClientService {
     user: User,
     clientId: string,
   ): Promise<void> {
+    if (!(await this.canManageClient(user, clientId)))
+      throw new ForbiddenException();
+  }
+
+  private async canManageClient(
+    user: User,
+    clientId: string,
+  ): Promise<boolean> {
     const spaces = await this.clientRepo.getLinkedSpaces(clientId);
     const checks = await Promise.all(
       spaces.map(async (space) => {
@@ -161,7 +178,7 @@ export class ClientService {
       }),
     );
 
-    if (!checks.some(Boolean)) throw new ForbiddenException();
+    return checks.some(Boolean);
   }
 
   private async assertCanManageSpace(

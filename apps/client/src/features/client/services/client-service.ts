@@ -6,6 +6,9 @@ import {
   IClientDetail,
   IProject,
   ProjectStatus,
+  IClientContact,
+  CreateClientContactInput,
+  UpdateClientContactInput,
 } from "../types/client.types";
 
 export async function getClients(): Promise<IClient[]> {
@@ -79,4 +82,34 @@ export async function getProjects(filters?: {
 export async function getProject(projectId: string): Promise<IProject> {
   const req = await api.get<IProject>(`/projects/${projectId}`);
   return req.data;
+}
+
+export async function createClientContact(
+  clientId: string,
+  data: CreateClientContactInput,
+): Promise<IClientContact> {
+  const req = await api.post<IClientContact>(
+    `/clients/${clientId}/contacts`,
+    data,
+  );
+  return req.data;
+}
+
+export async function updateClientContact(
+  clientId: string,
+  contactId: string,
+  data: UpdateClientContactInput,
+): Promise<IClientContact> {
+  const req = await api.patch<IClientContact>(
+    `/clients/${clientId}/contacts/${contactId}`,
+    data,
+  );
+  return req.data;
+}
+
+export async function deleteClientContact(
+  clientId: string,
+  contactId: string,
+): Promise<void> {
+  await api.delete(`/clients/${clientId}/contacts/${contactId}`);
 }

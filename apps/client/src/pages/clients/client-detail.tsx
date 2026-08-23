@@ -17,7 +17,8 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
 import { modals } from "@mantine/modals";
-import { IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconStar, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -26,9 +27,13 @@ import {
   useCreateProjectMutation,
   useLinkClientSpaceMutation,
   useUnlinkClientSpaceMutation,
+  useCreateClientContactMutation,
+  useDeleteClientContactMutation,
+  useUpdateClientContactMutation,
 } from "@/features/client/queries/client-query";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import { getSpaceUrl } from "@/lib/config";
+import { IClientContact } from "@/features/client/types/client.types";
 
 export default function ClientDetailPage() {
   const { t } = useTranslation();
@@ -37,10 +42,15 @@ export default function ClientDetailPage() {
   const { data: allSpaces } = useGetSpacesQuery({ limit: 100 });
   const [spaceOpened, spaceModal] = useDisclosure(false);
   const [projectOpened, projectModal] = useDisclosure(false);
+  const [contactOpened, contactModal] = useDisclosure(false);
+  const [editContact, setEditContact] = useState<IClientContact | null>(null);
   const linkSpace = useLinkClientSpaceMutation(clientId);
   const unlinkSpace = useUnlinkClientSpaceMutation(clientId);
   const createProject = useCreateProjectMutation(clientId);
   const archiveClient = useArchiveClientMutation();
+  const createContact = useCreateClientContactMutation(clientId);
+  const updateContact = useUpdateClientContactMutation(clientId);
+  const deleteContact = useDeleteClientContactMutation(clientId);
   const navigate = useNavigate();
 
   const handleDeleteClient = () => {
@@ -69,6 +79,16 @@ export default function ClientDetailPage() {
       spaceId: (v) => (v ? null : "Select a space"),
     },
   });
+  const contactForm = useForm({
+    initialValues: { name: "", email: "", phone: "", title: "" },
+    validate: {
+      name: (v) => (v.trim() ? null : "Enter a contact name"),
+      email: (v) => (/^\S+@\S+\.\S+$/.test(v) ? null : "Enter a valid email"),
+    },
+  });
+  const editContactForm = useForm({
+    initialValues: { name: "", email: "", phone: "", title: "" },
+  });
   if (isLoading)
     return (
       <Container pt="xl">
@@ -90,47 +110,160 @@ export default function ClientDetailPage() {
             {data.client.status}
           </Badge>
         </div>
-        <Tooltip label={t("Delete client")}>
-          <ActionIcon
-            color="red"
-            variant="subtle"
-            onClick={handleDeleteClient}
-            loading={archiveClient.isPending}
-          >
-            <IconTrash size={18} />
-          </ActionIcon>
-        </Tooltip>
+        {data.canManage && (
+          <Tooltip label={t("Delete client")}>
+            <ActionIcon
+              color="red"
+              variant="subtle"
+              onClick={handleDeleteClient}
+              loading={archiveClient.isPending}
+            >
+              <IconTrash size={18} />
+            </ActionIcon>
+          </Tooltip>
+        )}
       </Group>
       <Group justify="space-between" mb="sm">
         <Title order={2} size="h4">
           Linked spaces
         </Title>
-        <Button variant="light" onClick={spaceModal.open}>
-          Link space
-        </Button>
+        {data.canManage && (
+          <Button variant="light" onClick={spaceModal.open}>
+            Link space
+          </Button>
+        )}
       </Group>
       <Stack mb="xl">
         {data.spaces.map((space) => (
           <Card key={space.id} withBorder>
             <Group justify="space-between">
               <Link to={getSpaceUrl(space.slug)}>{space.name}</Link>
-              <Button
-                color="red"
-                variant="subtle"
-                size="xs"
-                onClick={() => unlinkSpace.mutate(space.id)}
-              >
-                Unlink
-              </Button>
+              {data.canManage && (
+                <Button
+                  color="red"
+                  variant="subtle"
+                  size="xs"
+                  onClick={() => unlinkSpace.mutate(space.id)}
+                >
+                  Unlink
+                </Button>
+              )}
             </Group>
           </Card>
         ))}
       </Stack>
       <Group justify="space-between" mb="sm">
         <Title order={2} size="h4">
+          Contacts
+        </Title>
+        {data.canManage && (
+          <Button onClick={contactModal.open}>Add contact</Button>
+        )}
+      </Group>
+      <Stack mb="xl">
+        {data.contacts.length ? (
+          data.contacts.map((contact) => (
+            <Card key={contact.id} withBorder>
+              <Group justify="space-between" align="flex-start">
+                <div>
+                  <Group gap="xs">
+                    <Text fw={600}>{contact.name}</Text>
+                    {contact.source === "guest_invite" && (
+                      <Badge variant="light">Portal user</Badge>
+                    )}
+                  </Group>
+                  {contact.title && <Text size="sm">{contact.title}</Text>}
+                  {contact.email && (
+                    <Text size="sm" c="dimmed">
+                      {contact.email}
+                    </Text>
+                  )}
+                  {contact.phone && (
+                    <Text size="sm" c="dimmed">
+                      {contact.phone}
+                    </Text>
+                  )}
+                </div>
+                <Group gap={4}>
+                  {data.canManage && (
+                    <Tooltip
+                      label={
+                        contact.isPrimary
+                          ? "Primary contact"
+                          : "Mark as primary"
+                      }
+                    >
+                      <ActionIcon
+                        variant="subtle"
+                        color={contact.isPrimary ? "yellow" : "gray"}
+                        onClick={() =>
+                          updateContact.mutate({
+                            contactId: contact.id,
+                            data: { isPrimary: !contact.isPrimary },
+                          })
+                        }
+                      >
+                        <IconStar
+                          size={18}
+                          fill={contact.isPrimary ? "currentColor" : "none"}
+                        />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                  {data.canManage && (
+                    <ActionIcon
+                      variant="subtle"
+                      onClick={() => {
+                        setEditContact(contact);
+                        editContactForm.setValues({
+                          name: contact.name,
+                          email: contact.email ?? "",
+                          phone: contact.phone ?? "",
+                          title: contact.title ?? "",
+                        });
+                      }}
+                    >
+                      <IconPencil size={18} />
+                    </ActionIcon>
+                  )}
+                  {data.canManage && (
+                    <ActionIcon
+                      color="red"
+                      variant="subtle"
+                      onClick={() =>
+                        modals.openConfirmModal({
+                          title: "Delete contact",
+                          children: (
+                            <Text size="sm">
+                              Remove {contact.name} from this client? This does
+                              not remove portal access.
+                            </Text>
+                          ),
+                          centered: true,
+                          labels: { confirm: "Delete", cancel: "Cancel" },
+                          confirmProps: { color: "red" },
+                          onConfirm: () => deleteContact.mutate(contact.id),
+                        })
+                      }
+                    >
+                      <IconTrash size={18} />
+                    </ActionIcon>
+                  )}
+                </Group>
+              </Group>
+            </Card>
+          ))
+        ) : (
+          <Text c="dimmed">No contacts yet.</Text>
+        )}
+      </Stack>
+      <Group justify="space-between" mb="sm">
+        <Title order={2} size="h4">
           Projects
         </Title>
-        <Button onClick={projectModal.open}>New project</Button>
+        {data.canManage && (
+          <Button onClick={projectModal.open}>New project</Button>
+        )}
       </Group>
       <Stack>
         {data.projects.length ? (
@@ -178,6 +311,90 @@ export default function ClientDetailPage() {
             />
             <Button type="submit" loading={linkSpace.isPending}>
               Link space
+            </Button>
+          </Stack>
+        </form>
+      </Modal>
+      <Modal
+        opened={!!editContact}
+        onClose={() => setEditContact(null)}
+        title="Edit contact"
+        centered
+      >
+        <form
+          onSubmit={editContactForm.onSubmit((values) => {
+            if (!editContact) return;
+            const update = {
+              phone: values.phone || null,
+              title: values.title || null,
+              ...(editContact.source === "manual"
+                ? { name: values.name, email: values.email }
+                : {}),
+            };
+            updateContact.mutate(
+              { contactId: editContact.id, data: update },
+              { onSuccess: () => setEditContact(null) },
+            );
+          })}
+        >
+          <Stack>
+            <TextInput
+              label="Name"
+              disabled={editContact?.source === "guest_invite"}
+              {...editContactForm.getInputProps("name")}
+            />
+            <TextInput
+              label="Email"
+              type="email"
+              disabled={editContact?.source === "guest_invite"}
+              {...editContactForm.getInputProps("email")}
+            />
+            <TextInput
+              label="Title"
+              {...editContactForm.getInputProps("title")}
+            />
+            <TextInput
+              label="Phone"
+              {...editContactForm.getInputProps("phone")}
+            />
+            <Button type="submit" loading={updateContact.isPending}>
+              Save changes
+            </Button>
+          </Stack>
+        </form>
+      </Modal>
+      <Modal
+        opened={contactOpened}
+        onClose={contactModal.close}
+        title="Add contact"
+        centered
+      >
+        <form
+          onSubmit={contactForm.onSubmit((values) =>
+            createContact.mutate(values, {
+              onSuccess: () => {
+                contactForm.reset();
+                contactModal.close();
+              },
+            }),
+          )}
+        >
+          <Stack>
+            <TextInput
+              label="Name"
+              required
+              {...contactForm.getInputProps("name")}
+            />
+            <TextInput
+              label="Email"
+              type="email"
+              required
+              {...contactForm.getInputProps("email")}
+            />
+            <TextInput label="Title" {...contactForm.getInputProps("title")} />
+            <TextInput label="Phone" {...contactForm.getInputProps("phone")} />
+            <Button type="submit" loading={createContact.isPending}>
+              Add contact
             </Button>
           </Stack>
         </form>

@@ -203,6 +203,23 @@ export interface Clients {
   workspaceId: string;
 }
 
+export interface ClientContacts {
+  clientId: string;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  deletedAt: Timestamp | null;
+  email: string | null;
+  id: Generated<string>;
+  isPrimary: Generated<boolean>;
+  name: string;
+  phone: string | null;
+  source: Generated<string>;
+  title: string | null;
+  updatedAt: Generated<Timestamp>;
+  userId: string | null;
+  workspaceId: string;
+}
+
 export interface ClientSpaces {
   clientId: string;
   createdAt: Generated<Timestamp>;
@@ -703,6 +720,7 @@ export interface DB {
   billing: Billing;
   blogPostSettings: BlogPostSettings;
   clients: Clients;
+  clientContacts: ClientContacts;
   clientSpaces: ClientSpaces;
   comments: Comments;
   favorites: Favorites;

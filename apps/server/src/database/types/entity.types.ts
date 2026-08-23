@@ -45,6 +45,7 @@ import {
   KanbanMilestones,
   PageReads as _PageReads,
   Clients,
+  ClientContacts,
   ClientSpaces,
   Projects,
 } from './db';
@@ -88,6 +89,11 @@ export type UpdatableSpace = Updateable<Omit<Spaces, 'id'>>;
 export type Client = Selectable<Clients>;
 export type InsertableClient = Insertable<Clients>;
 export type UpdatableClient = Updateable<Omit<Clients, 'id'>>;
+
+// ClientContact
+export type ClientContact = Selectable<ClientContacts>;
+export type InsertableClientContact = Insertable<ClientContacts>;
+export type UpdatableClientContact = Updateable<Omit<ClientContacts, 'id'>>;
 
 // ClientSpace
 export type ClientSpace = Selectable<ClientSpaces>;

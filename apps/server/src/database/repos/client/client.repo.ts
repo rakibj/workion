@@ -138,6 +138,21 @@ export class ClientRepo {
       .executeTakeFirst();
   }
 
+  async findClientsBySpaceId(
+    spaceId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<Client[]> {
+    return dbOrTx(this.db, trx)
+      .selectFrom('clients')
+      .innerJoin('clientSpaces', 'clientSpaces.clientId', 'clients.id')
+      .selectAll('clients')
+      .where('clientSpaces.spaceId', '=', spaceId)
+      .where('clients.workspaceId', '=', workspaceId)
+      .where('clients.deletedAt', 'is', null)
+      .execute();
+  }
+
   async isSpaceLinked(clientId: string, spaceId: string): Promise<boolean> {
     const link = await this.db
       .selectFrom('clientSpaces')
