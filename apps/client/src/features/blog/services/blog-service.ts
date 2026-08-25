@@ -29,3 +29,10 @@ export async function publishBlogPost(pageId: string, robotsIndex: boolean) {
 export async function unpublishBlogPost(pageId: string) {
   await api.post(`/blog/posts/${pageId}/unpublish`);
 }
+
+export async function getBlogCategories(spaceId: string) {
+  const response = await api.get<string[]>(
+    `/blog/posts/categories?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return response.data;
+}

@@ -11,7 +11,12 @@ import { ShareModule } from '../share/share.module';
 @Module({
   imports: [PageAccessModule, ShareModule],
   providers: [BlogPostSettingsService, BlogPublicService],
-  controllers: [BlogController, BlogPublicController, BlogRenderController, BlogSeoController],
+  controllers: [
+    BlogController,
+    BlogPublicController,
+    BlogRenderController,
+    BlogSeoController,
+  ],
   exports: [BlogPostSettingsService, BlogPublicService],
 })
 export class BlogModule {}

@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Autocomplete,
   Button,
   Divider,
   FileButton,
@@ -8,6 +9,7 @@ import {
   NumberInput,
   Stack,
   Switch,
+  TagsInput,
   Text,
   TextInput,
   Textarea,
@@ -18,6 +20,7 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { IconExternalLink } from "@tabler/icons-react";
 import {
+  useBlogCategoriesQuery,
   useBlogPostSettingsQuery,
   usePublishBlogPostMutation,
   useSaveBlogPostSettingsMutation,
@@ -31,17 +34,20 @@ import CopyTextButton from "@/components/common/copy";
 
 export function BlogSettingsModal({
   pageId,
+  spaceId,
   opened,
   onClose,
 }: {
   pageId: string;
+  spaceId: string;
   opened: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { data: settings } = useBlogPostSettingsQuery(pageId);
   const { data: share } = useShareForPageQuery(pageId);
-  const { data: space } = useSpaceQuery(settings?.spaceId);
+  const { data: space } = useSpaceQuery(settings?.spaceId ?? spaceId);
+  const { data: categories = [] } = useBlogCategoriesQuery(spaceId);
   const save = useSaveBlogPostSettingsMutation(pageId);
   const publish = usePublishBlogPostMutation(pageId);
   const unpublish = useUnpublishBlogPostMutation(pageId);
@@ -56,6 +62,10 @@ export function BlogSettingsModal({
       robotsIndex: true,
       robotsFollow: true,
       customFields: {} as Record<string, boolean | number | string>,
+      tags: [] as string[],
+      category: "",
+      featured: false,
+      priority: 0,
     },
   });
 
@@ -101,6 +111,10 @@ export function BlogSettingsModal({
             robotsIndex: settings.robotsIndex,
             robotsFollow: settings.robotsFollow,
             customFields: defaultCustomFields,
+            tags: settings.tags ?? [],
+            category: settings.category ?? "",
+            featured: settings.featured,
+            priority: settings.priority,
           }
         : {
             slug: "",
@@ -112,6 +126,10 @@ export function BlogSettingsModal({
             robotsIndex: true,
             robotsFollow: true,
             customFields: defaultCustomFields,
+            tags: [],
+            category: "",
+            featured: false,
+            priority: 0,
           },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,6 +140,7 @@ export function BlogSettingsModal({
       await save.mutateAsync({
         ...form.values,
         ogImageAttachmentId: form.values.ogImageAttachmentId || undefined,
+        category: form.values.category || null,
       });
       notifications.show({ message: t("Blog settings saved") });
     } catch (error) {
@@ -207,6 +226,29 @@ export function BlogSettingsModal({
           label={t("Allow search engines to follow links")}
           {...form.getInputProps("robotsFollow", { type: "checkbox" })}
         />
+        <Divider />
+        <Autocomplete
+          label={t("Category")}
+          placeholder={t("Select or type a category")}
+          data={categories}
+          {...form.getInputProps("category")}
+        />
+        <TagsInput
+          label={t("Tags")}
+          placeholder={t("Type a tag and press Enter")}
+          {...form.getInputProps("tags")}
+        />
+        <Group grow>
+          <Switch
+            label={t("Featured on home")}
+            {...form.getInputProps("featured", { type: "checkbox" })}
+          />
+          <NumberInput
+            label={t("Priority")}
+            description={t("Higher sorts first")}
+            {...form.getInputProps("priority")}
+          />
+        </Group>
         {customFieldDefs.length > 0 && (
           <>
             <Divider label={t("Custom fields")} labelPosition="left" />

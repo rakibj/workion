@@ -154,10 +154,15 @@ export interface Billing {
   canceledAt: Timestamp | null;
   createdAt: Generated<Timestamp>;
   currency: string | null;
+  customerPortalUrl: string | null;
   deletedAt: Timestamp | null;
   endedAt: Timestamp | null;
   id: Generated<string>;
   interval: string | null;
+  lemonSqueezyCustomerId: string | null;
+  lemonSqueezyProductId: string | null;
+  lemonSqueezySubscriptionId: string | null;
+  lemonSqueezyVariantId: string | null;
   metadata: Json | null;
   periodEndAt: Timestamp | null;
   periodStartAt: Timestamp;
@@ -173,34 +178,28 @@ export interface Billing {
   tieredUnitAmount: Int8 | null;
   tieredUpTo: string | null;
   updatedAt: Generated<Timestamp>;
+  updatePaymentMethodUrl: string | null;
   workspaceId: string;
 }
 
 export interface BlogPostSettings {
   canonicalUrl: string | null;
+  category: string | null;
   createdAt: Generated<Timestamp>;
   customFields: Generated<Json>;
+  featured: Generated<boolean>;
   focusKeyword: string | null;
   metaDescription: string | null;
   metaTitle: string | null;
   ogImageAttachmentId: string | null;
   pageId: string;
+  priority: Generated<number>;
   robotsFollow: Generated<boolean>;
   robotsIndex: Generated<boolean>;
   slug: string;
   spaceId: string;
+  tags: Generated<string[]>;
   updatedAt: Generated<Timestamp>;
-}
-
-export interface Clients {
-  createdAt: Generated<Timestamp>;
-  createdById: string;
-  deletedAt: Timestamp | null;
-  id: Generated<string>;
-  name: string;
-  status: Generated<string>;
-  updatedAt: Generated<Timestamp>;
-  workspaceId: string;
 }
 
 export interface ClientContacts {
@@ -217,6 +216,17 @@ export interface ClientContacts {
   title: string | null;
   updatedAt: Generated<Timestamp>;
   userId: string | null;
+  workspaceId: string;
+}
+
+export interface Clients {
+  createdAt: Generated<Timestamp>;
+  createdById: string;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  name: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
   workspaceId: string;
 }
 
@@ -682,6 +692,7 @@ export interface Workspaces {
   hostname: string | null;
   id: Generated<string>;
   isScimEnabled: Generated<boolean>;
+  lemonSqueezyCustomerId: string | null;
   licenseKey: string | null;
   logo: string | null;
   name: string | null;
@@ -705,8 +716,8 @@ export interface DB {
   backlinks: Backlinks;
   billing: Billing;
   blogPostSettings: BlogPostSettings;
-  clients: Clients;
   clientContacts: ClientContacts;
+  clients: Clients;
   clientSpaces: ClientSpaces;
   comments: Comments;
   favorites: Favorites;

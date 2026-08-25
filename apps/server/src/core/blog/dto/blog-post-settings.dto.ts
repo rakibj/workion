@@ -1,5 +1,8 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
@@ -10,6 +13,11 @@ import {
 export class BlogPageIdDto {
   @IsUUID()
   pageId: string;
+}
+
+export class BlogCategoriesQueryDto {
+  @IsUUID()
+  spaceId: string;
 }
 
 export class UpsertBlogPostSettingsDto {
@@ -51,4 +59,24 @@ export class UpsertBlogPostSettingsDto {
   @IsOptional()
   @IsObject()
   customFields?: Record<string, boolean | number | string>;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(255, { each: true })
+  tags?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  category?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  featured?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  priority?: number;
 }

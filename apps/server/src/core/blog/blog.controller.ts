@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -22,7 +24,13 @@ import { PageAccessService } from '../page/page-access/page-access.service';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { ShareService } from '../share/share.service';
 import { BlogPostSettingsService } from './services/blog-post-settings.service';
+import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '../casl/interfaces/space-ability.type';
+import {
+  BlogCategoriesQueryDto,
   BlogPageIdDto,
   UpsertBlogPostSettingsDto,
 } from './dto/blog-post-settings.dto';
@@ -38,7 +46,20 @@ export class BlogController {
     private readonly blogPostSettingsService: BlogPostSettingsService,
     private readonly shareService: ShareService,
     private readonly shareRepo: ShareRepo,
+    private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
+
+  @Get('categories')
+  async getCategories(
+    @Query() { spaceId }: BlogCategoriesQueryDto,
+    @AuthUser() user: User,
+  ): Promise<string[]> {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+    return this.blogPostSettingsService.findCategories(spaceId);
+  }
 
   @Get(':pageId/settings')
   async getSettings(

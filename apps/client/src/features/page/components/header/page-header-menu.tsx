@@ -158,6 +158,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
           </Tooltip>
           <BlogSettingsModal
             pageId={page.id}
+            spaceId={page.spaceId}
             opened={blogSettingsOpened}
             onClose={closeBlogSettings}
           />

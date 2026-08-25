@@ -16,6 +16,7 @@ describe('BlogPostSettingsService', () => {
       findBySlugInSpace: jest.fn(),
       upsert: jest.fn(),
       findSpaceById: jest.fn(),
+      findDistinctCategories: jest.fn(),
     };
 
     const module = await Test.createTestingModule({
@@ -71,6 +72,45 @@ describe('BlogPostSettingsService', () => {
     await service.upsert({ pageId, spaceId, title: 'Hello World' });
 
     expect(repo.findBySlugInSpace).toHaveBeenCalledWith(spaceId, 'hello-world');
+  });
+
+  describe('tags', () => {
+    beforeEach(() => {
+      repo.findBySlugInSpace.mockResolvedValue(undefined);
+      repo.upsert.mockResolvedValue({ pageId, spaceId, slug: 'hello-world' } as any);
+    });
+
+    it('trims whitespace and drops empty tags', async () => {
+      await service.upsert({
+        pageId,
+        spaceId,
+        title: 'Hello World',
+        tags: ['  react ', '', '   ', 'typescript'],
+      });
+
+      expect(repo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ tags: ['react', 'typescript'] }),
+      );
+    });
+
+    it('leaves tags undefined when none are supplied', async () => {
+      await service.upsert({ pageId, spaceId, title: 'Hello World' });
+
+      expect(repo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ tags: undefined }),
+      );
+    });
+  });
+
+  describe('findCategories', () => {
+    it('delegates to the repo for the given space', async () => {
+      repo.findDistinctCategories.mockResolvedValue(['News', 'Tutorials']);
+
+      const result = await service.findCategories(spaceId);
+
+      expect(repo.findDistinctCategories).toHaveBeenCalledWith(spaceId);
+      expect(result).toEqual(['News', 'Tutorials']);
+    });
   });
 
   describe('customFields validation', () => {

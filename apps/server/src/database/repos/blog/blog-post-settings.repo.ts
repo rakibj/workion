@@ -54,11 +54,27 @@ export class BlogPostSettingsRepo {
           robotsFollow: settings.robotsFollow ?? true,
           focusKeyword: settings.focusKeyword ?? null,
           customFields: settings.customFields ?? {},
+          tags: settings.tags ?? [],
+          category: settings.category ?? null,
+          featured: settings.featured ?? false,
+          priority: settings.priority ?? 0,
           updatedAt: new Date(),
         }),
       )
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  async findDistinctCategories(spaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('blogPostSettings')
+      .select('category')
+      .distinct()
+      .where('spaceId', '=', spaceId)
+      .where('category', 'is not', null)
+      .orderBy('category', 'asc')
+      .execute();
+    return rows.map((row) => row.category!);
   }
 
   async findSpaceByBlogDomain(domain: string) {
@@ -95,6 +111,8 @@ export class BlogPostSettingsRepo {
 
   async listPublished(spaceId: string, limit: number, offset: number) {
     return this.basePublishedQuery(spaceId)
+      .orderBy('blogPostSettings.featured', 'desc')
+      .orderBy('blogPostSettings.priority', 'desc')
       .orderBy('shares.createdAt', 'desc')
       .limit(limit)
       .offset(offset)
@@ -103,6 +121,8 @@ export class BlogPostSettingsRepo {
 
   async listPublishedAnywhere(limit: number, offset: number) {
     return this.basePublishedQuery()
+      .orderBy('blogPostSettings.featured', 'desc')
+      .orderBy('blogPostSettings.priority', 'desc')
       .orderBy('shares.createdAt', 'desc')
       .limit(limit)
       .offset(offset)
@@ -111,12 +131,16 @@ export class BlogPostSettingsRepo {
 
   async listAllPublished(spaceId: string) {
     return this.basePublishedQuery(spaceId)
+      .orderBy('blogPostSettings.featured', 'desc')
+      .orderBy('blogPostSettings.priority', 'desc')
       .orderBy('shares.createdAt', 'desc')
       .execute();
   }
 
   async listAllPublishedAnywhere() {
     return this.basePublishedQuery()
+      .orderBy('blogPostSettings.featured', 'desc')
+      .orderBy('blogPostSettings.priority', 'desc')
       .orderBy('shares.createdAt', 'desc')
       .execute();
   }
@@ -150,6 +174,10 @@ export class BlogPostSettingsRepo {
         'blogPostSettings.robotsFollow',
         'blogPostSettings.focusKeyword',
         'blogPostSettings.customFields',
+        'blogPostSettings.tags',
+        'blogPostSettings.category',
+        'blogPostSettings.featured',
+        'blogPostSettings.priority',
         'shares.createdAt as publishedAt',
         'users.name as authorName',
       ])

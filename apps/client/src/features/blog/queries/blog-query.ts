@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  getBlogCategories,
   getBlogPostSettings,
   publishBlogPost,
   saveBlogPostSettings,
@@ -15,13 +16,25 @@ export function useBlogPostSettingsQuery(pageId?: string) {
   });
 }
 
+export function useBlogCategoriesQuery(spaceId?: string) {
+  return useQuery({
+    queryKey: ["blog-categories", spaceId],
+    queryFn: () => getBlogCategories(spaceId!),
+    enabled: !!spaceId,
+  });
+}
+
 export function useSaveBlogPostSettingsMutation(pageId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: Partial<IBlogPostSettings>) =>
       saveBlogPostSettings(pageId, data),
-    onSuccess: (data) =>
-      queryClient.setQueryData(["blog-post-settings", pageId], data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["blog-post-settings", pageId], data);
+      queryClient.invalidateQueries({
+        queryKey: ["blog-categories", data.spaceId],
+      });
+    },
   });
 }
 

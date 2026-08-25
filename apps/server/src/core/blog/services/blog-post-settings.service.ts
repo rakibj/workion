@@ -44,7 +44,19 @@ export class BlogPostSettingsService {
     }
 
     const { title: _title, ...settings } = input;
-    return this.blogPostSettingsRepo.upsert({ ...settings, slug });
+    return this.blogPostSettingsRepo.upsert({
+      ...settings,
+      slug,
+      tags: input.tags ? this.normalizeTags(input.tags as string[]) : undefined,
+    });
+  }
+
+  async findCategories(spaceId: string): Promise<string[]> {
+    return this.blogPostSettingsRepo.findDistinctCategories(spaceId);
+  }
+
+  private normalizeTags(tags: string[]): string[] {
+    return tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0);
   }
 
   private async validateCustomFields(
