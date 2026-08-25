@@ -65,7 +65,7 @@ export class BlogPostSettingsRepo {
     return this.db
       .selectFrom('spaces')
       .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
-      .selectAll()
+      .selectAll('spaces')
       .select('workspaces.plan as workspacePlan')
       .where(sql`LOWER(settings->'blog'->>'domain')`, '=', domain.toLowerCase())
       .executeTakeFirst();
@@ -75,9 +75,9 @@ export class BlogPostSettingsRepo {
     return this.db
       .selectFrom('spaces')
       .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
-      .selectAll()
+      .selectAll('spaces')
       .select('workspaces.plan as workspacePlan')
-      .where('id', '=', spaceId)
+      .where('spaces.id', '=', spaceId)
       .executeTakeFirst();
   }
 

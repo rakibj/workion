@@ -83,24 +83,39 @@ export function BlogSettingsModal({
   };
 
   useEffect(() => {
-    if (settings)
-      form.setValues({
-        slug: settings.slug,
-        metaTitle: settings.metaTitle ?? "",
-        metaDescription: settings.metaDescription ?? "",
-        ogImageAttachmentId: settings.ogImageAttachmentId ?? "",
-        canonicalUrl: settings.canonicalUrl ?? "",
-        focusKeyword: settings.focusKeyword ?? "",
-        robotsIndex: settings.robotsIndex,
-        robotsFollow: settings.robotsFollow,
-        customFields: Object.fromEntries(
-          customFieldDefs.map((field) => [
-            field.key,
-            settings.customFields?.[field.key] ?? defaultForType(field.type),
-          ]),
-        ),
-      });
-  }, [settings, space]);
+    const defaultCustomFields = Object.fromEntries(
+      customFieldDefs.map((field) => [
+        field.key,
+        settings?.customFields?.[field.key] ?? defaultForType(field.type),
+      ]),
+    );
+    form.setValues(
+      settings
+        ? {
+            slug: settings.slug,
+            metaTitle: settings.metaTitle ?? "",
+            metaDescription: settings.metaDescription ?? "",
+            ogImageAttachmentId: settings.ogImageAttachmentId ?? "",
+            canonicalUrl: settings.canonicalUrl ?? "",
+            focusKeyword: settings.focusKeyword ?? "",
+            robotsIndex: settings.robotsIndex,
+            robotsFollow: settings.robotsFollow,
+            customFields: defaultCustomFields,
+          }
+        : {
+            slug: "",
+            metaTitle: "",
+            metaDescription: "",
+            ogImageAttachmentId: "",
+            canonicalUrl: "",
+            focusKeyword: "",
+            robotsIndex: true,
+            robotsFollow: true,
+            customFields: defaultCustomFields,
+          },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId, settings, space]);
 
   const saveSettings = async () => {
     try {
