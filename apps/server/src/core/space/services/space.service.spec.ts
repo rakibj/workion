@@ -111,7 +111,7 @@ describe('SpaceService', () => {
       (spaceRepo.findById as jest.Mock).mockResolvedValue({ id: spaceId });
       const customFields = [
         { key: 'isFeatured', label: 'Featured', type: BlogCustomFieldType.BOOLEAN },
-        { key: 'priority', label: 'Priority', type: BlogCustomFieldType.NUMBER },
+        { key: 'readingMinutes', label: 'Reading minutes', type: BlogCustomFieldType.NUMBER },
       ];
 
       await service.updateBlogSettings(
@@ -127,6 +127,17 @@ describe('SpaceService', () => {
         workspaceId,
         { domain: 'example.com', basePath: '', customFields },
       );
+    });
+
+    it('rejects a custom field key that collides with a built-in blog field', async () => {
+      (spaceRepo.findById as jest.Mock).mockResolvedValue({ id: spaceId });
+
+      await expect(
+        service.updateBlogSettings(spaceId, workspaceId, 'example.com', undefined, [
+          { key: 'priority', label: 'Priority', type: BlogCustomFieldType.NUMBER },
+        ]),
+      ).rejects.toThrow(BadRequestException);
+      expect(spaceRepo.updateBlogSettings).not.toHaveBeenCalled();
     });
   });
 });

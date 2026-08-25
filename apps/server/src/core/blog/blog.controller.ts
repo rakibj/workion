@@ -23,6 +23,7 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageAccessService } from '../page/page-access/page-access.service';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { ShareService } from '../share/share.service';
+import { AiStreamService } from '../ai-chat/services/ai-stream.service';
 import { BlogPostSettingsService } from './services/blog-post-settings.service';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import {
@@ -47,6 +48,7 @@ export class BlogController {
     private readonly shareService: ShareService,
     private readonly shareRepo: ShareRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly aiStreamService: AiStreamService,
   ) {}
 
   @Get('categories')
@@ -124,12 +126,89 @@ export class BlogController {
     if (share) await this.shareRepo.deleteShare(share.id);
   }
 
+  @Post(':pageId/generate-seo')
+  async generateSeo(
+    @Param() { pageId }: BlogPageIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ): Promise<{ tags: string[]; metaDescription: string }> {
+    const page = await this.findEditableBlogPage(pageId, user, workspace.id, {
+      includeTextContent: true,
+    });
+
+    const systemPrompt =
+      'You are an SEO assistant for a blog. Given a post title and its content, ' +
+      'produce: (1) "tags" — 3 to 6 concise, lowercase, relevant tags/keywords ' +
+      'for the post; (2) "metaDescription" — an SEO-optimized meta description, ' +
+      '140-160 characters, active voice, naturally including the primary topic, ' +
+      'written to earn clicks without being clickbait. ' +
+      'Respond with ONLY a raw JSON object of the exact shape ' +
+      '{"tags": string[], "metaDescription": string} — no markdown fences, no ' +
+      'explanation, no extra keys.';
+
+    const userContent =
+      `Title: ${page.title || 'Untitled'}\n\n` +
+      `Content:\n${page.textContent?.trim() || '(empty page)'}`;
+
+    const result = await this.aiStreamService.streamChat(
+      workspace.id,
+      [{ role: 'user', content: userContent }],
+      systemPrompt,
+    );
+
+    let raw = '';
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') {
+        raw += part.text;
+      } else if (part.type === 'error') {
+        throw (part as any).error instanceof Error
+          ? (part as any).error
+          : new Error(String((part as any).error));
+      }
+    }
+
+    return this.parseSeoResponse(raw);
+  }
+
+  private parseSeoResponse(raw: string): {
+    tags: string[];
+    metaDescription: string;
+  } {
+    const jsonText = raw
+      .trim()
+      .replace(/^```(?:json)?/i, '')
+      .replace(/```$/, '')
+      .trim();
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      throw new BadRequestException('AI returned an unexpected response');
+    }
+
+    const tags = Array.isArray(parsed?.tags)
+      ? parsed.tags
+          .filter((tag: unknown) => typeof tag === 'string')
+          .map((tag: string) => tag.trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      : [];
+    const metaDescription =
+      typeof parsed?.metaDescription === 'string'
+        ? parsed.metaDescription.trim()
+        : '';
+
+    return { tags, metaDescription };
+  }
+
   private async findEditableBlogPage(
     pageId: string,
     user: User,
     workspaceId: string,
+    opts?: { includeTextContent?: boolean },
   ) {
-    const page = await this.pageRepo.findById(pageId);
+    const page = await this.pageRepo.findById(pageId, opts);
     if (!page || page.workspaceId !== workspaceId || page.type !== 'blog') {
       throw new NotFoundException('Blog post not found');
     }

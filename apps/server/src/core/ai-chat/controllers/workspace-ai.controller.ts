@@ -74,4 +74,16 @@ export class WorkspaceAiController {
     }
     return this.aiKeyService.getKeyStatus(workspace.id);
   }
+
+  // Unlike /key/status (admin-only, includes the model name), this is safe for
+  // any workspace member — just a boolean so non-admin editors can tell
+  // whether AI-assisted features (e.g. blog SEO generation) are available.
+  @HttpCode(HttpStatus.OK)
+  @Get('status')
+  async getStatus(
+    @AuthWorkspace() workspace: Workspace,
+  ): Promise<{ configured: boolean }> {
+    const { configured } = await this.aiKeyService.getKeyStatus(workspace.id);
+    return { configured };
+  }
 }

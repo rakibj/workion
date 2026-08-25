@@ -4,9 +4,9 @@ import {
   Button,
   Group,
   PasswordInput,
-  Select,
   Stack,
   Text,
+  TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { z } from "zod/v4";
@@ -20,16 +20,6 @@ import {
   saveAiKey,
 } from "@/features/workspace/services/workspace-service.ts";
 import type { IAiKeyStatus } from "@/features/workspace/types/workspace.types.ts";
-
-const OPENROUTER_MODELS = [
-  { value: "openai/gpt-4o-mini", label: "GPT-4o Mini (OpenAI)" },
-  { value: "openai/gpt-4o", label: "GPT-4o (OpenAI)" },
-  { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Anthropic)" },
-  { value: "anthropic/claude-3-haiku", label: "Claude 3 Haiku (Anthropic)" },
-  { value: "google/gemini-flash-1.5", label: "Gemini Flash 1.5 (Google)" },
-  { value: "google/gemini-pro-1.5", label: "Gemini Pro 1.5 (Google)" },
-  { value: "meta-llama/llama-3.1-8b-instruct:free", label: "Llama 3.1 8B (Meta, free)" },
-];
 
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
@@ -133,10 +123,12 @@ export default function OpenRouterSettings() {
             placeholder="sk-or-v1-..."
             {...form.getInputProps("apiKey")}
           />
-          <Select
+          <TextInput
             label={t("Model")}
-            data={OPENROUTER_MODELS}
-            allowDeselect={false}
+            description={t(
+              "Any OpenRouter model identifier, e.g. openai/gpt-4o-mini",
+            )}
+            placeholder={DEFAULT_MODEL}
             {...form.getInputProps("model")}
           />
           <Group>

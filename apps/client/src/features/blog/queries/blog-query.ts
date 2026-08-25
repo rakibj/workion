@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  generateBlogSeo,
   getBlogCategories,
   getBlogPostSettings,
   publishBlogPost,
@@ -53,5 +54,11 @@ export function useUnpublishBlogPostMutation(pageId: string) {
     mutationFn: () => unpublishBlogPost(pageId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["share-for-page", pageId] }),
+  });
+}
+
+export function useGenerateBlogSeoMutation(pageId: string) {
+  return useMutation({
+    mutationFn: () => generateBlogSeo(pageId),
   });
 }

@@ -139,3 +139,8 @@ export async function getAiKeyStatus(): Promise<IAiKeyStatus> {
   const req = await api.get<IAiKeyStatus>("/workspace/ai/key/status");
   return req.data;
 }
+
+export async function getAiStatus(): Promise<{ configured: boolean }> {
+  const req = await api.get<{ configured: boolean }>("/workspace/ai/status");
+  return req.data;
+}

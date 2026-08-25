@@ -12,5 +12,6 @@ import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
   imports: [StorageModule],
   controllers: [AiChatController, WorkspaceAiController, AiGenerateController],
   providers: [AiChatService, AiKeyService, AiStreamService, KanbanRepo],
+  exports: [AiStreamService],
 })
 export class AiChatModule {}

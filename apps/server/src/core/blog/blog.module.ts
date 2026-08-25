@@ -7,9 +7,10 @@ import { BlogSeoController } from './blog-seo.controller';
 import { BlogPublicService } from './services/blog-public.service';
 import { PageAccessModule } from '../page/page-access/page-access.module';
 import { ShareModule } from '../share/share.module';
+import { AiChatModule } from '../ai-chat/ai-chat.module';
 
 @Module({
-  imports: [PageAccessModule, ShareModule],
+  imports: [PageAccessModule, ShareModule, AiChatModule],
   providers: [BlogPostSettingsService, BlogPublicService],
   controllers: [
     BlogController,

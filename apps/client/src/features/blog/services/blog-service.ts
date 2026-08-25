@@ -36,3 +36,10 @@ export async function getBlogCategories(spaceId: string) {
   );
   return response.data;
 }
+
+export async function generateBlogSeo(pageId: string) {
+  const response = await api.post<{ tags: string[]; metaDescription: string }>(
+    `/blog/posts/${pageId}/generate-seo`,
+  );
+  return response.data;
+}

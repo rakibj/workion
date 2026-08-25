@@ -15,6 +15,24 @@ export class BlogPageIdDto {
   pageId: string;
 }
 
+// Space-level custom field keys (Space Settings -> Blog -> Custom fields) may
+// not reuse these — they're already first-class BlogPostSettings columns, and
+// a colliding key would render the same concept twice in the settings modal.
+export const RESERVED_BLOG_CUSTOM_FIELD_KEYS = [
+  'slug',
+  'metatitle',
+  'metadescription',
+  'ogimageattachmentid',
+  'canonicalurl',
+  'robotsindex',
+  'robotsfollow',
+  'focuskeyword',
+  'tags',
+  'category',
+  'featured',
+  'priority',
+];
+
 export class BlogCategoriesQueryDto {
   @IsUUID()
   spaceId: string;

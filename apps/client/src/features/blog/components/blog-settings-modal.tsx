@@ -16,12 +16,14 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { IconExternalLink } from "@tabler/icons-react";
+import { IconExternalLink, IconSparkles } from "@tabler/icons-react";
 import {
   useBlogCategoriesQuery,
   useBlogPostSettingsQuery,
+  useGenerateBlogSeoMutation,
   usePublishBlogPostMutation,
   useSaveBlogPostSettingsMutation,
   useUnpublishBlogPostMutation,
@@ -29,17 +31,56 @@ import {
 import { useShareForPageQuery } from "@/features/share/queries/share-query";
 import { uploadFile } from "@/features/page/services/page-service";
 import { useSpaceQuery } from "@/features/space/queries/space-query";
+import { getAiStatus } from "@/features/workspace/services/workspace-service";
 import { getAppUrl, getBlogDomainOrigin } from "@/lib/config";
 import CopyTextButton from "@/components/common/copy";
+
+// Mirrors RESERVED_BLOG_CUSTOM_FIELD_KEYS server-side (blog-post-settings.dto.ts) —
+// space-level custom fields reusing these keys are rejected on save, but older
+// data saved before that check existed can still have them; hide instead of
+// rendering the same field twice.
+const RESERVED_CUSTOM_FIELD_KEYS = new Set([
+  "slug",
+  "metatitle",
+  "metadescription",
+  "ogimageattachmentid",
+  "canonicalurl",
+  "robotsindex",
+  "robotsfollow",
+  "focuskeyword",
+  "tags",
+  "category",
+  "featured",
+  "priority",
+]);
+
+const COMBINING_MARKS_PATTERN = new RegExp(
+  `[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`,
+  "g",
+);
+
+function slugify(value: string): string {
+  return (
+    value
+      .normalize("NFKD")
+      .replace(COMBINING_MARKS_PATTERN, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "untitled"
+  );
+}
 
 export function BlogSettingsModal({
   pageId,
   spaceId,
+  title,
   opened,
   onClose,
 }: {
   pageId: string;
   spaceId: string;
+  title: string;
   opened: boolean;
   onClose: () => void;
 }) {
@@ -48,9 +89,14 @@ export function BlogSettingsModal({
   const { data: share } = useShareForPageQuery(pageId);
   const { data: space } = useSpaceQuery(settings?.spaceId ?? spaceId);
   const { data: categories = [] } = useBlogCategoriesQuery(spaceId);
+  const { data: aiStatus } = useQuery({
+    queryKey: ["ai-status"],
+    queryFn: getAiStatus,
+  });
   const save = useSaveBlogPostSettingsMutation(pageId);
   const publish = usePublishBlogPostMutation(pageId);
   const unpublish = useUnpublishBlogPostMutation(pageId);
+  const generateSeo = useGenerateBlogSeoMutation(pageId);
   const form = useForm({
     initialValues: {
       slug: "",
@@ -69,7 +115,9 @@ export function BlogSettingsModal({
     },
   });
 
-  const customFieldDefs = space?.settings?.blog?.customFields ?? [];
+  const customFieldDefs = (space?.settings?.blog?.customFields ?? []).filter(
+    (field) => !RESERVED_CUSTOM_FIELD_KEYS.has(field.key.toLowerCase()),
+  );
   const defaultForType = (type: "boolean" | "number" | "text") =>
     type === "boolean" ? false : type === "number" ? 0 : "";
 
@@ -139,6 +187,12 @@ export function BlogSettingsModal({
     try {
       await save.mutateAsync({
         ...form.values,
+        // blank strings should defer to the derive-from-title/content default
+        // (slug from page title; meta title/canonical from the public render)
+        // rather than persisting as a literal empty value.
+        slug: form.values.slug.trim() || undefined,
+        metaTitle: form.values.metaTitle.trim() || undefined,
+        canonicalUrl: form.values.canonicalUrl.trim() || undefined,
         ogImageAttachmentId: form.values.ogImageAttachmentId || undefined,
         category: form.values.category || null,
       });
@@ -151,6 +205,16 @@ export function BlogSettingsModal({
       });
     }
   };
+  const derivedSlug = useMemo(() => slugify(title || "untitled"), [title]);
+  const effectiveSlug = (form.values.slug || derivedSlug).trim();
+  const previewUrl = useMemo(() => {
+    const blogSettings = space?.settings?.blog;
+    if (blogSettings?.domain) {
+      const basePath = blogSettings.basePath || "";
+      return `${getBlogDomainOrigin(blogSettings.domain)}${basePath}/${effectiveSlug}`;
+    }
+    return `${getAppUrl()}/blog/${effectiveSlug}`;
+  }, [effectiveSlug, space?.settings?.blog]);
   const liveLink = useMemo(() => {
     if (!settings?.slug) return undefined;
     const blogSettings = space?.settings?.blog;
@@ -161,11 +225,25 @@ export function BlogSettingsModal({
     return `${getAppUrl()}/blog/${settings.slug}`;
   }, [settings?.slug, space?.settings?.blog]);
 
-  const publishPost = async () => {
-    if (!form.values.slug.trim()) {
-      form.setFieldError("slug", t("Slug is required before publishing"));
-      return;
+  const handleGenerateSeo = async () => {
+    try {
+      const result = await generateSeo.mutateAsync();
+      form.setFieldValue("tags", result.tags);
+      form.setFieldValue("metaDescription", result.metaDescription);
+      notifications.show({
+        message: t("Generated tags and meta description with AI"),
+      });
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message:
+          error["response"]?.data?.message ??
+          t("Unable to generate SEO fields"),
+      });
     }
+  };
+
+  const publishPost = async () => {
     await saveSettings();
     try {
       await publish.mutateAsync(form.values.robotsIndex);
@@ -187,9 +265,26 @@ export function BlogSettingsModal({
       size="lg"
     >
       <Stack>
-        <TextInput label={t("Slug")} {...form.getInputProps("slug")} />
+        {aiStatus?.configured && (
+          <Button
+            variant="light"
+            leftSection={<IconSparkles size={16} />}
+            onClick={handleGenerateSeo}
+            loading={generateSeo.isPending}
+          >
+            {t("Generate tags & meta description with AI")}
+          </Button>
+        )}
+        <TextInput
+          label={t("Slug")}
+          description={t("Derived from the page title when left blank")}
+          placeholder={derivedSlug}
+          {...form.getInputProps("slug")}
+        />
         <TextInput
           label={t("Meta title")}
+          description={t("Falls back to the page title when left blank")}
+          placeholder={title}
           {...form.getInputProps("metaTitle")}
         />
         <Textarea
@@ -212,6 +307,8 @@ export function BlogSettingsModal({
         />
         <TextInput
           label={t("Canonical URL")}
+          description={t("Falls back to the live post URL when left blank")}
+          placeholder={previewUrl}
           {...form.getInputProps("canonicalUrl")}
         />
         <TextInput
