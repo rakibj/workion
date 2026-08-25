@@ -139,5 +139,18 @@ describe('SpaceService', () => {
       ).rejects.toThrow(BadRequestException);
       expect(spaceRepo.updateBlogSettings).not.toHaveBeenCalled();
     });
+
+    it('rejects a custom field whose label collides with a built-in blog field even when the key differs', async () => {
+      (spaceRepo.findById as jest.Mock).mockResolvedValue({ id: spaceId });
+
+      // Key sidesteps the reserved-key check ("featured" isn't
+      // "featuredOnHome"), but the label reads as the same built-in field.
+      await expect(
+        service.updateBlogSettings(spaceId, workspaceId, 'example.com', undefined, [
+          { key: 'featuredOnHome', label: 'Featured on Home', type: BlogCustomFieldType.BOOLEAN },
+        ]),
+      ).rejects.toThrow(BadRequestException);
+      expect(spaceRepo.updateBlogSettings).not.toHaveBeenCalled();
+    });
   });
 });

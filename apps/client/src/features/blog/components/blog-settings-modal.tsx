@@ -54,6 +54,30 @@ const RESERVED_CUSTOM_FIELD_KEYS = new Set([
   "priority",
 ]);
 
+// Mirrors RESERVED_BLOG_CUSTOM_FIELD_LABELS server-side — keys are
+// constrained ([a-zA-Z][a-zA-Z0-9_]*) so a custom field can dodge the key
+// check above (e.g. key "featuredOnHome") while its free-text label still
+// reads as the same built-in field ("Featured on Home" vs. the built-in
+// "Featured on home"). Match on normalized label too.
+const RESERVED_CUSTOM_FIELD_LABELS = new Set([
+  "slug",
+  "meta title",
+  "meta description",
+  "og image attachment id",
+  "canonical url",
+  "allow search indexing",
+  "allow search engines to follow links",
+  "focus keyword",
+  "tags",
+  "category",
+  "featured on home",
+  "priority",
+]);
+
+function normalizeFieldLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 const COMBINING_MARKS_PATTERN = new RegExp(
   `[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`,
   "g",
@@ -116,7 +140,9 @@ export function BlogSettingsModal({
   });
 
   const customFieldDefs = (space?.settings?.blog?.customFields ?? []).filter(
-    (field) => !RESERVED_CUSTOM_FIELD_KEYS.has(field.key.toLowerCase()),
+    (field) =>
+      !RESERVED_CUSTOM_FIELD_KEYS.has(field.key.toLowerCase()) &&
+      !RESERVED_CUSTOM_FIELD_LABELS.has(normalizeFieldLabel(field.label)),
   );
   const defaultForType = (type: "boolean" | "number" | "text") =>
     type === "boolean" ? false : type === "number" ? 0 : "";

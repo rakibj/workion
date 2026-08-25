@@ -33,6 +33,30 @@ export const RESERVED_BLOG_CUSTOM_FIELD_KEYS = [
   'priority',
 ];
 
+// Keys are constrained to [a-zA-Z][a-zA-Z0-9_]*, but labels are free text —
+// a custom field can dodge the key check above (e.g. key "featuredOnHome")
+// while its label still reads as the same built-in field to a user ("Featured
+// on Home" vs. the built-in "Featured on home"). Block on normalized label
+// too. Normalization: lowercase, trim, collapse internal whitespace.
+export const RESERVED_BLOG_CUSTOM_FIELD_LABELS = [
+  'slug',
+  'meta title',
+  'meta description',
+  'og image attachment id',
+  'canonical url',
+  'allow search indexing',
+  'allow search engines to follow links',
+  'focus keyword',
+  'tags',
+  'category',
+  'featured on home',
+  'priority',
+];
+
+export function normalizeBlogFieldLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export class BlogCategoriesQueryDto {
   @IsUUID()
   spaceId: string;

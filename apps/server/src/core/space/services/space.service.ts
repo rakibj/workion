@@ -12,7 +12,11 @@ import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { Space, User } from '@docmost/db/types/entity.types';
 import { UpdateSpaceDto } from '../dto/update-space.dto';
 import { BlogCustomFieldDefDto } from '../dto/update-space-blog-settings.dto';
-import { RESERVED_BLOG_CUSTOM_FIELD_KEYS } from '../../blog/dto/blog-post-settings.dto';
+import {
+  RESERVED_BLOG_CUSTOM_FIELD_KEYS,
+  RESERVED_BLOG_CUSTOM_FIELD_LABELS,
+  normalizeBlogFieldLabel,
+} from '../../blog/dto/blog-post-settings.dto';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
 import { SpaceMemberService } from './space-member.service';
@@ -258,6 +262,18 @@ export class SpaceService {
       if (reserved.length) {
         throw new BadRequestException(
           `customFields keys conflict with built-in blog fields: ${reserved.join(', ')}`,
+        );
+      }
+      const reservedLabels = customFields
+        .map((field) => field.label)
+        .filter((label) =>
+          RESERVED_BLOG_CUSTOM_FIELD_LABELS.includes(
+            normalizeBlogFieldLabel(label),
+          ),
+        );
+      if (reservedLabels.length) {
+        throw new BadRequestException(
+          `customFields labels conflict with built-in blog fields: ${reservedLabels.join(', ')}`,
         );
       }
       settings.customFields = customFields;
