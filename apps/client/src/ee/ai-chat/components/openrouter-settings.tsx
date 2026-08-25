@@ -24,7 +24,7 @@ import type { IAiKeyStatus } from "@/features/workspace/types/workspace.types.ts
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
 const formSchema = z.object({
-  apiKey: z.string().min(1, "API key is required"),
+  apiKey: z.string(),
   model: z.string().min(1, "Model is required"),
 });
 
@@ -58,12 +58,21 @@ export default function OpenRouterSettings() {
   if (!isAdmin) return null;
 
   const handleSave = async (values: { apiKey: string; model: string }) => {
+    const apiKey = values.apiKey.trim();
+    if (!status?.configured && !apiKey) {
+      form.setFieldError("apiKey", t("API key is required"));
+      return;
+    }
     setIsSaving(true);
     try {
-      await saveAiKey({ apiKey: values.apiKey, model: values.model });
+      await saveAiKey({ apiKey: apiKey || undefined, model: values.model });
       setStatus({ configured: true, model: values.model });
       form.setFieldValue("apiKey", "");
-      notifications.show({ message: t("OpenRouter key saved successfully") });
+      notifications.show({
+        message: apiKey
+          ? t("OpenRouter key saved successfully")
+          : t("Model updated successfully"),
+      });
     } catch (err: any) {
       notifications.show({
         message: err?.response?.data?.message || t("Failed to save key"),
@@ -120,6 +129,11 @@ export default function OpenRouterSettings() {
                 ? t("New API key (replaces existing)")
                 : t("API key")
             }
+            description={
+              status?.configured
+                ? t("Leave blank to keep the current key and only change the model")
+                : undefined
+            }
             placeholder="sk-or-v1-..."
             {...form.getInputProps("apiKey")}
           />
@@ -133,7 +147,7 @@ export default function OpenRouterSettings() {
           />
           <Group>
             <Button type="submit" loading={isSaving}>
-              {status?.configured ? t("Update key") : t("Save key")}
+              {status?.configured ? t("Save changes") : t("Save key")}
             </Button>
             {status?.configured && (
               <Button

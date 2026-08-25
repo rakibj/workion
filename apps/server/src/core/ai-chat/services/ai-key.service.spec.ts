@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AiKeyService } from './ai-key.service';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
@@ -66,6 +67,37 @@ describe('AiKeyService', () => {
         'openrouterModel',
         'openai/gpt-4o-mini',
       );
+    });
+
+    it('updates only the model when apiKey is omitted and a key already exists', async () => {
+      let capturedEncrypted: string;
+      workspaceRepo.updateAiSettings.mockImplementation(async (_, key, value) => {
+        if (key === 'openrouterKey') capturedEncrypted = value as string;
+        return makeWorkspace();
+      });
+      await service.saveKey(WORKSPACE_ID, 'sk-or-v1-secret');
+      workspaceRepo.findById.mockResolvedValue(
+        makeWorkspace({ openrouterKey: capturedEncrypted }),
+      );
+      workspaceRepo.updateAiSettings.mockClear();
+
+      await service.saveKey(WORKSPACE_ID, undefined, 'anthropic/claude-3.5-sonnet');
+
+      expect(workspaceRepo.updateAiSettings).toHaveBeenCalledTimes(1);
+      expect(workspaceRepo.updateAiSettings).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        'openrouterModel',
+        'anthropic/claude-3.5-sonnet',
+      );
+    });
+
+    it('throws when apiKey is omitted and no key is configured yet', async () => {
+      workspaceRepo.findById.mockResolvedValue(makeWorkspace());
+
+      await expect(
+        service.saveKey(WORKSPACE_ID, undefined, 'anthropic/claude-3.5-sonnet'),
+      ).rejects.toThrow(BadRequestException);
+      expect(workspaceRepo.updateAiSettings).not.toHaveBeenCalled();
     });
   });
 

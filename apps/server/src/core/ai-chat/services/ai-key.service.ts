@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -14,22 +14,41 @@ export class AiKeyService {
     private environmentService: EnvironmentService,
   ) {}
 
+  // apiKey is optional so the model can be updated on its own once a key is
+  // already configured — the settings form clears the key field after save
+  // (never re-displays a saved secret), so requiring it on every edit would
+  // force re-pasting the key just to change the model.
   async saveKey(
     workspaceId: string,
-    apiKey: string,
+    apiKey?: string,
     model?: string,
   ): Promise<void> {
-    const encrypted = this.encrypt(apiKey, workspaceId);
-    await this.workspaceRepo.updateAiSettings(
-      workspaceId,
-      'openrouterKey',
-      encrypted,
-    );
-    await this.workspaceRepo.updateAiSettings(
-      workspaceId,
-      'openrouterModel',
-      model ?? DEFAULT_MODEL,
-    );
+    if (apiKey) {
+      const encrypted = this.encrypt(apiKey, workspaceId);
+      await this.workspaceRepo.updateAiSettings(
+        workspaceId,
+        'openrouterKey',
+        encrypted,
+      );
+      await this.workspaceRepo.updateAiSettings(
+        workspaceId,
+        'openrouterModel',
+        model ?? DEFAULT_MODEL,
+      );
+      return;
+    }
+
+    const existingKey = await this.getDecryptedKey(workspaceId);
+    if (!existingKey) {
+      throw new BadRequestException('API key is required');
+    }
+    if (model) {
+      await this.workspaceRepo.updateAiSettings(
+        workspaceId,
+        'openrouterModel',
+        model,
+      );
+    }
   }
 
   async removeKey(workspaceId: string): Promise<void> {

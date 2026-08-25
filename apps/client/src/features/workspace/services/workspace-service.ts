@@ -125,7 +125,7 @@ export async function getAppVersion(): Promise<IVersion> {
 }
 
 export async function saveAiKey(data: {
-  apiKey: string;
+  apiKey?: string;
   model: string;
 }): Promise<void> {
   await api.post("/workspace/ai/key", data);
