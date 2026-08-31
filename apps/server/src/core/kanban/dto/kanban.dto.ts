@@ -29,6 +29,22 @@ export const CATEGORY_ICONS = [
   'IconPalette',
   'IconCode',
   'IconShieldCheck',
+  'IconBriefcase',
+  'IconFolder',
+  'IconBulb',
+  'IconHeart',
+  'IconClock',
+  'IconMapPin',
+  'IconMail',
+  'IconSettings',
+  'IconLock',
+  'IconChecklist',
+  'IconChartBar',
+  'IconWorld',
+  'IconGitBranch',
+  'IconThumbUp',
+  'IconAlertCircle',
+  'IconDeviceLaptop',
 ] as const;
 
 const KANBAN_OPTION_COLORS = ['gray', 'blue', 'green', 'yellow', 'red', 'purple'];

@@ -26,30 +26,46 @@ import {
 } from "@mantine/core";
 import {
   IconAlarm,
+  IconAlertCircle,
   IconAlertTriangle,
   IconBolt,
   IconBookmark,
+  IconBriefcase,
   IconBug,
+  IconBulb,
   IconCalendarEvent,
+  IconChartBar,
   IconCheck,
+  IconChecklist,
   IconCircleCheck,
   IconCircleDot,
   IconClipboardList,
+  IconClock,
   IconCode,
+  IconDeviceLaptop,
   IconDotsVertical,
   IconFlag,
+  IconFolder,
+  IconGitBranch,
   IconHash,
+  IconHeart,
+  IconLock,
+  IconMail,
+  IconMapPin,
   IconPalette,
   IconPencil,
   IconPlus,
   IconRocket,
+  IconSettings,
   IconShieldCheck,
   IconStar,
   IconTag,
   IconTarget,
+  IconThumbUp,
   IconTrash,
   IconUser,
   IconUsers,
+  IconWorld,
 } from "@tabler/icons-react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -157,6 +173,22 @@ const CATEGORY_ICON_MAP: Record<string, typeof IconFlag> = {
   IconPalette,
   IconCode,
   IconShieldCheck,
+  IconBriefcase,
+  IconFolder,
+  IconBulb,
+  IconHeart,
+  IconClock,
+  IconMapPin,
+  IconMail,
+  IconSettings,
+  IconLock,
+  IconChecklist,
+  IconChartBar,
+  IconWorld,
+  IconGitBranch,
+  IconThumbUp,
+  IconAlertCircle,
+  IconDeviceLaptop,
 };
 const CATEGORY_ICON_NAMES = Object.keys(CATEGORY_ICON_MAP);
 
@@ -167,7 +199,7 @@ function CategoryIcon({ name, size = 12 }: { name: string; size?: number }) {
 
 function IconPickerGrid({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
   return (
-    <Group gap={6} justify="center" style={{ maxWidth: 168 }}>
+    <Group gap={6} justify="center" style={{ maxWidth: 216 }}>
       {CATEGORY_ICON_NAMES.map((name) => (
         <Box
           key={name}
@@ -856,6 +888,7 @@ function CategoryPicker({ card, category, pageId, canEdit, onManage }: CategoryP
         </button>
       </Menu.Target>
       <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+        <Menu.Label>{category.name}</Menu.Label>
         {category.options.length === 0 && (
           <Menu.Item disabled>No options yet</Menu.Item>
         )}
@@ -1290,14 +1323,14 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones, 
       opened={!!card}
       onClose={onClose}
       title={null}
-      size="860px"
+      size="min(1140px, 94vw)"
       padding={0}
       styles={{
-        content: { display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 80px)" },
-        body: { flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" },
+        content: { display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 80px)", overflow: "hidden" },
+        body: { flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "row" },
       }}
     >
-      <ScrollArea style={{ flex: 1 }} p="xl" type="auto">
+      <ScrollArea style={{ flex: 1, minWidth: 0, minHeight: 0 }} p="xl" type="auto">
         {canEdit ? (
           <Group justify="space-between" align="center" mb="md" wrap="nowrap">
             <TextInput
@@ -1341,226 +1374,224 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones, 
         />
       </ScrollArea>
 
-      <div className={classes.modalFooter}>
-        {/* Metadata row */}
-        <Group gap="xl" mb="sm" align="flex-start" wrap="wrap">
-          {/* Priority */}
-          <Stack gap={4}>
-            <Text size="xs" c="dimmed" fw={500}>Priority</Text>
-            {canEdit ? (
-              <Select
-                size="xs"
-                placeholder="None"
-                clearable
-                value={card.priority ?? null}
-                onChange={handlePriorityChange}
-                data={PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
-                styles={{ input: { minWidth: 110 } }}
-                leftSection={
-                  card.priority
-                    ? <IconFlag size={12} style={{ color: priorityConfig(card.priority)?.color }} />
-                    : <IconFlag size={12} />
-                }
-              />
-            ) : (
-              <Text size="sm">{priorityConfig(card.priority)?.label ?? "None"}</Text>
-            )}
-          </Stack>
-
-          {/* Milestone */}
-          <Stack gap={4}>
-            <Group gap={4}>
-              <Text size="xs" c="dimmed" fw={500}>Milestone</Text>
-              {canEdit && (
-                <ActionIcon
+      <div className={classes.modalSidebar}>
+        <ScrollArea style={{ flex: 1, minHeight: 0 }} p="md" type="auto">
+          <Stack gap="md">
+            {/* Priority */}
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed" fw={500}>Priority</Text>
+              {canEdit ? (
+                <Select
                   size="xs"
-                  variant="subtle"
-                  title="Manage milestones"
-                  onClick={onOpenMilestones}
-                >
-                  <IconPencil size={10} />
-                </ActionIcon>
-              )}
-            </Group>
-            {canEdit ? (
-              <Select
-                size="xs"
-                placeholder="None"
-                clearable
-                value={card.milestone?.id ?? null}
-                onChange={handleMilestoneChange}
-                data={milestones.map((m) => ({
-                  value: m.id,
-                  label: `${m.name} · ${formatDueDate(m.dueDate)}`,
-                }))}
-                styles={{ input: { minWidth: 180 } }}
-                leftSection={
-                  card.milestone && getDueDateStatus(card.milestone.dueDate) !== 'upcoming'
-                    ? <IconAlertTriangle size={12} style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }} />
-                    : <IconTarget size={12} />
-                }
-              />
-            ) : (
-              card.milestone ? (
-                <Group gap={4} align="center" wrap="nowrap">
-                  <Text size="sm">{card.milestone.name}</Text>
-                  <Text
-                    size="sm"
-                    style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] ?? 'inherit' }}
-                  >
-                    · {formatDueDate(card.milestone.dueDate)}
-                  </Text>
-                  {getDueDateStatus(card.milestone.dueDate) !== 'upcoming' && (
-                    <IconAlertTriangle
-                      size={13}
-                      style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }}
-                    />
-                  )}
-                </Group>
+                  placeholder="None"
+                  clearable
+                  value={card.priority ?? null}
+                  onChange={handlePriorityChange}
+                  data={PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
+                  leftSection={
+                    card.priority
+                      ? <IconFlag size={12} style={{ color: priorityConfig(card.priority)?.color }} />
+                      : <IconFlag size={12} />
+                  }
+                />
               ) : (
-                <Text size="sm">None</Text>
-              )
-            )}
-          </Stack>
+                <Text size="sm">{priorityConfig(card.priority)?.label ?? "None"}</Text>
+              )}
+            </Stack>
 
-          {/* Categories */}
-          {categories.map((category) => {
-            const currentOptionId = card.categoryValues.find((v) => v.categoryId === category.id)?.optionId ?? null;
-            return (
-              <Stack gap={4} key={category.id}>
-                <Group gap={4}>
-                  <Text size="xs" c="dimmed" fw={500}>{category.name}</Text>
-                  {canEdit && (
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      title="Manage categories"
-                      onClick={onOpenCategories}
-                    >
-                      <IconPencil size={10} />
-                    </ActionIcon>
-                  )}
-                </Group>
-                {canEdit ? (
-                  <Select
+            {/* Milestone */}
+            <Stack gap={4}>
+              <Group gap={4}>
+                <Text size="xs" c="dimmed" fw={500}>Milestone</Text>
+                {canEdit && (
+                  <ActionIcon
                     size="xs"
-                    placeholder="None"
-                    clearable
-                    value={currentOptionId}
-                    onChange={(value) =>
-                      setCardCategory.mutate({ cardId: card.id, categoryId: category.id, optionId: value })
-                    }
-                    data={category.options.map((o) => ({ value: o.id, label: o.label }))}
-                    styles={{ input: { minWidth: 140 } }}
-                    leftSection={<CategoryIcon name={category.icon} size={12} />}
-                  />
-                ) : (
-                  <Text size="sm">
-                    {category.options.find((o) => o.id === currentOptionId)?.label ?? "None"}
-                  </Text>
+                    variant="subtle"
+                    title="Manage milestones"
+                    onClick={onOpenMilestones}
+                  >
+                    <IconPencil size={10} />
+                  </ActionIcon>
                 )}
-              </Stack>
-            );
-          })}
-
-          {/* Assignees */}
-          <Stack gap={4} style={{ flex: 1 }}>
-            <Group gap="xs">
-              <Text size="xs" c="dimmed" fw={500}>Assignees</Text>
-              {canEdit && (
-                <ActionIcon
+              </Group>
+              {canEdit ? (
+                <Select
                   size="xs"
-                  variant="subtle"
-                  onClick={() => setShowAssigneeSearch((v) => !v)}
-                  title="Manage assignees"
-                >
-                  <IconPlus size={12} />
-                </ActionIcon>
-              )}
-            </Group>
-            <Group gap="xs">
-              {card.assignees.length > 0 ? (
-                <Avatar.Group spacing="xs">
-                  {card.assignees.slice(0, 6).map((a) => (
-                    <Tooltip key={a.userId} label={a.name} withArrow>
-                      <Avatar
-                        src={getAvatarUrl(a.avatarUrl as string)}
-                        size={24}
-                        radius="xl"
-                        name={a.name}
-                        style={canEdit ? { cursor: "pointer" } : undefined}
-                        onClick={
-                          canEdit
-                            ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId })
-                            : undefined
-                        }
-                      />
-                    </Tooltip>
-                  ))}
-                </Avatar.Group>
+                  placeholder="None"
+                  clearable
+                  value={card.milestone?.id ?? null}
+                  onChange={handleMilestoneChange}
+                  data={milestones.map((m) => ({
+                    value: m.id,
+                    label: `${m.name} · ${formatDueDate(m.dueDate)}`,
+                  }))}
+                  leftSection={
+                    card.milestone && getDueDateStatus(card.milestone.dueDate) !== 'upcoming'
+                      ? <IconAlertTriangle size={12} style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }} />
+                      : <IconTarget size={12} />
+                  }
+                />
               ) : (
-                <Text size="sm" c="dimmed">None</Text>
-              )}
-            </Group>
-          </Stack>
-        </Group>
-
-        {canEdit && showAssigneeSearch && (
-          <div className={classes.assigneeSearch}>
-            <TextInput
-              placeholder="Search members…"
-              value={memberSearch}
-              onChange={(e) => setMemberSearch(e.currentTarget.value)}
-              size="xs"
-              mb={4}
-              autoFocus
-            />
-            <ScrollArea h={140}>
-              <Stack gap={2}>
-                {filteredMembers.map((m) => {
-                  const isAssigned = assignedIds.has(m.id);
-                  return (
-                    <Group
-                      key={m.id}
-                      gap="xs"
-                      className={clsx(classes.memberRow, isAssigned && classes.memberRowAssigned)}
-                      onClick={() =>
-                        isAssigned
-                          ? removeAssignee.mutate({ cardId: card.id, userId: m.id })
-                          : addAssignee.mutate({ cardId: card.id, userId: m.id })
-                      }
+                card.milestone ? (
+                  <Group gap={4} align="center" wrap="nowrap">
+                    <Text size="sm">{card.milestone.name}</Text>
+                    <Text
+                      size="sm"
+                      style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] ?? 'inherit' }}
                     >
-                      <Avatar src={getAvatarUrl(m.avatarUrl as string)} size={24} radius="xl" name={m.name} />
-                      <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
-                      {isAssigned && <IconCheck size={14} />}
-                    </Group>
-                  );
-                })}
-              </Stack>
-            </ScrollArea>
-          </div>
-        )}
+                      · {formatDueDate(card.milestone.dueDate)}
+                    </Text>
+                    {getDueDateStatus(card.milestone.dueDate) !== 'upcoming' && (
+                      <IconAlertTriangle
+                        size={13}
+                        style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }}
+                      />
+                    )}
+                  </Group>
+                ) : (
+                  <Text size="sm">None</Text>
+                )
+              )}
+            </Stack>
 
-        <Divider my="sm" />
+            {/* Categories */}
+            {categories.map((category) => {
+              const currentOptionId = card.categoryValues.find((v) => v.categoryId === category.id)?.optionId ?? null;
+              return (
+                <Stack gap={4} key={category.id}>
+                  <Group gap={4}>
+                    <Text size="xs" c="dimmed" fw={500}>{category.name}</Text>
+                    {canEdit && (
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        title="Manage categories"
+                        onClick={onOpenCategories}
+                      >
+                        <IconPencil size={10} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                  {canEdit ? (
+                    <Select
+                      size="xs"
+                      placeholder="None"
+                      clearable
+                      value={currentOptionId}
+                      onChange={(value) =>
+                        setCardCategory.mutate({ cardId: card.id, categoryId: category.id, optionId: value })
+                      }
+                      data={category.options.map((o) => ({ value: o.id, label: o.label }))}
+                      leftSection={<CategoryIcon name={category.icon} size={12} />}
+                    />
+                  ) : (
+                    <Text size="sm">
+                      {category.options.find((o) => o.id === currentOptionId)?.label ?? "None"}
+                    </Text>
+                  )}
+                </Stack>
+              );
+            })}
 
-        {canEdit ? (
-          <Group justify="space-between">
-            <Button
-              variant="subtle"
-              color="red"
-              leftSection={<IconTrash size={14} />}
-              onClick={handleDelete}
-              size="xs"
-            >
-              Delete card
-            </Button>
-            <Button variant="default" size="xs" onClick={onClose}>Close</Button>
-          </Group>
-        ) : (
-          <Group justify="flex-end">
-            <Button variant="default" size="xs" onClick={onClose}>Close</Button>
-          </Group>
-        )}
+            {/* Assignees */}
+            <Stack gap={4}>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed" fw={500}>Assignees</Text>
+                {canEdit && (
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    onClick={() => setShowAssigneeSearch((v) => !v)}
+                    title="Manage assignees"
+                  >
+                    <IconPlus size={12} />
+                  </ActionIcon>
+                )}
+              </Group>
+              <Group gap="xs">
+                {card.assignees.length > 0 ? (
+                  <Avatar.Group spacing="xs">
+                    {card.assignees.slice(0, 6).map((a) => (
+                      <Tooltip key={a.userId} label={a.name} withArrow>
+                        <Avatar
+                          src={getAvatarUrl(a.avatarUrl as string)}
+                          size={24}
+                          radius="xl"
+                          name={a.name}
+                          style={canEdit ? { cursor: "pointer" } : undefined}
+                          onClick={
+                            canEdit
+                              ? () => removeAssignee.mutate({ cardId: card.id, userId: a.userId })
+                              : undefined
+                          }
+                        />
+                      </Tooltip>
+                    ))}
+                  </Avatar.Group>
+                ) : (
+                  <Text size="sm" c="dimmed">None</Text>
+                )}
+              </Group>
+
+              {canEdit && showAssigneeSearch && (
+                <div className={classes.assigneeSearch}>
+                  <TextInput
+                    placeholder="Search members…"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.currentTarget.value)}
+                    size="xs"
+                    mb={4}
+                    autoFocus
+                  />
+                  <ScrollArea h={140}>
+                    <Stack gap={2}>
+                      {filteredMembers.map((m) => {
+                        const isAssigned = assignedIds.has(m.id);
+                        return (
+                          <Group
+                            key={m.id}
+                            gap="xs"
+                            className={clsx(classes.memberRow, isAssigned && classes.memberRowAssigned)}
+                            onClick={() =>
+                              isAssigned
+                                ? removeAssignee.mutate({ cardId: card.id, userId: m.id })
+                                : addAssignee.mutate({ cardId: card.id, userId: m.id })
+                            }
+                          >
+                            <Avatar src={getAvatarUrl(m.avatarUrl as string)} size={24} radius="xl" name={m.name} />
+                            <Text size="sm" style={{ flex: 1 }}>{m.name}</Text>
+                            {isAssigned && <IconCheck size={14} />}
+                          </Group>
+                        );
+                      })}
+                    </Stack>
+                  </ScrollArea>
+                </div>
+              )}
+            </Stack>
+          </Stack>
+        </ScrollArea>
+
+        <div className={classes.modalSidebarFooter}>
+          {canEdit ? (
+            <Group justify="space-between">
+              <Button
+                variant="subtle"
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                onClick={handleDelete}
+                size="xs"
+              >
+                Delete
+              </Button>
+              <Button variant="default" size="xs" onClick={onClose}>Close</Button>
+            </Group>
+          ) : (
+            <Group justify="flex-end">
+              <Button variant="default" size="xs" onClick={onClose}>Close</Button>
+            </Group>
+          )}
+        </div>
       </div>
     </Modal>
   );
