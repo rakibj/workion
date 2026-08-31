@@ -25,15 +25,31 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconAlarm,
   IconAlertTriangle,
+  IconBolt,
+  IconBookmark,
+  IconBug,
+  IconCalendarEvent,
   IconCheck,
+  IconCircleCheck,
+  IconCircleDot,
+  IconClipboardList,
+  IconCode,
   IconDotsVertical,
   IconFlag,
+  IconHash,
+  IconPalette,
   IconPencil,
   IconPlus,
+  IconRocket,
+  IconShieldCheck,
+  IconStar,
+  IconTag,
   IconTarget,
   IconTrash,
   IconUser,
+  IconUsers,
 } from "@tabler/icons-react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -51,6 +67,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type {
   IKanbanCard,
+  IKanbanCategory,
   IKanbanColumn,
   IKanbanMilestone,
   KanbanColor,
@@ -59,10 +76,15 @@ import type {
 import CardDescriptionEditor, { getDescriptionPlainText } from "./card-description-editor";
 import {
   useAddAssigneeMutation,
+  useCategoriesQuery,
   useCreateCardMutation,
+  useCreateCategoryMutation,
+  useCreateCategoryOptionMutation,
   useCreateColumnMutation,
   useCreateMilestoneMutation,
   useDeleteCardMutation,
+  useDeleteCategoryMutation,
+  useDeleteCategoryOptionMutation,
   useDeleteColumnMutation,
   useDeleteMilestoneMutation,
   useKanbanAssignableMembersQuery,
@@ -71,7 +93,10 @@ import {
   useMoveCardMutation,
   useMoveColumnMutation,
   useRemoveAssigneeMutation,
+  useSetCardCategoryMutation,
   useUpdateCardMutation,
+  useUpdateCategoryMutation,
+  useUpdateCategoryOptionMutation,
   useUpdateColumnMutation,
   useUpdateMilestoneMutation,
 } from "../queries/kanban-query";
@@ -112,6 +137,91 @@ const PRIORITIES: { value: KanbanPriority; label: string; color: string }[] = [
 
 function priorityConfig(p: KanbanPriority | null) {
   return PRIORITIES.find((x) => x.value === p) ?? null;
+}
+
+// Kept in sync with CATEGORY_ICONS on the server (kanban.dto.ts).
+const CATEGORY_ICON_MAP: Record<string, typeof IconFlag> = {
+  IconTag,
+  IconBookmark,
+  IconStar,
+  IconBolt,
+  IconBug,
+  IconClipboardList,
+  IconUsers,
+  IconCalendarEvent,
+  IconAlarm,
+  IconCircleCheck,
+  IconCircleDot,
+  IconHash,
+  IconRocket,
+  IconPalette,
+  IconCode,
+  IconShieldCheck,
+};
+const CATEGORY_ICON_NAMES = Object.keys(CATEGORY_ICON_MAP);
+
+function CategoryIcon({ name, size = 12 }: { name: string; size?: number }) {
+  const Cmp = CATEGORY_ICON_MAP[name] ?? IconTag;
+  return <Cmp size={size} />;
+}
+
+function IconPickerGrid({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
+  return (
+    <Group gap={6} justify="center" style={{ maxWidth: 168 }}>
+      {CATEGORY_ICON_NAMES.map((name) => (
+        <Box
+          key={name}
+          className={clsx(classes.iconSwatch, value === name && classes.iconSwatchActive)}
+          onClick={() => onChange(name)}
+          role="button"
+          tabIndex={0}
+        >
+          <CategoryIcon name={name} size={15} />
+        </Box>
+      ))}
+    </Group>
+  );
+}
+
+function ColorSwatchPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: KanbanColor;
+  onChange: (color: KanbanColor) => void;
+  disabled?: boolean;
+}) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <Popover opened={opened} onChange={setOpened} width={140} withArrow shadow="sm">
+      <Popover.Target>
+        <Box
+          className={classes.colorSwatch}
+          style={{ backgroundColor: colorCss(value), width: 14, height: 14 }}
+          onClick={() => !disabled && setOpened((v) => !v)}
+          role={disabled ? undefined : "button"}
+          tabIndex={disabled ? -1 : 0}
+        />
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Group gap={6} justify="center">
+          {COLORS.map(({ name, css }) => (
+            <Box
+              key={name}
+              className={clsx(classes.colorSwatch, value === name && classes.colorSwatchActive)}
+              style={{ backgroundColor: css }}
+              onClick={() => { onChange(name); setOpened(false); }}
+              role="button"
+              tabIndex={0}
+            >
+              {value === name && <IconCheck size={11} />}
+            </Box>
+          ))}
+        </Group>
+      </Popover.Dropdown>
+    </Popover>
+  );
 }
 
 function formatDueDate(dateStr: string): string {
@@ -345,6 +455,283 @@ function MilestoneManagementModal({
   );
 }
 
+// ─── Category management modal ─────────────────────────────────────────────
+
+interface CategoryManagementModalProps {
+  opened: boolean;
+  onClose: () => void;
+  pageId: string;
+  canEdit: boolean;
+}
+
+function CategoryManagementModal({ opened, onClose, pageId, canEdit }: CategoryManagementModalProps) {
+  const { data: categories = [] } = useCategoriesQuery(pageId);
+  const createCategory = useCreateCategoryMutation(pageId);
+  const updateCategory = useUpdateCategoryMutation(pageId);
+  const deleteCategory = useDeleteCategoryMutation(pageId);
+  const createOption = useCreateCategoryOptionMutation(pageId);
+  const updateOption = useUpdateCategoryOptionMutation(pageId);
+  const deleteOption = useDeleteCategoryOptionMutation(pageId);
+
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState(CATEGORY_ICON_NAMES[0]);
+  const [iconPickerOpenFor, setIconPickerOpenFor] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [newOptionLabel, setNewOptionLabel] = useState<Record<string, string>>({});
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
+  const [editOptionLabel, setEditOptionLabel] = useState("");
+
+  const handleCreateCategory = () => {
+    if (!newCategoryName.trim()) return;
+    createCategory.mutate(
+      { pageId, name: newCategoryName.trim(), icon: newCategoryIcon },
+      {
+        onSuccess: () => {
+          setNewCategoryName("");
+          setNewCategoryIcon(CATEGORY_ICON_NAMES[0]);
+        },
+      },
+    );
+  };
+
+  const startEditCategory = (category: IKanbanCategory) => {
+    setEditingCategoryId(category.id);
+    setEditCategoryName(category.name);
+  };
+
+  const commitEditCategory = () => {
+    if (!editingCategoryId || !editCategoryName.trim()) {
+      setEditingCategoryId(null);
+      return;
+    }
+    updateCategory.mutate({ categoryId: editingCategoryId, name: editCategoryName.trim() });
+    setEditingCategoryId(null);
+  };
+
+  const handleAddOption = (categoryId: string) => {
+    const label = (newOptionLabel[categoryId] ?? "").trim();
+    if (!label) return;
+    createOption.mutate(
+      { categoryId, label },
+      { onSuccess: () => setNewOptionLabel((prev) => ({ ...prev, [categoryId]: "" })) },
+    );
+  };
+
+  const startEditOption = (option: { id: string; label: string }) => {
+    setEditingOptionId(option.id);
+    setEditOptionLabel(option.label);
+  };
+
+  const commitEditOption = () => {
+    if (!editingOptionId || !editOptionLabel.trim()) {
+      setEditingOptionId(null);
+      return;
+    }
+    updateOption.mutate({ optionId: editingOptionId, label: editOptionLabel.trim() });
+    setEditingOptionId(null);
+  };
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Categories" size="560px">
+      <Stack gap="lg">
+        {categories.length === 0 && (
+          <Text size="sm" c="dimmed" ta="center" py="sm">No categories yet.</Text>
+        )}
+        {categories.map((category) => (
+          <div key={category.id}>
+            <Group gap="xs" wrap="nowrap">
+              <Popover
+                opened={iconPickerOpenFor === category.id}
+                onChange={(v) => setIconPickerOpenFor(v ? category.id : null)}
+                width={200}
+                withArrow
+                shadow="sm"
+              >
+                <Popover.Target>
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => canEdit && setIconPickerOpenFor(category.id)}
+                  >
+                    <CategoryIcon name={category.icon} size={16} />
+                  </ActionIcon>
+                </Popover.Target>
+                <Popover.Dropdown>
+                  <IconPickerGrid
+                    value={category.icon}
+                    onChange={(icon) => {
+                      updateCategory.mutate({ categoryId: category.id, icon });
+                      setIconPickerOpenFor(null);
+                    }}
+                  />
+                </Popover.Dropdown>
+              </Popover>
+
+              {editingCategoryId === category.id ? (
+                <TextInput
+                  value={editCategoryName}
+                  onChange={(e) => setEditCategoryName(e.currentTarget.value)}
+                  onBlur={commitEditCategory}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitEditCategory();
+                    if (e.key === "Escape") setEditingCategoryId(null);
+                  }}
+                  size="xs"
+                  style={{ flex: 1 }}
+                  autoFocus
+                />
+              ) : (
+                <Text
+                  size="sm"
+                  fw={600}
+                  style={{ flex: 1, cursor: canEdit ? "pointer" : undefined }}
+                  onClick={() => canEdit && startEditCategory(category)}
+                >
+                  {category.name}
+                </Text>
+              )}
+
+              {canEdit && (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  color="red"
+                  onClick={() => deleteCategory.mutate(category.id)}
+                  loading={deleteCategory.isPending}
+                >
+                  <IconTrash size={12} />
+                </ActionIcon>
+              )}
+            </Group>
+
+            <Stack gap={4} mt={6} ml={30}>
+              {category.options.length === 0 && (
+                <Text size="xs" c="dimmed">No options yet.</Text>
+              )}
+              {category.options.map((option) => (
+                <Group key={option.id} gap="xs" wrap="nowrap">
+                  <ColorSwatchPicker
+                    value={option.color}
+                    onChange={(color) => updateOption.mutate({ optionId: option.id, color })}
+                    disabled={!canEdit}
+                  />
+                  {editingOptionId === option.id ? (
+                    <TextInput
+                      value={editOptionLabel}
+                      onChange={(e) => setEditOptionLabel(e.currentTarget.value)}
+                      onBlur={commitEditOption}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEditOption();
+                        if (e.key === "Escape") setEditingOptionId(null);
+                      }}
+                      size="xs"
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                  ) : (
+                    <Text
+                      size="xs"
+                      style={{ flex: 1, cursor: canEdit ? "pointer" : undefined }}
+                      onClick={() => canEdit && startEditOption(option)}
+                    >
+                      {option.label}
+                    </Text>
+                  )}
+                  {canEdit && (
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() => deleteOption.mutate({ optionId: option.id, categoryId: category.id })}
+                    >
+                      <IconTrash size={11} />
+                    </ActionIcon>
+                  )}
+                </Group>
+              ))}
+
+              {canEdit && (
+                <Group gap="xs" wrap="nowrap">
+                  <TextInput
+                    value={newOptionLabel[category.id] ?? ""}
+                    onChange={(e) => {
+                      const value = e.currentTarget.value;
+                      setNewOptionLabel((prev) => ({ ...prev, [category.id]: value }));
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddOption(category.id); }}
+                    placeholder="Add option…"
+                    size="xs"
+                    style={{ flex: 1 }}
+                  />
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    onClick={() => handleAddOption(category.id)}
+                    disabled={!(newOptionLabel[category.id] ?? "").trim()}
+                  >
+                    <IconPlus size={14} />
+                  </ActionIcon>
+                </Group>
+              )}
+            </Stack>
+          </div>
+        ))}
+
+        {canEdit && (
+          <>
+            <Divider />
+            <Group gap="xs" align="flex-end">
+              <Popover
+                opened={iconPickerOpenFor === "__new__"}
+                onChange={(v) => setIconPickerOpenFor(v ? "__new__" : null)}
+                width={200}
+                withArrow
+                shadow="sm"
+              >
+                <Popover.Target>
+                  <ActionIcon
+                    variant="default"
+                    size="lg"
+                    onClick={() => setIconPickerOpenFor("__new__")}
+                  >
+                    <CategoryIcon name={newCategoryIcon} size={16} />
+                  </ActionIcon>
+                </Popover.Target>
+                <Popover.Dropdown>
+                  <IconPickerGrid
+                    value={newCategoryIcon}
+                    onChange={(icon) => {
+                      setNewCategoryIcon(icon);
+                      setIconPickerOpenFor(null);
+                    }}
+                  />
+                </Popover.Dropdown>
+              </Popover>
+              <TextInput
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.currentTarget.value)}
+                placeholder="Category name"
+                size="xs"
+                style={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateCategory(); }}
+              />
+              <Button
+                size="xs"
+                onClick={handleCreateCategory}
+                loading={createCategory.isPending}
+                disabled={!newCategoryName.trim()}
+              >
+                Add category
+              </Button>
+            </Group>
+          </>
+        )}
+      </Stack>
+    </Modal>
+  );
+}
+
 // ─── Inline milestone picker (on card) ───────────────────────────────────────
 
 interface MilestonePickerProps {
@@ -373,7 +760,7 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
       <Menu.Target>
         <button
           className={clsx(
-            classes.milestoneBadge,
+            current ? classes.milestoneBadge : classes.badgeIconOnly,
             current && (status === 'overdue'
               ? classes.milestoneBadgeOverdue
               : status === 'today'
@@ -384,9 +771,9 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
           title={current ? `${current.name} · ${formatDueDate(current.dueDate)}` : "Set milestone"}
         >
           {status === 'overdue' || status === 'today'
-            ? <IconAlertTriangle size={10} />
-            : <IconTarget size={10} />}
-          {current ? current.name : "Milestone"}
+            ? <IconAlertTriangle size={current ? 10 : 12} />
+            : <IconTarget size={current ? 10 : 12} />}
+          {current && current.name}
         </button>
       </Menu.Target>
       <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
@@ -433,6 +820,72 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
   );
 }
 
+// ─── Inline category picker (on card) ────────────────────────────────────────
+
+interface CategoryPickerProps {
+  card: IKanbanCard;
+  category: IKanbanCategory;
+  pageId: string;
+  canEdit: boolean;
+  onManage: () => void;
+}
+
+function CategoryPicker({ card, category, pageId, canEdit, onManage }: CategoryPickerProps) {
+  const setCardCategory = useSetCardCategoryMutation(pageId);
+
+  const currentOptionId = card.categoryValues.find((v) => v.categoryId === category.id)?.optionId ?? null;
+  const currentOption = category.options.find((o) => o.id === currentOptionId) ?? null;
+
+  if (!canEdit && !currentOption) return null;
+
+  const handleSelect = (optionId: string | null) => {
+    setCardCategory.mutate({ cardId: card.id, categoryId: category.id, optionId });
+  };
+
+  return (
+    <Menu shadow="md" width={180} position="bottom-start" withinPortal>
+      <Menu.Target>
+        <button
+          className={clsx(currentOption ? classes.categoryBadge : classes.badgeIconOnly)}
+          onClick={(e) => e.stopPropagation()}
+          title={currentOption ? undefined : `Set ${category.name}`}
+          style={currentOption ? { color: colorCss(currentOption.color), borderColor: colorCss(currentOption.color) } : undefined}
+        >
+          <CategoryIcon name={category.icon} size={currentOption ? 10 : 12} />
+          {currentOption && currentOption.label}
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+        {category.options.length === 0 && (
+          <Menu.Item disabled>No options yet</Menu.Item>
+        )}
+        {category.options.map((o) => (
+          <Menu.Item
+            key={o.id}
+            leftSection={<Box w={10} h={10} style={{ borderRadius: 999, backgroundColor: colorCss(o.color) }} />}
+            rightSection={currentOptionId === o.id ? <IconCheck size={12} /> : null}
+            onClick={() => handleSelect(currentOptionId === o.id ? null : o.id)}
+          >
+            {o.label}
+          </Menu.Item>
+        ))}
+        {currentOption && (
+          <>
+            <Menu.Divider />
+            <Menu.Item color="dimmed" onClick={() => handleSelect(null)}>
+              Clear
+            </Menu.Item>
+          </>
+        )}
+        <Menu.Divider />
+        <Menu.Item leftSection={<IconPlus size={12} />} onClick={() => onManage()}>
+          Manage categories
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 // ─── Inline priority picker ───────────────────────────────────────────────────
 
 interface PriorityPickerProps {
@@ -456,13 +909,16 @@ function PriorityPicker({ priority, cardId, pageId, canEdit }: PriorityPickerPro
     <Menu shadow="md" width={130} position="bottom-start" withinPortal>
       <Menu.Target>
         <button
-          className={clsx(classes.priorityBadge, cfg && classes[`priority_${cfg.value}`])}
+          className={clsx(
+            cfg ? classes.priorityBadge : classes.badgeIconOnly,
+            cfg && classes[`priority_${cfg.value}`],
+          )}
           onClick={(e) => e.stopPropagation()}
-          title="Set priority"
+          title={cfg ? undefined : "Set priority"}
           style={cfg ? { color: cfg.color, borderColor: cfg.color } : undefined}
         >
-          <IconFlag size={10} />
-          {cfg ? cfg.label : "Priority"}
+          <IconFlag size={cfg ? 10 : 12} />
+          {cfg && cfg.label}
         </button>
       </Menu.Target>
       <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
@@ -592,6 +1048,7 @@ interface KanbanCardProps {
   canEdit: boolean;
   onOpenCard: (card: IKanbanCard) => void;
   onOpenMilestones: () => void;
+  onOpenCategories: () => void;
 }
 
 function KanbanCardItem({
@@ -602,7 +1059,9 @@ function KanbanCardItem({
   canEdit,
   onOpenCard,
   onOpenMilestones,
+  onOpenCategories,
 }: KanbanCardProps) {
+  const { data: categories = [] } = useCategoriesQuery(pageId);
   const ref = useRef<HTMLDivElement>(null);
   const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -681,6 +1140,16 @@ function KanbanCardItem({
             canEdit={canEdit}
             onManage={onOpenMilestones}
           />
+          {categories.map((category) => (
+            <CategoryPicker
+              key={category.id}
+              card={card}
+              category={category}
+              pageId={pageId}
+              canEdit={canEdit}
+              onManage={onOpenCategories}
+            />
+          ))}
           <div style={{ marginLeft: "auto" }}>
             <InlineAssigneePicker
               card={card}
@@ -719,9 +1188,10 @@ interface CardModalProps {
   canEdit: boolean;
   onClose: () => void;
   onOpenMilestones: () => void;
+  onOpenCategories: () => void;
 }
 
-function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }: CardModalProps) {
+function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones, onOpenCategories }: CardModalProps) {
   const [title, setTitle] = useState(card?.title ?? "");
   const [desc, setDesc] = useState(card?.description ?? "");
   const [memberSearch, setMemberSearch] = useState("");
@@ -732,7 +1202,9 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
   const deleteCard = useDeleteCardMutation(pageId);
   const addAssignee = useAddAssigneeMutation(pageId);
   const removeAssignee = useRemoveAssigneeMutation(pageId);
+  const setCardCategory = useSetCardCategoryMutation(pageId);
   const { data: milestones = [] } = useMilestonesQuery(pageId);
+  const { data: categories = [] } = useCategoriesQuery(pageId);
 
   const { data: members = [] } = useKanbanAssignableMembersQuery(pageId);
 
@@ -951,6 +1423,46 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones }
             )}
           </Stack>
 
+          {/* Categories */}
+          {categories.map((category) => {
+            const currentOptionId = card.categoryValues.find((v) => v.categoryId === category.id)?.optionId ?? null;
+            return (
+              <Stack gap={4} key={category.id}>
+                <Group gap={4}>
+                  <Text size="xs" c="dimmed" fw={500}>{category.name}</Text>
+                  {canEdit && (
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      title="Manage categories"
+                      onClick={onOpenCategories}
+                    >
+                      <IconPencil size={10} />
+                    </ActionIcon>
+                  )}
+                </Group>
+                {canEdit ? (
+                  <Select
+                    size="xs"
+                    placeholder="None"
+                    clearable
+                    value={currentOptionId}
+                    onChange={(value) =>
+                      setCardCategory.mutate({ cardId: card.id, categoryId: category.id, optionId: value })
+                    }
+                    data={category.options.map((o) => ({ value: o.id, label: o.label }))}
+                    styles={{ input: { minWidth: 140 } }}
+                    leftSection={<CategoryIcon name={category.icon} size={12} />}
+                  />
+                ) : (
+                  <Text size="sm">
+                    {category.options.find((o) => o.id === currentOptionId)?.label ?? "None"}
+                  </Text>
+                )}
+              </Stack>
+            );
+          })}
+
           {/* Assignees */}
           <Stack gap={4} style={{ flex: 1 }}>
             <Group gap="xs">
@@ -1064,6 +1576,7 @@ interface KanbanColumnProps {
   canEdit: boolean;
   onOpenCard: (card: IKanbanCard) => void;
   onOpenMilestones: () => void;
+  onOpenCategories: () => void;
   onCardDrop: (args: {
     cardId: string;
     fromColumnId: string;
@@ -1086,6 +1599,7 @@ function KanbanColumnItem({
   canEdit,
   onOpenCard,
   onOpenMilestones,
+  onOpenCategories,
   onCardDrop,
   onColumnDrop,
 }: KanbanColumnProps) {
@@ -1312,6 +1826,7 @@ function KanbanColumnItem({
               canEdit={canEdit}
               onOpenCard={onOpenCard}
               onOpenMilestones={onOpenMilestones}
+              onOpenCategories={onOpenCategories}
             />
           ))}
 
@@ -1417,6 +1932,7 @@ export default function KanbanBoardPage({
   const { data: columns, isLoading } = useKanbanBoardQuery(pageId);
   const [openCard, setOpenCard] = useState<IKanbanCard | null>(null);
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   const moveCard = useMoveCardMutation(pageId);
   const moveColumn = useMoveColumnMutation(pageId);
@@ -1656,6 +2172,16 @@ export default function KanbanBoardPage({
         >
           Milestones
         </Button>
+
+        <Button
+          variant="subtle"
+          size="xs"
+          leftSection={<IconTag size={14} />}
+          onClick={() => setCategoryModalOpen(true)}
+          className={classes.milestonesBtn}
+        >
+          Categories
+        </Button>
       </div>
 
       <div className={classes.board} ref={boardRef} onPointerMove={handleBoardPointerMove}>
@@ -1670,6 +2196,7 @@ export default function KanbanBoardPage({
             canEdit={canEdit}
             onOpenCard={setOpenCard}
             onOpenMilestones={() => setMilestoneModalOpen(true)}
+            onOpenCategories={() => setCategoryModalOpen(true)}
             onCardDrop={handleCardDrop}
             onColumnDrop={handleColumnDrop}
           />
@@ -1712,6 +2239,14 @@ export default function KanbanBoardPage({
         canEdit={canEdit}
         onClose={() => setOpenCard(null)}
         onOpenMilestones={() => setMilestoneModalOpen(true)}
+        onOpenCategories={() => setCategoryModalOpen(true)}
+      />
+
+      <CategoryManagementModal
+        opened={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        pageId={pageId}
+        canEdit={canEdit}
       />
 
       <MilestoneManagementModal

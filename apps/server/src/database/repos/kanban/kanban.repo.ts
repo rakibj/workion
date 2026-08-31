@@ -13,11 +13,25 @@ import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import {
   InsertableKanbanMilestone,
   KanbanMilestone,
+  InsertableKanbanCategory,
+  KanbanCategory,
+  InsertableKanbanCategoryOption,
+  KanbanCategoryOption,
 } from '../../types/entity.types';
+
+export interface KanbanCardCategoryValueView {
+  categoryId: string;
+  optionId: string;
+}
 
 export interface KanbanCardWithAssignees extends KanbanCard {
   assignees: { userId: string; name: string; avatarUrl: string | null }[];
   milestone: { id: string; name: string; dueDate: string } | null;
+  categoryValues: KanbanCardCategoryValueView[];
+}
+
+export interface KanbanCategoryWithOptions extends KanbanCategory {
+  options: Pick<KanbanCategoryOption, 'id' | 'categoryId' | 'label' | 'color' | 'position'>[];
 }
 
 export interface KanbanColumnWithCards extends KanbanColumn {
@@ -67,6 +81,12 @@ export class KanbanRepo {
             .select(['id', 'name', 'dueDate'])
             .whereRef('kanbanMilestones.id', '=', 'kanbanCards.milestoneId'),
         ).as('milestone'),
+        jsonArrayFrom(
+          eb
+            .selectFrom('kanbanCardCategoryValues')
+            .select(['kanbanCardCategoryValues.categoryId', 'kanbanCardCategoryValues.optionId'])
+            .whereRef('kanbanCardCategoryValues.cardId', '=', 'kanbanCards.id'),
+        ).as('categoryValues'),
       ])
       .where('columnId', 'in', columnIds)
       .orderBy('position', 'asc')
@@ -318,6 +338,149 @@ export class KanbanRepo {
     await this.db
       .deleteFrom('kanbanMilestones')
       .where('id', '=', id)
+      .execute();
+  }
+
+  // ─── Categories ───────────────────────────────────────────────────────────
+
+  async findCategoryById(id: string): Promise<KanbanCategory | undefined> {
+    return this.db
+      .selectFrom('kanbanCategories')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+  }
+
+  async getCategoriesByPageId(
+    pageId: string,
+  ): Promise<KanbanCategoryWithOptions[]> {
+    return this.db
+      .selectFrom('kanbanCategories')
+      .selectAll()
+      .select((eb) => [
+        jsonArrayFrom(
+          eb
+            .selectFrom('kanbanCategoryOptions')
+            .select(['id', 'categoryId', 'label', 'color', 'position'])
+            .whereRef('kanbanCategoryOptions.categoryId', '=', 'kanbanCategories.id')
+            .orderBy('kanbanCategoryOptions.position', 'asc'),
+        ).as('options'),
+      ])
+      .where('pageId', '=', pageId)
+      .orderBy('position', 'asc')
+      .execute();
+  }
+
+  async createCategory(
+    data: InsertableKanbanCategory,
+  ): Promise<KanbanCategory> {
+    return this.db
+      .insertInto('kanbanCategories')
+      .values(data)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async updateCategory(
+    id: string,
+    data: Partial<Pick<KanbanCategory, 'name' | 'icon' | 'position'>>,
+  ): Promise<KanbanCategory> {
+    return this.db
+      .updateTable('kanbanCategories')
+      .set({ ...data, updatedAt: new Date() })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    await this.db
+      .deleteFrom('kanbanCategories')
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async getMaxCategoryPosition(pageId: string): Promise<number> {
+    const result = await this.db
+      .selectFrom('kanbanCategories')
+      .select((eb) => eb.fn.max('position').as('maxPos'))
+      .where('pageId', '=', pageId)
+      .executeTakeFirst();
+    return (result?.maxPos as number) ?? 0;
+  }
+
+  // ─── Category options ───────────────────────────────────────────────────────
+
+  async findCategoryOptionById(
+    id: string,
+  ): Promise<KanbanCategoryOption | undefined> {
+    return this.db
+      .selectFrom('kanbanCategoryOptions')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+  }
+
+  async createCategoryOption(
+    data: InsertableKanbanCategoryOption,
+  ): Promise<KanbanCategoryOption> {
+    return this.db
+      .insertInto('kanbanCategoryOptions')
+      .values(data)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async updateCategoryOption(
+    id: string,
+    data: Partial<Pick<KanbanCategoryOption, 'label' | 'color' | 'position'>>,
+  ): Promise<KanbanCategoryOption> {
+    return this.db
+      .updateTable('kanbanCategoryOptions')
+      .set({ ...data, updatedAt: new Date() })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async deleteCategoryOption(id: string): Promise<void> {
+    await this.db
+      .deleteFrom('kanbanCategoryOptions')
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async getMaxCategoryOptionPosition(categoryId: string): Promise<number> {
+    const result = await this.db
+      .selectFrom('kanbanCategoryOptions')
+      .select((eb) => eb.fn.max('position').as('maxPos'))
+      .where('categoryId', '=', categoryId)
+      .executeTakeFirst();
+    return (result?.maxPos as number) ?? 0;
+  }
+
+  // ─── Card category values ───────────────────────────────────────────────────
+
+  async setCardCategoryValue(
+    cardId: string,
+    categoryId: string,
+    optionId: string | null,
+  ): Promise<void> {
+    if (optionId === null) {
+      await this.db
+        .deleteFrom('kanbanCardCategoryValues')
+        .where('cardId', '=', cardId)
+        .where('categoryId', '=', categoryId)
+        .execute();
+      return;
+    }
+
+    await this.db
+      .insertInto('kanbanCardCategoryValues')
+      .values({ cardId, categoryId, optionId })
+      .onConflict((oc) =>
+        oc.columns(['cardId', 'categoryId']).doUpdateSet({ optionId }),
+      )
       .execute();
   }
 }

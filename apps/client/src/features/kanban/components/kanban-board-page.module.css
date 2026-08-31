@@ -345,6 +345,34 @@
   outline-offset: 2px;
 }
 
+/* ── Icon swatches (category icon picker) ── */
+
+.iconSwatch {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px solid var(--mantine-color-default-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mantine-color-text);
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.iconSwatch:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.iconSwatchActive {
+  border-color: var(--mantine-color-blue-5);
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 20%, transparent)
+  );
+  color: var(--mantine-color-blue-6);
+}
+
 /* ── Member picker ── */
 
 .memberRow {
@@ -433,6 +461,28 @@
   );
 }
 
+/* ── Shared icon-only badge (unset priority/milestone/category) ── */
+
+.badgeIconOnly {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--mantine-color-dimmed);
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.badgeIconOnly:hover {
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-text);
+}
+
 /* ── Milestone management modal rows ── */
 
 .milestoneRow {
@@ -498,6 +548,32 @@
 .priority_high   { color: var(--mantine-color-orange-6); border-color: var(--mantine-color-orange-3); background: light-dark(var(--mantine-color-orange-0), color-mix(in srgb, var(--mantine-color-orange-9) 20%, transparent)); }
 .priority_medium { color: var(--mantine-color-yellow-7); border-color: var(--mantine-color-yellow-4); background: light-dark(var(--mantine-color-yellow-0), color-mix(in srgb, var(--mantine-color-yellow-9) 20%, transparent)); }
 .priority_low    { color: var(--mantine-color-blue-6); border-color: var(--mantine-color-blue-3); background: light-dark(var(--mantine-color-blue-0), color-mix(in srgb, var(--mantine-color-blue-9) 20%, transparent)); }
+
+/* ── Category badge (inline on card) ── */
+
+.categoryBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--mantine-color-default-border);
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--mantine-color-dimmed);
+  line-height: 1.5;
+  transition: background 0.1s, opacity 0.1s;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.categoryBadge:hover {
+  background: var(--mantine-color-default-hover);
+}
 
 /* ── Priority stripe (top of card) ── */
 

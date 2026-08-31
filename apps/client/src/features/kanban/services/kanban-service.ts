@@ -1,5 +1,11 @@
 import api from "@/lib/api-client";
-import type { IKanbanCard, IKanbanColumn, IKanbanMilestone } from "../types/kanban.types";
+import type {
+  IKanbanCard,
+  IKanbanCategory,
+  IKanbanCategoryOption,
+  IKanbanColumn,
+  IKanbanMilestone,
+} from "../types/kanban.types";
 
 export async function getBoard(pageId: string): Promise<IKanbanColumn[]> {
   const res = await api.post<IKanbanColumn[]>("/kanban/board", { pageId });
@@ -115,6 +121,72 @@ export async function updateMilestone(data: {
 
 export async function deleteMilestone(milestoneId: string): Promise<void> {
   await api.post("/kanban/milestones/delete", { milestoneId });
+}
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+export async function listCategories(pageId: string): Promise<IKanbanCategory[]> {
+  const res = await api.post<IKanbanCategory[]>("/kanban/categories/list", { pageId });
+  return res.data;
+}
+
+export async function createCategory(data: {
+  pageId: string;
+  name: string;
+  icon: string;
+}): Promise<IKanbanCategory> {
+  const res = await api.post<IKanbanCategory>("/kanban/categories/create", data);
+  return res.data;
+}
+
+export async function updateCategory(data: {
+  categoryId: string;
+  name?: string;
+  icon?: string;
+}): Promise<IKanbanCategory> {
+  const res = await api.post<IKanbanCategory>("/kanban/categories/update", data);
+  return res.data;
+}
+
+export async function deleteCategory(categoryId: string): Promise<void> {
+  await api.post("/kanban/categories/delete", { categoryId });
+}
+
+export async function createCategoryOption(data: {
+  categoryId: string;
+  label: string;
+  color?: string;
+}): Promise<IKanbanCategoryOption> {
+  const res = await api.post<IKanbanCategoryOption>(
+    "/kanban/categories/options/create",
+    data,
+  );
+  return res.data;
+}
+
+export async function updateCategoryOption(data: {
+  optionId: string;
+  label?: string;
+  color?: string;
+  position?: number;
+}): Promise<IKanbanCategoryOption> {
+  const res = await api.post<IKanbanCategoryOption>(
+    "/kanban/categories/options/update",
+    data,
+  );
+  return res.data;
+}
+
+export async function deleteCategoryOption(optionId: string): Promise<void> {
+  await api.post("/kanban/categories/options/delete", { optionId });
+}
+
+export async function setCardCategory(data: {
+  cardId: string;
+  categoryId: string;
+  optionId: string | null;
+}): Promise<void> {
+  await api.post("/kanban/cards/category/set", data);
 }
 
 // ─── Assignable members ───────────────────────────────────────────────────────

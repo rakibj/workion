@@ -439,7 +439,9 @@ OpenRouter key stored per workspace in `workspace_ai_config` (encrypted). Backen
 
 ### Kanban Board Page
 
-`kanban` page type. Backend: `core/kanban/`, tables `kanban_tasks`/`kanban_columns`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` on `page-${pageId}` room, filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
+`kanban` page type. Backend: `core/kanban/`, tables `kanban_columns`/`kanban_cards`/`kanban_card_assignees`/`kanban_milestones`/`kanban_categories`/`kanban_category_options`/`kanban_card_category_values`. Frontend: `features/kanban/`, Atlaskit pragmatic DnD; assignees, due dates, priority, and page-level custom **Categories** (a category has a name + a preset icon and owns a list of colored options; a card picks at most one option per category — same single-select interaction model as Milestone, just user-definable per board). Priority/Milestone/Category badges on the card face render icon-only when unset and a colored pill with the label once a value is set. Realtime: WS events `kanbanCardMoved`/`kanbanColumnMoved` broadcast on the `space-${spaceId}` room (not a per-page room), filtered by `userId` to skip self. Milestone badge turns red (overdue) / amber (today).
+
+**Spec (source of truth):** `docs/specs/ongoing/KANBAN_CATEGORIES_AND_AI_TOOLS_SPEC.md` — Spec 1 (icon-only badges) and Spec 2 (custom Categories) are Done; Spec 3 (AI chat board actions — create/move/update card + set category via the chat panel's tool-calling) is pending.
 
 ### Entitlement / Edition Gating — Workspace Module Config
 
@@ -581,6 +583,7 @@ One spec, one feature at a time, per the methodology — do not batch client-lay
 
 - [docs/specs/ongoing/CLIENT_MEMBER_INVITES_SPEC.md](docs/specs/ongoing/CLIENT_MEMBER_INVITES_SPEC.md) — one-use Client member invites that grant commenter access across every Client-linked Space.
 - [docs/specs/ongoing/BILLING_BACKEND_SPEC.md](docs/specs/ongoing/BILLING_BACKEND_SPEC.md) — Lemon Squeezy checkout, signed webhooks, portal, `/pricing`, and transaction-safe tenant Space limits. Solo Founder is $9/month (first three payments $5 with `FOUNDER5`); Startup is $19/month (first three payments $9 with `STARTUP9`). Implementation is locally verified (2026-08-23); the only remaining gate is a configured Lemon test-mode smoke test on `workionlive`. Live selling remains blocked until Lemon Squeezy identity verification completes.
+- [docs/specs/ongoing/KANBAN_CATEGORIES_AND_AI_TOOLS_SPEC.md](docs/specs/ongoing/KANBAN_CATEGORIES_AND_AI_TOOLS_SPEC.md) — Kanban icon-only badges (Spec 1, Done) and custom Categories (Spec 2, Done); **Spec 3** (AI chat panel gets tool-calling to create/move/update Kanban cards and set categories — the first real use of the chat's already-built-but-unused tool-call plumbing) is not started.
 
 **Active spec:** [docs/specs/ongoing/BLOG_MASTER_SPEC.md](docs/specs/ongoing/BLOG_MASTER_SPEC.md) — Blog Publishing Platform. Specs 1–5 and 7–9 are Done; **Spec 6** (browser smoke test + real custom-domain/DNS/Caddy verification) is still "In progress" — the documented step-by-step procedure against a custom domain + basePath hasn't been formally run yet, even though the blog feature is in active use on the primary domain.
 

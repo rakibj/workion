@@ -43,6 +43,9 @@ import {
   KanbanCards,
   KanbanCardAssignees,
   KanbanMilestones,
+  KanbanCategories,
+  KanbanCategoryOptions,
+  KanbanCardCategoryValues,
   PageReads as _PageReads,
   Clients,
   ClientContacts,
@@ -134,6 +137,17 @@ export type KanbanCardAssignee = Selectable<KanbanCardAssignees>;
 export type KanbanMilestone = Selectable<KanbanMilestones>;
 export type InsertableKanbanMilestone = Insertable<KanbanMilestones>;
 export type UpdatableKanbanMilestone = Updateable<Omit<KanbanMilestones, 'id'>>;
+
+export type KanbanCategory = Selectable<KanbanCategories>;
+export type InsertableKanbanCategory = Insertable<KanbanCategories>;
+export type UpdatableKanbanCategory = Updateable<Omit<KanbanCategories, 'id'>>;
+
+export type KanbanCategoryOption = Selectable<KanbanCategoryOptions>;
+export type InsertableKanbanCategoryOption = Insertable<KanbanCategoryOptions>;
+export type UpdatableKanbanCategoryOption = Updateable<Omit<KanbanCategoryOptions, 'id'>>;
+
+export type KanbanCardCategoryValue = Selectable<KanbanCardCategoryValues>;
+export type InsertableKanbanCardCategoryValue = Insertable<KanbanCardCategoryValues>;
 
 // PageReads
 export type PageRead = Selectable<_PageReads>;

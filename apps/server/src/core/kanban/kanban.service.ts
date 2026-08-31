@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { KanbanRepo, KanbanColumnWithCards } from '@docmost/db/repos/kanban/kanban.repo';
+import {
+  KanbanRepo,
+  KanbanColumnWithCards,
+  KanbanCategoryWithOptions,
+} from '@docmost/db/repos/kanban/kanban.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
@@ -14,6 +18,8 @@ import {
   KanbanCard,
   KanbanColumn,
   KanbanMilestone,
+  KanbanCategory,
+  KanbanCategoryOption,
 } from '@docmost/db/types/entity.types';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -209,6 +215,99 @@ export class KanbanService {
     const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
     if (!milestone) throw new NotFoundException('Milestone not found');
     await this.kanbanRepo.deleteMilestone(milestoneId);
+  }
+
+  // ─── Categories ─────────────────────────────────────────────────────────────
+
+  async getCategories(pageId: string): Promise<KanbanCategoryWithOptions[]> {
+    await this.assertKanbanPage(pageId);
+    return this.kanbanRepo.getCategoriesByPageId(pageId);
+  }
+
+  async createCategory(
+    pageId: string,
+    name: string,
+    icon: string,
+  ): Promise<KanbanCategory> {
+    await this.assertKanbanPage(pageId);
+    const maxPos = await this.kanbanRepo.getMaxCategoryPosition(pageId);
+    return this.kanbanRepo.createCategory({
+      pageId,
+      name,
+      icon,
+      position: maxPos + POSITION_STEP,
+    });
+  }
+
+  async updateCategory(
+    categoryId: string,
+    data: { name?: string; icon?: string },
+  ): Promise<KanbanCategory> {
+    const category = await this.kanbanRepo.findCategoryById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    return this.kanbanRepo.updateCategory(categoryId, data);
+  }
+
+  async deleteCategory(categoryId: string): Promise<void> {
+    const category = await this.kanbanRepo.findCategoryById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    await this.kanbanRepo.deleteCategory(categoryId);
+  }
+
+  // ─── Category options ───────────────────────────────────────────────────────
+
+  async createCategoryOption(
+    categoryId: string,
+    label: string,
+    color = 'gray',
+  ): Promise<KanbanCategoryOption> {
+    const category = await this.kanbanRepo.findCategoryById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    const maxPos = await this.kanbanRepo.getMaxCategoryOptionPosition(categoryId);
+    return this.kanbanRepo.createCategoryOption({
+      categoryId,
+      label,
+      color,
+      position: maxPos + POSITION_STEP,
+    });
+  }
+
+  async updateCategoryOption(
+    optionId: string,
+    data: { label?: string; color?: string; position?: number },
+  ): Promise<KanbanCategoryOption> {
+    const option = await this.kanbanRepo.findCategoryOptionById(optionId);
+    if (!option) throw new NotFoundException('Category option not found');
+    return this.kanbanRepo.updateCategoryOption(optionId, data);
+  }
+
+  async deleteCategoryOption(optionId: string): Promise<void> {
+    const option = await this.kanbanRepo.findCategoryOptionById(optionId);
+    if (!option) throw new NotFoundException('Category option not found');
+    await this.kanbanRepo.deleteCategoryOption(optionId);
+  }
+
+  // ─── Card category values ───────────────────────────────────────────────────
+
+  async setCardCategoryValue(
+    cardId: string,
+    categoryId: string,
+    optionId: string | null,
+    userId: string,
+  ): Promise<void> {
+    const card = await this.kanbanRepo.findCardById(cardId);
+    if (!card) throw new NotFoundException('Card not found');
+    const category = await this.kanbanRepo.findCategoryById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    if (optionId !== null) {
+      const option = await this.kanbanRepo.findCategoryOptionById(optionId);
+      if (!option || option.categoryId !== categoryId) {
+        throw new NotFoundException('Category option not found');
+      }
+    }
+    await this.kanbanRepo.setCardCategoryValue(cardId, categoryId, optionId);
+    const column = await this.kanbanRepo.findColumnById(card.columnId);
+    if (column) await this.queueBoardUpdateNotification(column.pageId, userId);
   }
 
   // ─── Assignable members ────────────────────────────────────────────────────

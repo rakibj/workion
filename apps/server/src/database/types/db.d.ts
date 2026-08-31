@@ -314,6 +314,12 @@ export interface KanbanCardAssignees {
   userId: string;
 }
 
+export interface KanbanCardCategoryValues {
+  cardId: string;
+  categoryId: string;
+  optionId: string;
+}
+
 export interface KanbanCards {
   columnId: string;
   createdAt: Generated<Timestamp>;
@@ -323,6 +329,26 @@ export interface KanbanCards {
   position: number;
   priority: string | null;
   title: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface KanbanCategories {
+  createdAt: Generated<Timestamp>;
+  icon: string;
+  id: Generated<string>;
+  name: string;
+  pageId: string;
+  position: number;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface KanbanCategoryOptions {
+  categoryId: string;
+  color: Generated<string>;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  label: string;
+  position: number;
   updatedAt: Generated<Timestamp>;
 }
 
@@ -725,7 +751,10 @@ export interface DB {
   groups: Groups;
   groupUsers: GroupUsers;
   kanbanCardAssignees: KanbanCardAssignees;
+  kanbanCardCategoryValues: KanbanCardCategoryValues;
   kanbanCards: KanbanCards;
+  kanbanCategories: KanbanCategories;
+  kanbanCategoryOptions: KanbanCategoryOptions;
   kanbanColumns: KanbanColumns;
   kanbanMilestones: KanbanMilestones;
   labels: Labels;

@@ -17,6 +17,28 @@ export interface IKanbanMilestone {
   updatedAt: string;
 }
 
+export interface IKanbanCategoryOption {
+  id: string;
+  categoryId: string;
+  label: string;
+  color: KanbanColor;
+  position: number;
+}
+
+export interface IKanbanCategory {
+  id: string;
+  pageId: string;
+  name: string;
+  icon: string;
+  position: number;
+  options: IKanbanCategoryOption[];
+}
+
+export interface IKanbanCardCategoryValue {
+  categoryId: string;
+  optionId: string;
+}
+
 export interface IKanbanCard {
   id: string;
   columnId: string;
@@ -29,6 +51,7 @@ export interface IKanbanCard {
   createdAt: string;
   updatedAt: string;
   assignees: KanbanAssignee[];
+  categoryValues: IKanbanCardCategoryValue[];
 }
 
 export interface IKanbanColumn {

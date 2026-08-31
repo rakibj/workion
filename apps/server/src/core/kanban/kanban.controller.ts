@@ -14,17 +14,25 @@ import { KanbanRepo } from '@docmost/db/repos/kanban/kanban.repo';
 import {
   CardAssigneeDto,
   CreateCardDto,
+  CreateCategoryDto,
+  CreateCategoryOptionDto,
   CreateColumnDto,
   CreateMilestoneDto,
   DeleteCardDto,
+  DeleteCategoryDto,
+  DeleteCategoryOptionDto,
   DeleteColumnDto,
   DeleteMilestoneDto,
   GetAssignableMembersDto,
   GetBoardDto,
+  ListCategoriesDto,
   ListMilestonesDto,
   MoveCardDto,
   MoveColumnDto,
+  SetCardCategoryDto,
   UpdateCardDto,
+  UpdateCategoryDto,
+  UpdateCategoryOptionDto,
   UpdateColumnDto,
   UpdateMilestoneDto,
 } from './dto/kanban.dto';
@@ -276,6 +284,108 @@ export class KanbanController {
     await this.kanbanService.deleteMilestone(dto.milestoneId);
   }
 
+  // ─── Categories ───────────────────────────────────────────────────────────
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/list')
+  async listCategories(
+    @Body() dto: ListCategoriesDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanRead(user, dto.pageId);
+    return this.kanbanService.getCategories(dto.pageId);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/create')
+  async createCategory(
+    @Body() dto: CreateCategoryDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWrite(user, dto.pageId);
+    return this.kanbanService.createCategory(dto.pageId, dto.name, dto.icon);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/update')
+  async updateCategory(
+    @Body() dto: UpdateCategoryDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCategoryId(user, dto.categoryId);
+    return this.kanbanService.updateCategory(dto.categoryId, {
+      name: dto.name,
+      icon: dto.icon,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/delete')
+  async deleteCategory(
+    @Body() dto: DeleteCategoryDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCategoryId(user, dto.categoryId);
+    await this.kanbanService.deleteCategory(dto.categoryId);
+  }
+
+  // ─── Category options ─────────────────────────────────────────────────────
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/options/create')
+  async createCategoryOption(
+    @Body() dto: CreateCategoryOptionDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCategoryId(user, dto.categoryId);
+    return this.kanbanService.createCategoryOption(
+      dto.categoryId,
+      dto.label,
+      dto.color,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/options/update')
+  async updateCategoryOption(
+    @Body() dto: UpdateCategoryOptionDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCategoryOptionId(user, dto.optionId);
+    return this.kanbanService.updateCategoryOption(dto.optionId, {
+      label: dto.label,
+      color: dto.color,
+      position: dto.position,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('categories/options/delete')
+  async deleteCategoryOption(
+    @Body() dto: DeleteCategoryOptionDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCategoryOptionId(user, dto.optionId);
+    await this.kanbanService.deleteCategoryOption(dto.optionId);
+  }
+
+  // ─── Card category values ─────────────────────────────────────────────────
+
+  @HttpCode(HttpStatus.OK)
+  @Post('cards/category/set')
+  async setCardCategory(
+    @Body() dto: SetCardCategoryDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertCanWriteByCardId(user, dto.cardId);
+    await this.kanbanService.setCardCategoryValue(
+      dto.cardId,
+      dto.categoryId,
+      dto.optionId ?? null,
+      user.id,
+    );
+  }
+
   // ─── Permission helpers ───────────────────────────────────────────────────
 
   private async assertCanRead(user: User, pageId: string): Promise<void> {
@@ -329,5 +439,23 @@ export class KanbanController {
     const milestone = await this.kanbanRepo.findMilestoneById(milestoneId);
     if (!milestone) throw new NotFoundException('Milestone not found');
     await this.assertCanWrite(user, milestone.pageId);
+  }
+
+  private async assertCanWriteByCategoryId(
+    user: User,
+    categoryId: string,
+  ): Promise<void> {
+    const category = await this.kanbanRepo.findCategoryById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    await this.assertCanWrite(user, category.pageId);
+  }
+
+  private async assertCanWriteByCategoryOptionId(
+    user: User,
+    optionId: string,
+  ): Promise<void> {
+    const option = await this.kanbanRepo.findCategoryOptionById(optionId);
+    if (!option) throw new NotFoundException('Category option not found');
+    await this.assertCanWriteByCategoryId(user, option.categoryId);
   }
 }

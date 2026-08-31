@@ -1,10 +1,16 @@
 import { useMutation, useQuery, useQueryClient, UseQueryResult } from "@tanstack/react-query";
 import * as kanbanService from "../services/kanban-service";
 import type { KanbanAssignableMember } from "../services/kanban-service";
-import type { IKanbanCard, IKanbanColumn, IKanbanMilestone } from "../types/kanban.types";
+import type {
+  IKanbanCard,
+  IKanbanCategory,
+  IKanbanColumn,
+  IKanbanMilestone,
+} from "../types/kanban.types";
 
 const boardKey = (pageId: string) => ["kanban-board", pageId];
 const milestonesKey = (pageId: string) => ["kanban-milestones", pageId];
+const categoriesKey = (pageId: string) => ["kanban-categories", pageId];
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +86,7 @@ export function useCreateCardMutation(pageId: string) {
         prev.map((col) =>
           col.id !== card.columnId
             ? col
-            : { ...col, cards: [...col.cards, { ...card, assignees: [] }] },
+            : { ...col, cards: [...col.cards, { ...card, assignees: [], categoryValues: [] }] },
         ),
       );
     },
@@ -246,6 +252,129 @@ export function useDeleteMilestoneMutation(pageId: string) {
       );
       // cards assigned to this milestone now have milestone=null
       qc.invalidateQueries({ queryKey: boardKey(pageId) });
+    },
+  });
+}
+
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+export function useCategoriesQuery(pageId: string) {
+  return useQuery({
+    queryKey: categoriesKey(pageId),
+    queryFn: () => kanbanService.listCategories(pageId),
+    enabled: !!pageId,
+  });
+}
+
+export function useCreateCategoryMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.createCategory,
+    onSuccess: (category) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) => [
+        ...prev,
+        { ...category, options: [] },
+      ]);
+    },
+  });
+}
+
+export function useUpdateCategoryMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.updateCategory,
+    onSuccess: (updated) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) =>
+        prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)),
+      );
+    },
+  });
+}
+
+export function useDeleteCategoryMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.deleteCategory,
+    onSuccess: (_, categoryId) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) =>
+        prev.filter((c) => c.id !== categoryId),
+      );
+      // cards holding a value for this category now need it cleared
+      qc.invalidateQueries({ queryKey: boardKey(pageId) });
+    },
+  });
+}
+
+export function useCreateCategoryOptionMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.createCategoryOption,
+    onSuccess: (option) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) =>
+        prev.map((c) =>
+          c.id !== option.categoryId ? c : { ...c, options: [...c.options, option] },
+        ),
+      );
+    },
+  });
+}
+
+export function useUpdateCategoryOptionMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.updateCategoryOption,
+    onSuccess: (updated) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) =>
+        prev.map((c) =>
+          c.id !== updated.categoryId
+            ? c
+            : {
+                ...c,
+                options: c.options.map((o) => (o.id === updated.id ? updated : o)),
+              },
+        ),
+      );
+    },
+  });
+}
+
+export function useDeleteCategoryOptionMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { optionId: string; categoryId: string }) =>
+      kanbanService.deleteCategoryOption(vars.optionId),
+    onSuccess: (_, { optionId, categoryId }) => {
+      qc.setQueryData<IKanbanCategory[]>(categoriesKey(pageId), (prev = []) =>
+        prev.map((c) =>
+          c.id !== categoryId
+            ? c
+            : { ...c, options: c.options.filter((o) => o.id !== optionId) },
+        ),
+      );
+      // cards holding this option now need it cleared
+      qc.invalidateQueries({ queryKey: boardKey(pageId) });
+    },
+  });
+}
+
+export function useSetCardCategoryMutation(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: kanbanService.setCardCategory,
+    onSuccess: (_, { cardId, categoryId, optionId }) => {
+      qc.setQueryData<IKanbanColumn[]>(boardKey(pageId), (prev = []) =>
+        prev.map((col) => ({
+          ...col,
+          cards: col.cards.map((c) => {
+            if (c.id !== cardId) return c;
+            const rest = c.categoryValues.filter((v) => v.categoryId !== categoryId);
+            return {
+              ...c,
+              categoryValues: optionId ? [...rest, { categoryId, optionId }] : rest,
+            };
+          }),
+        })),
+      );
     },
   });
 }
