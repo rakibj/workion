@@ -7,10 +7,11 @@ jest.mock('@ai-sdk/openai-compatible', () => ({
 
 jest.mock('ai', () => ({
   streamText: jest.fn(),
+  stepCountIs: jest.fn((n: number) => ({ __stepCount: n })),
 }));
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { streamText, ModelMessage } from 'ai';
+import { streamText, stepCountIs, ModelMessage, ToolSet } from 'ai';
 import { AiStreamService } from './ai-stream.service';
 import { AiKeyService } from './ai-key.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -77,7 +78,7 @@ describe('AiStreamService', () => {
           apiKey: 'sk-test',
           headers: expect.objectContaining({
             'HTTP-Referer': 'http://localhost:3000',
-            'X-Title': 'Docmost',
+            'X-Title': 'Workion',
           }),
         }),
       );
@@ -114,6 +115,36 @@ describe('AiStreamService', () => {
       const result = await service.streamChat(WORKSPACE_ID, []);
 
       expect(result).toBe(fakeResult);
+    });
+
+    it('omits tools and stopWhen when no tools are given', async () => {
+      (aiKeyService.getDecryptedKey as jest.Mock).mockResolvedValue('sk-test');
+      (aiKeyService.getKeyStatus as jest.Mock).mockResolvedValue({
+        configured: true,
+        model: 'openai/gpt-4o-mini',
+      });
+
+      await service.streamChat(WORKSPACE_ID, []);
+
+      const call = (streamText as jest.Mock).mock.calls[0][0];
+      expect(call.tools).toBeUndefined();
+      expect(call.stopWhen).toBeUndefined();
+    });
+
+    it('forwards tools and a stopWhen step-count condition when tools are given', async () => {
+      (aiKeyService.getDecryptedKey as jest.Mock).mockResolvedValue('sk-test');
+      (aiKeyService.getKeyStatus as jest.Mock).mockResolvedValue({
+        configured: true,
+        model: 'openai/gpt-4o-mini',
+      });
+      const tools = { some_tool: {} } as unknown as ToolSet;
+
+      await service.streamChat(WORKSPACE_ID, [], undefined, tools);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({ tools, stopWhen: { __stepCount: 5 } }),
+      );
+      expect(stepCountIs).toHaveBeenCalledWith(5);
     });
   });
 });

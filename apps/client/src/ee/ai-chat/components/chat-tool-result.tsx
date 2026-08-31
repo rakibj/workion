@@ -9,6 +9,10 @@ export const TOOL_LABELS: Record<string, string> = {
   get_page: "Read page",
   create_page: "Created page",
   update_page: "Updated page",
+  create_kanban_card: "Created card",
+  move_kanban_card: "Moved card",
+  update_kanban_card: "Updated card",
+  set_kanban_card_category: "Set category",
 };
 
 type Props = {

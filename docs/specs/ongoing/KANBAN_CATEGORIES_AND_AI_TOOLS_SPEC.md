@@ -1,6 +1,6 @@
 # Kanban: Icon-Only Badges, Custom Categories, AI Board Actions — Spec
 
-> **Status: Approved, implementation in progress.** Three related Kanban improvements, requested together, scoped as independent sub-specs per CLAUDE.md methodology so they can be approved and implemented one at a time. Spec 2 confirmed single-select-per-category. Implementation order: Spec 1 → Spec 2 → Spec 3.
+> **Status: All three sub-specs implemented (2026-08-31).** Three related Kanban improvements, requested together, scoped as independent sub-specs per CLAUDE.md methodology so they could be approved and implemented one at a time. Spec 2 confirmed single-select-per-category. Implementation order: Spec 1 → Spec 2 → Spec 3. Spec 3 is verified only by unit tests so far — no live in-browser smoke test with a real OpenRouter key has been run yet.
 
 ## Goal
 
@@ -114,6 +114,8 @@ Index `kanban_categories(page_id)` and `kanban_category_options(category_id)`, m
 ---
 
 ## Spec 3 — AI chat Kanban actions
+
+**Status: Done.** Implemented per this design: `KanbanRepo.getMinCardPosition` added; `AiStreamService.streamChat` takes an optional `tools` param and applies `stopWhen: stepCountIs(5)` when tools are given; `AiChatController` gained `KanbanService`/`SpaceAbilityFactory`/`WsService` deps, `resolveKanbanTools()` (contextPageId must be a kanban page the user can edit) and `buildKanbanTools()` (the four tools below, each verifying the target id belongs to the bound page before mutating, returning `{ok:false, error}` instead of throwing on a bad id, and broadcasting a page-scoped `invalidate` WS event on success); `formatKanbanAsText` now prints column/card/milestone/category/option ids plus Milestones/Categories catalog sections so the model has real ids to call tools with. `AiChatModule` now imports `CaslModule` and provides `KanbanService`. Frontend: `TOOL_LABELS` in `chat-tool-result.tsx` got the four new entries; no other frontend change was needed. Tests: `ai-stream.service.spec.ts` covers tools/stopWhen forwarding; `ai-chat.controller.spec.ts` covers tool registration (kanban+edit vs wrong type/read-only/no contextPageId) and tool-execution edge cases (bad id → `ok:false`, no-op update rejected, success path invalidates the board). Two unrelated pre-existing test bugs were fixed in passing since they were in files this spec had to touch anyway: `ai-chat.controller.spec.ts` was missing `PageRepo`/`KanbanRepo`/`AiChatRepo.updateChat` mocks (DI compile failure, dated from the Spec 1/2 work), and `ai-stream.service.spec.ts` asserted the pre-rebrand `X-Title: 'Docmost'` header. Not yet done: a live in-browser smoke test with a real OpenRouter key (verified only via unit tests here).
 
 **Depends on:** the `create_kanban_card`/`move_kanban_card`/`update_kanban_card` tools depend on nothing new; `set_kanban_card_category` depends on Spec 2's schema existing.
 

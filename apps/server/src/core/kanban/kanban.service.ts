@@ -126,7 +126,12 @@ export class KanbanService {
 
   async updateCard(
     cardId: string,
-    data: { title?: string; description?: string; priority?: string; milestoneId?: string | null },
+    data: {
+      title?: string;
+      description?: string;
+      priority?: string | null;
+      milestoneId?: string | null;
+    },
     userId: string,
   ): Promise<KanbanCard> {
     const card = await this.kanbanRepo.findCardById(cardId);

@@ -217,6 +217,18 @@ export class KanbanRepo {
     return (result?.maxPos as number) ?? 0;
   }
 
+  async getMinCardPosition(
+    columnId: string,
+    trx?: KyselyTransaction,
+  ): Promise<number> {
+    const result = await dbOrTx(this.db, trx)
+      .selectFrom('kanbanCards')
+      .select((eb) => eb.fn.min('position').as('minPos'))
+      .where('columnId', '=', columnId)
+      .executeTakeFirst();
+    return (result?.minPos as number) ?? 0;
+  }
+
   // ─── Assignees ────────────────────────────────────────────────────────────
 
   async addAssignee(

@@ -1,10 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { streamText, ModelMessage } from 'ai';
+import { streamText, stepCountIs, ModelMessage, ToolSet } from 'ai';
 import { AiKeyService } from './ai-key.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const MAX_TOOL_STEPS = 5;
 
 @Injectable()
 export class AiStreamService {
@@ -17,6 +18,7 @@ export class AiStreamService {
     workspaceId: string,
     messages: ModelMessage[],
     system?: string,
+    tools?: ToolSet,
   ): Promise<ReturnType<typeof streamText>> {
     const apiKey = await this.aiKeyService.getDecryptedKey(workspaceId);
     if (!apiKey) {
@@ -41,6 +43,7 @@ export class AiStreamService {
       model: provider(model),
       messages,
       ...(system ? { system } : {}),
+      ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
     });
   }
 }

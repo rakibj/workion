@@ -14,6 +14,7 @@ import {
 import { FastifyReply } from 'fastify';
 import * as bytes from 'bytes';
 import { v7 as uuid7 } from 'uuid';
+import { z } from 'zod';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorator';
@@ -24,7 +25,19 @@ import { AiStreamService } from '../services/ai-stream.service';
 import { AiChatRepo } from '@docmost/db/repos/ai-chat/ai-chat.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { KanbanRepo, KanbanColumnWithCards } from '@docmost/db/repos/kanban/kanban.repo';
+import {
+  KanbanRepo,
+  KanbanColumnWithCards,
+  KanbanCategoryWithOptions,
+} from '@docmost/db/repos/kanban/kanban.repo';
+import { KanbanMilestone } from '@docmost/db/types/entity.types';
+import { KanbanService } from '../../kanban/kanban.service';
+import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '../../casl/interfaces/space-ability.type';
+import { WsService } from '../../../ws/ws.service';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { FileInterceptor } from '../../../common/interceptors/file.interceptor';
@@ -35,8 +48,11 @@ import {
 import { AttachmentType } from '../../attachment/attachment.constants';
 import { ChatIdDto, SearchChatDto, UpdateChatDto } from '../dto/chat-id.dto';
 import { SendMessageDto } from '../dto/send-message.dto';
-import { ModelMessage } from 'ai';
+import { ModelMessage, tool, ToolSet } from 'ai';
 import { AiChatMessage } from '@docmost/db/types/entity.types';
+
+const KANBAN_PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
+const POSITION_STEP = 1000;
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai/chats')
@@ -52,6 +68,9 @@ export class AiChatController {
     private readonly environmentService: EnvironmentService,
     private readonly pageRepo: PageRepo,
     private readonly kanbanRepo: KanbanRepo,
+    private readonly kanbanService: KanbanService,
+    private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly wsService: WsService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -266,10 +285,13 @@ export class AiChatController {
         workspace.id,
       );
 
+      const tools = await this.resolveKanbanTools(dto, user);
+
       const result = await this.aiStreamService.streamChat(
         workspace.id,
         coreMessages,
         systemPrompt,
+        tools,
       );
 
       let fullContent = '';
@@ -382,8 +404,12 @@ export class AiChatController {
         validPages.map(async (p) => {
           const title = p.title || 'Untitled';
           if (p.type === 'kanban') {
-            const columns = await this.kanbanRepo.getBoardByPageId(p.id);
-            return `## ${title} (Project Tracker)\n\n${this.formatKanbanAsText(columns)}`;
+            const [columns, milestones, categories] = await Promise.all([
+              this.kanbanRepo.getBoardByPageId(p.id),
+              this.kanbanRepo.getMilestonesByPageId(p.id),
+              this.kanbanRepo.getCategoriesByPageId(p.id),
+            ]);
+            return `## ${title} (Project Tracker)\n\n${this.formatKanbanAsText(columns, milestones, categories)}`;
           }
           return `## ${title}\n\n${p.textContent?.trim() || '(empty page)'}`;
         }),
@@ -395,25 +421,245 @@ export class AiChatController {
     return `You are a helpful assistant. Answer based on the conversation and the following page context provided by the user.\n\n${pageBlocks}`;
   }
 
-  private formatKanbanAsText(columns: KanbanColumnWithCards[]): string {
-    if (!columns.length) return '(no columns)';
-    return columns
-      .map((col) => {
-        if (!col.cards.length) return `**${col.name}**\n(no cards)`;
-        const cards = col.cards
-          .map((card) => {
-            let line = `- ${card.title || 'Untitled'}`;
-            if (card.priority) line += ` [${card.priority}]`;
-            if (card.milestone) line += ` [milestone: ${card.milestone.name}]`;
-            if (card.assignees?.length)
-              line += ` [assigned: ${card.assignees.map((a) => a.name).join(', ')}]`;
-            if (card.description?.trim()) line += `\n  ${card.description.trim()}`;
-            return line;
-          })
-          .join('\n');
-        return `**${col.name}**\n${cards}`;
-      })
-      .join('\n\n');
+  private formatKanbanAsText(
+    columns: KanbanColumnWithCards[],
+    milestones: KanbanMilestone[],
+    categories: KanbanCategoryWithOptions[],
+  ): string {
+    const sections: string[] = [];
+
+    if (milestones.length) {
+      sections.push(
+        `**Milestones:**\n${milestones
+          .map((m) => `- ${m.name} (id: ${m.id})`)
+          .join('\n')}`,
+      );
+    }
+
+    if (categories.length) {
+      sections.push(
+        `**Categories:**\n${categories
+          .map(
+            (c) =>
+              `- ${c.name} (id: ${c.id}): ${c.options
+                .map((o) => `${o.label} (id: ${o.id})`)
+                .join(', ') || '(no options)'}`,
+          )
+          .join('\n')}`,
+      );
+    }
+
+    if (!columns.length) {
+      sections.push('(no columns)');
+      return sections.join('\n\n');
+    }
+
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
+
+    sections.push(
+      columns
+        .map((col) => {
+          const header = `**${col.name}** (id: ${col.id})`;
+          if (!col.cards.length) return `${header}\n(no cards)`;
+          const cards = col.cards
+            .map((card) => {
+              let line = `- [id: ${card.id}] ${card.title || 'Untitled'}`;
+              if (card.priority) line += ` [${card.priority}]`;
+              if (card.milestone)
+                line += ` [milestone: ${card.milestone.name} (id: ${card.milestone.id})]`;
+              for (const cv of card.categoryValues ?? []) {
+                const category = categoryById.get(cv.categoryId);
+                const option = category?.options.find((o) => o.id === cv.optionId);
+                if (category && option) {
+                  line += ` [${category.name}: ${option.label} (id: ${option.id})]`;
+                }
+              }
+              if (card.assignees?.length)
+                line += ` [assigned: ${card.assignees.map((a) => a.name).join(', ')}]`;
+              if (card.description?.trim()) line += `\n  ${card.description.trim()}`;
+              return line;
+            })
+            .join('\n');
+          return `${header}\n${cards}`;
+        })
+        .join('\n\n'),
+    );
+
+    return sections.join('\n\n');
+  }
+
+  private async resolveKanbanTools(
+    dto: SendMessageDto,
+    user: User,
+  ): Promise<ToolSet | undefined> {
+    if (!dto.contextPageId) return undefined;
+
+    const page = await this.pageRepo.findById(dto.contextPageId);
+    if (!page || page.deletedAt || page.type !== 'kanban') return undefined;
+
+    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
+    if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+      return undefined;
+    }
+
+    return this.buildKanbanTools(page.id, page.spaceId, user.id);
+  }
+
+  private buildKanbanTools(
+    pageId: string,
+    spaceId: string,
+    userId: string,
+  ): ToolSet {
+    const invalidateBoard = () =>
+      this.wsService.emitPageScopedEvent(spaceId, pageId, {
+        operation: 'invalidate',
+        entity: ['kanban-board'],
+        id: pageId,
+      });
+
+    const toErrorMessage = (err: unknown, fallback: string) =>
+      err instanceof Error ? err.message : fallback;
+
+    return {
+      create_kanban_card: tool({
+        description: 'Create a new card on this Kanban board in the given column.',
+        inputSchema: z.object({
+          columnId: z.string().uuid(),
+          title: z.string(),
+          description: z.string().optional(),
+          priority: z.enum(KANBAN_PRIORITIES).optional(),
+          milestoneId: z.string().uuid().optional(),
+        }),
+        execute: async ({ columnId, title, description, priority, milestoneId }) => {
+          const column = await this.kanbanRepo.findColumnById(columnId);
+          if (!column || column.pageId !== pageId) {
+            return { ok: false, error: 'Column not found on this board' };
+          }
+          try {
+            const card = await this.kanbanService.createCard(columnId, title, userId);
+            if (description !== undefined || priority !== undefined || milestoneId !== undefined) {
+              await this.kanbanService.updateCard(
+                card.id,
+                { description, priority, milestoneId },
+                userId,
+              );
+            }
+            await invalidateBoard();
+            return { ok: true, cardId: card.id };
+          } catch (err) {
+            return { ok: false, error: toErrorMessage(err, 'Failed to create card') };
+          }
+        },
+      }),
+
+      move_kanban_card: tool({
+        description: 'Move a card to a different column (or reorder within its column).',
+        inputSchema: z.object({
+          cardId: z.string().uuid(),
+          columnId: z.string().uuid(),
+          position: z.enum(['top', 'bottom']).optional(),
+        }),
+        execute: async ({ cardId, columnId, position = 'bottom' }) => {
+          const card = await this.kanbanRepo.findCardById(cardId);
+          if (!card) return { ok: false, error: 'Card not found on this board' };
+          const cardColumn = await this.kanbanRepo.findColumnById(card.columnId);
+          if (!cardColumn || cardColumn.pageId !== pageId) {
+            return { ok: false, error: 'Card not found on this board' };
+          }
+          const targetColumn = await this.kanbanRepo.findColumnById(columnId);
+          if (!targetColumn || targetColumn.pageId !== pageId) {
+            return { ok: false, error: 'Target column not found on this board' };
+          }
+          try {
+            const numericPosition =
+              position === 'top'
+                ? (await this.kanbanRepo.getMinCardPosition(columnId)) - POSITION_STEP
+                : (await this.kanbanRepo.getMaxCardPosition(columnId)) + POSITION_STEP;
+            await this.kanbanService.moveCard(cardId, columnId, numericPosition, userId);
+            await invalidateBoard();
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, error: toErrorMessage(err, 'Failed to move card') };
+          }
+        },
+      }),
+
+      update_kanban_card: tool({
+        description: "Update a card's title, description, priority, or milestone.",
+        inputSchema: z.object({
+          cardId: z.string().uuid(),
+          title: z.string().optional(),
+          description: z.string().optional(),
+          priority: z.union([z.enum(KANBAN_PRIORITIES), z.literal('none')]).optional(),
+          milestoneId: z.union([z.string().uuid(), z.literal('none')]).optional(),
+        }),
+        execute: async ({ cardId, title, description, priority, milestoneId }) => {
+          if (
+            title === undefined &&
+            description === undefined &&
+            priority === undefined &&
+            milestoneId === undefined
+          ) {
+            return { ok: false, error: 'no changes given' };
+          }
+          const card = await this.kanbanRepo.findCardById(cardId);
+          if (!card) return { ok: false, error: 'Card not found on this board' };
+          const column = await this.kanbanRepo.findColumnById(card.columnId);
+          if (!column || column.pageId !== pageId) {
+            return { ok: false, error: 'Card not found on this board' };
+          }
+          try {
+            await this.kanbanService.updateCard(
+              cardId,
+              {
+                title,
+                description,
+                priority: priority === 'none' ? null : priority,
+                milestoneId: milestoneId === 'none' ? null : milestoneId,
+              },
+              userId,
+            );
+            await invalidateBoard();
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, error: toErrorMessage(err, 'Failed to update card') };
+          }
+        },
+      }),
+
+      set_kanban_card_category: tool({
+        description: "Set (or clear) a card's value for a board category.",
+        inputSchema: z.object({
+          cardId: z.string().uuid(),
+          categoryId: z.string().uuid(),
+          optionId: z.union([z.string().uuid(), z.literal('none')]),
+        }),
+        execute: async ({ cardId, categoryId, optionId }) => {
+          const card = await this.kanbanRepo.findCardById(cardId);
+          if (!card) return { ok: false, error: 'Card not found on this board' };
+          const column = await this.kanbanRepo.findColumnById(card.columnId);
+          if (!column || column.pageId !== pageId) {
+            return { ok: false, error: 'Card not found on this board' };
+          }
+          const category = await this.kanbanRepo.findCategoryById(categoryId);
+          if (!category || category.pageId !== pageId) {
+            return { ok: false, error: 'Category not found on this board' };
+          }
+          try {
+            await this.kanbanService.setCardCategoryValue(
+              cardId,
+              categoryId,
+              optionId === 'none' ? null : optionId,
+              userId,
+            );
+            await invalidateBoard();
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, error: toErrorMessage(err, 'Failed to set category') };
+          }
+        },
+      }),
+    };
   }
 
   private buildCoreMessages(messages: AiChatMessage[]): ModelMessage[] {
