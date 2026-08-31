@@ -461,6 +461,56 @@
   );
 }
 
+/* ── Due date badge (inline on card) ── */
+
+.dueDateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--mantine-color-default-border);
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--mantine-color-dimmed);
+  line-height: 1.5;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.dueDateBadge:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.dueDateBadgeActive {
+  color: var(--mantine-color-blue-6);
+  border-color: var(--mantine-color-blue-3);
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 20%, transparent)
+  );
+}
+
+.dueDateBadgeOverdue {
+  color: var(--mantine-color-red-6);
+  border-color: var(--mantine-color-red-3);
+  background: light-dark(
+    var(--mantine-color-red-0),
+    color-mix(in srgb, var(--mantine-color-red-9) 20%, transparent)
+  );
+}
+
+.dueDateBadgeToday {
+  color: var(--mantine-color-yellow-7);
+  border-color: var(--mantine-color-yellow-4);
+  background: light-dark(
+    var(--mantine-color-yellow-0),
+    color-mix(in srgb, var(--mantine-color-yellow-9) 20%, transparent)
+  );
+}
+
 /* ── Shared icon-only badge (unset priority/milestone/category) ── */
 
 .badgeIconOnly {

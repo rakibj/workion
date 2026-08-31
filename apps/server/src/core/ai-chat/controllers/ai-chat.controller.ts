@@ -467,6 +467,8 @@ export class AiChatController {
               if (card.priority) line += ` [${card.priority}]`;
               if (card.milestone)
                 line += ` [milestone: ${card.milestone.name} (id: ${card.milestone.id})]`;
+              if (card.dueDate)
+                line += ` [due: ${new Date(card.dueDate).toISOString().slice(0, 10)}]`;
               for (const cv of card.categoryValues ?? []) {
                 const category = categoryById.get(cv.categoryId);
                 const option = category?.options.find((o) => o.id === cv.optionId);
@@ -585,20 +587,22 @@ export class AiChatController {
       }),
 
       update_kanban_card: tool({
-        description: "Update a card's title, description, priority, or milestone.",
+        description: "Update a card's title, description, priority, milestone, or due date.",
         inputSchema: z.object({
           cardId: z.string().uuid(),
           title: z.string().optional(),
           description: z.string().optional(),
           priority: z.union([z.enum(KANBAN_PRIORITIES), z.literal('none')]).optional(),
           milestoneId: z.union([z.string().uuid(), z.literal('none')]).optional(),
+          dueDate: z.union([z.string(), z.literal('none')]).optional(),
         }),
-        execute: async ({ cardId, title, description, priority, milestoneId }) => {
+        execute: async ({ cardId, title, description, priority, milestoneId, dueDate }) => {
           if (
             title === undefined &&
             description === undefined &&
             priority === undefined &&
-            milestoneId === undefined
+            milestoneId === undefined &&
+            dueDate === undefined
           ) {
             return { ok: false, error: 'no changes given' };
           }
@@ -616,6 +620,7 @@ export class AiChatController {
                 description,
                 priority: priority === 'none' ? null : priority,
                 milestoneId: milestoneId === 'none' ? null : milestoneId,
+                dueDate: dueDate === 'none' ? null : dueDate,
               },
               userId,
             );

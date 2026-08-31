@@ -47,6 +47,7 @@ export interface IKanbanCard {
   priority: KanbanPriority | null;
   milestoneId: string | null;
   milestone: { id: string; name: string; dueDate: string } | null;
+  dueDate: string | null;
   position: number;
   createdAt: string;
   updatedAt: string;

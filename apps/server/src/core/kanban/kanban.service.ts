@@ -131,12 +131,17 @@ export class KanbanService {
       description?: string;
       priority?: string | null;
       milestoneId?: string | null;
+      dueDate?: string | null;
     },
     userId: string,
   ): Promise<KanbanCard> {
     const card = await this.kanbanRepo.findCardById(cardId);
     if (!card) throw new NotFoundException('Card not found');
-    const updated = await this.kanbanRepo.updateCard(cardId, data);
+    const updateData = {
+      ...data,
+      dueDate: data.dueDate === undefined ? undefined : data.dueDate === null ? null : new Date(data.dueDate),
+    };
+    const updated = await this.kanbanRepo.updateCard(cardId, updateData);
     const column = await this.kanbanRepo.findColumnById(card.columnId);
     if (column) await this.queueBoardUpdateNotification(column.pageId, userId);
     return updated;

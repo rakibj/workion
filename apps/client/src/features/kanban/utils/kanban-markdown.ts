@@ -22,6 +22,7 @@ export function kanbanToMarkdown(title: string, columns: IKanbanColumn[]): strin
         const meta: string[] = [];
         if (card.priority) meta.push(`*${card.priority}*`);
         if (card.milestone) meta.push(`Milestone: ${card.milestone.name}`);
+        if (card.dueDate) meta.push(`Due: ${card.dueDate.slice(0, 10)}`);
         if (card.assignees.length > 0)
           meta.push(`Assigned to: ${card.assignees.map((a) => a.name).join(", ")}`);
 

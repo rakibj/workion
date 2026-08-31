@@ -630,6 +630,54 @@ describe('AiChatController', () => {
         expect(kanbanRepo.findCardById).not.toHaveBeenCalled();
       });
 
+      it('update_kanban_card sets dueDate on a card on this board', async () => {
+        const tools = await getTools();
+        kanbanRepo.findCardById.mockResolvedValue({
+          id: CARD_ID,
+          columnId: COLUMN_ID,
+        } as any);
+        kanbanRepo.findColumnById.mockResolvedValue({
+          id: COLUMN_ID,
+          pageId: PAGE_ID,
+        } as any);
+
+        const result = await tools.update_kanban_card.execute({
+          cardId: CARD_ID,
+          dueDate: '2026-09-15',
+        });
+
+        expect(result).toEqual({ ok: true });
+        expect(kanbanService.updateCard).toHaveBeenCalledWith(
+          CARD_ID,
+          expect.objectContaining({ dueDate: '2026-09-15' }),
+          USER_ID,
+        );
+      });
+
+      it('update_kanban_card clears dueDate when given "none"', async () => {
+        const tools = await getTools();
+        kanbanRepo.findCardById.mockResolvedValue({
+          id: CARD_ID,
+          columnId: COLUMN_ID,
+        } as any);
+        kanbanRepo.findColumnById.mockResolvedValue({
+          id: COLUMN_ID,
+          pageId: PAGE_ID,
+        } as any);
+
+        const result = await tools.update_kanban_card.execute({
+          cardId: CARD_ID,
+          dueDate: 'none',
+        });
+
+        expect(result).toEqual({ ok: true });
+        expect(kanbanService.updateCard).toHaveBeenCalledWith(
+          CARD_ID,
+          expect.objectContaining({ dueDate: null }),
+          USER_ID,
+        );
+      });
+
       it('set_kanban_card_category returns ok:false for a category not on this board', async () => {
         const tools = await getTools();
         kanbanRepo.findCardById.mockResolvedValue({

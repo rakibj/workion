@@ -121,6 +121,11 @@ export class UpdateCardDto {
   @ValidateIf((o) => o.milestoneId !== null && o.milestoneId !== undefined)
   @IsUUID()
   milestoneId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.dueDate !== null && o.dueDate !== undefined)
+  @IsDateString()
+  dueDate?: string | null;
 }
 
 export class MoveCardDto {

@@ -169,6 +169,7 @@ export class KanbanController {
         description: dto.description,
         priority: dto.priority,
         milestoneId: dto.milestoneId,
+        dueDate: dto.dueDate,
       },
       user.id,
     );

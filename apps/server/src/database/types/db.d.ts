@@ -324,6 +324,7 @@ export interface KanbanCards {
   columnId: string;
   createdAt: Generated<Timestamp>;
   description: Generated<string>;
+  dueDate: Timestamp | null;
   id: Generated<string>;
   milestoneId: string | null;
   position: number;

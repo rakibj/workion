@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { getAvatarUrl } from "@/lib/config";
+import { DateInput } from "@mantine/dates";
 import {
   ActionIcon,
   Avatar,
@@ -33,6 +34,7 @@ import {
   IconBriefcase,
   IconBug,
   IconBulb,
+  IconCalendarDue,
   IconCalendarEvent,
   IconChartBar,
   IconCheck,
@@ -852,6 +854,70 @@ function MilestonePicker({ card, pageId, canEdit, onManage }: MilestonePickerPro
   );
 }
 
+// ─── Inline due date picker (on card) ─────────────────────────────────────────
+
+interface DueDatePickerProps {
+  card: IKanbanCard;
+  pageId: string;
+  canEdit: boolean;
+}
+
+function DueDatePicker({ card, pageId, canEdit }: DueDatePickerProps) {
+  const [opened, setOpened] = useState(false);
+  const updateCard = useUpdateCardMutation(pageId);
+
+  const dueDate = card.dueDate;
+
+  if (!canEdit && !dueDate) return null;
+
+  const status = dueDate ? getDueDateStatus(dueDate) : null;
+
+  const handleChange = (value: string | null) => {
+    updateCard.mutate({ cardId: card.id, dueDate: value });
+    setOpened(false);
+  };
+
+  return (
+    <Popover opened={opened} onChange={setOpened} position="bottom-start" withinPortal shadow="md">
+      <Popover.Target>
+        <button
+          className={clsx(
+            dueDate ? classes.dueDateBadge : classes.badgeIconOnly,
+            dueDate && (status === 'overdue'
+              ? classes.dueDateBadgeOverdue
+              : status === 'today'
+              ? classes.dueDateBadgeToday
+              : classes.dueDateBadgeActive),
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canEdit) setOpened((o) => !o);
+          }}
+          title={dueDate ? `Due ${formatDueDate(dueDate)}` : "Set due date"}
+        >
+          <IconCalendarDue size={dueDate ? 10 : 12} />
+          {dueDate && formatDueDate(dueDate)}
+        </button>
+      </Popover.Target>
+      <Popover.Dropdown
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Stack gap="xs">
+          <DateInput
+            value={dueDate ? dueDate.slice(0, 10) : null}
+            onChange={(value) => handleChange(value || null)}
+            placeholder="Due date"
+            size="xs"
+            clearable
+            valueFormat="MMM D, YYYY"
+          />
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
 // ─── Inline category picker (on card) ────────────────────────────────────────
 
 interface CategoryPickerProps {
@@ -1173,6 +1239,11 @@ function KanbanCardItem({
             canEdit={canEdit}
             onManage={onOpenMilestones}
           />
+          <DueDatePicker
+            card={card}
+            pageId={pageId}
+            canEdit={canEdit}
+          />
           {categories.map((category) => (
             <CategoryPicker
               key={category.id}
@@ -1311,6 +1382,10 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones, 
     updateCard.mutate({ cardId: card.id, milestoneId: value });
   };
 
+  const handleDueDateChange = (value: string | null) => {
+    updateCard.mutate({ cardId: card.id, dueDate: value });
+  };
+
   const assignedIds = new Set(card.assignees.map((a) => a.userId));
   const filteredMembers = members.filter(
     (m) =>
@@ -1445,6 +1520,45 @@ function CardModal({ card, pageId, spaceId, canEdit, onClose, onOpenMilestones, 
                       <IconAlertTriangle
                         size={13}
                         style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.milestone.dueDate)] }}
+                      />
+                    )}
+                  </Group>
+                ) : (
+                  <Text size="sm">None</Text>
+                )
+              )}
+            </Stack>
+
+            {/* Due date */}
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed" fw={500}>Due date</Text>
+              {canEdit ? (
+                <DateInput
+                  size="xs"
+                  placeholder="None"
+                  clearable
+                  value={card.dueDate ? card.dueDate.slice(0, 10) : null}
+                  onChange={(value) => handleDueDateChange(value || null)}
+                  valueFormat="MMM D, YYYY"
+                  leftSection={
+                    card.dueDate && getDueDateStatus(card.dueDate) !== 'upcoming'
+                      ? <IconAlertTriangle size={12} style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.dueDate)] }} />
+                      : <IconCalendarDue size={12} />
+                  }
+                />
+              ) : (
+                card.dueDate ? (
+                  <Group gap={4} align="center" wrap="nowrap">
+                    <Text
+                      size="sm"
+                      style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.dueDate)] ?? 'inherit' }}
+                    >
+                      {formatDueDate(card.dueDate)}
+                    </Text>
+                    {getDueDateStatus(card.dueDate) !== 'upcoming' && (
+                      <IconAlertTriangle
+                        size={13}
+                        style={{ color: DUE_DATE_COLOR[getDueDateStatus(card.dueDate)] }}
                       />
                     )}
                   </Group>

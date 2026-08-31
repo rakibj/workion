@@ -187,7 +187,7 @@ export class KanbanRepo {
 
   async updateCard(
     id: string,
-    data: Partial<Pick<KanbanCard, 'title' | 'description' | 'priority' | 'milestoneId' | 'position' | 'columnId'>>,
+    data: Partial<Pick<KanbanCard, 'title' | 'description' | 'priority' | 'milestoneId' | 'dueDate' | 'position' | 'columnId'>>,
     trx?: KyselyTransaction,
   ): Promise<KanbanCard> {
     return dbOrTx(this.db, trx)

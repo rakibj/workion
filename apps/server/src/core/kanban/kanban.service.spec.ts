@@ -37,6 +37,7 @@ describe('KanbanService — categories', () => {
       setCardCategoryValue: jest.fn(),
       findCardById: jest.fn(),
       findColumnById: jest.fn(),
+      updateCard: jest.fn(),
     };
     pageRepo = {
       findById: jest.fn().mockResolvedValue({ id: pageId, type: 'kanban' }),
@@ -205,6 +206,54 @@ describe('KanbanService — categories', () => {
       await expect(
         service.setCardCategoryValue(cardId, categoryId, optionId, userId),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateCard — dueDate', () => {
+    beforeEach(() => {
+      (kanbanRepo.findCardById as jest.Mock).mockResolvedValue({
+        id: cardId,
+        columnId,
+      });
+      (kanbanRepo.findColumnById as jest.Mock).mockResolvedValue({
+        id: columnId,
+        pageId,
+      });
+      (kanbanRepo.updateCard as jest.Mock).mockResolvedValue({ id: cardId });
+    });
+
+    it('converts a dueDate string to a Date before passing it to the repo', async () => {
+      await service.updateCard(cardId, { dueDate: '2026-09-15' }, userId);
+
+      expect(kanbanRepo.updateCard).toHaveBeenCalledWith(cardId, {
+        dueDate: new Date('2026-09-15'),
+      });
+    });
+
+    it('passes null through to clear the due date', async () => {
+      await service.updateCard(cardId, { dueDate: null }, userId);
+
+      expect(kanbanRepo.updateCard).toHaveBeenCalledWith(cardId, {
+        dueDate: null,
+      });
+    });
+
+    it('leaves dueDate undefined when not provided', async () => {
+      await service.updateCard(cardId, { title: 'New title' }, userId);
+
+      expect(kanbanRepo.updateCard).toHaveBeenCalledWith(cardId, {
+        title: 'New title',
+        dueDate: undefined,
+      });
+    });
+
+    it('throws NotFoundException updating a card that does not exist', async () => {
+      (kanbanRepo.findCardById as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(
+        service.updateCard(cardId, { dueDate: '2026-09-15' }, userId),
+      ).rejects.toThrow(NotFoundException);
+      expect(kanbanRepo.updateCard).not.toHaveBeenCalled();
     });
   });
 });
