@@ -88,6 +88,7 @@ import type {
   IKanbanCategory,
   IKanbanColumn,
   IKanbanMilestone,
+  KanbanCategoryOptionColor,
   KanbanColor,
   KanbanPriority,
 } from "../types/kanban.types";
@@ -134,16 +135,29 @@ import classes from "./kanban-board-page.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const COLORS: { name: KanbanColor; css: string }[] = [
+// Full palette — used for rendering (colorCss) and the category-option
+// swatch picker. Kept in sync with KANBAN_OPTION_COLORS on the server
+// (kanban.dto.ts).
+const COLORS: { name: KanbanCategoryOptionColor; css: string }[] = [
   { name: "gray", css: "var(--mantine-color-gray-5)" },
   { name: "blue", css: "var(--mantine-color-blue-5)" },
   { name: "green", css: "var(--mantine-color-green-5)" },
   { name: "yellow", css: "var(--mantine-color-yellow-5)" },
   { name: "red", css: "var(--mantine-color-red-5)" },
   { name: "purple", css: "var(--mantine-color-violet-5)" },
+  { name: "orange", css: "var(--mantine-color-orange-5)" },
+  { name: "teal", css: "var(--mantine-color-teal-5)" },
+  { name: "pink", css: "var(--mantine-color-pink-5)" },
+  { name: "cyan", css: "var(--mantine-color-cyan-5)" },
+  { name: "indigo", css: "var(--mantine-color-indigo-5)" },
+  { name: "lime", css: "var(--mantine-color-lime-5)" },
 ];
 
-const colorCss = (name: KanbanColor) =>
+// Columns keep the original, smaller palette — kept in sync with the
+// hardcoded @IsIn lists on CreateColumnDto/UpdateColumnDto (kanban.dto.ts).
+const COLUMN_COLORS = COLORS.slice(0, 6) as { name: KanbanColor; css: string }[];
+
+const colorCss = (name: KanbanCategoryOptionColor) =>
   COLORS.find((c) => c.name === name)?.css ?? COLORS[0].css;
 
 const PRIORITIES: { value: KanbanPriority; label: string; color: string }[] = [
@@ -222,8 +236,8 @@ function ColorSwatchPicker({
   onChange,
   disabled,
 }: {
-  value: KanbanColor;
-  onChange: (color: KanbanColor) => void;
+  value: KanbanCategoryOptionColor;
+  onChange: (color: KanbanCategoryOptionColor) => void;
   disabled?: boolean;
 }) {
   const [opened, setOpened] = useState(false);
@@ -1233,35 +1247,35 @@ function KanbanCardItem({
             pageId={pageId}
             canEdit={canEdit}
           />
-          <MilestonePicker
-            card={card}
-            pageId={pageId}
-            canEdit={canEdit}
-            onManage={onOpenMilestones}
-          />
           <DueDatePicker
             card={card}
             pageId={pageId}
             canEdit={canEdit}
           />
-          {categories.map((category) => (
-            <CategoryPicker
-              key={category.id}
+          <Group gap={4} ml="auto" align="center" wrap="wrap" justify="flex-end">
+            <MilestonePicker
               card={card}
-              category={category}
               pageId={pageId}
               canEdit={canEdit}
-              onManage={onOpenCategories}
+              onManage={onOpenMilestones}
             />
-          ))}
-          <div style={{ marginLeft: "auto" }}>
+            {categories.map((category) => (
+              <CategoryPicker
+                key={category.id}
+                card={card}
+                category={category}
+                pageId={pageId}
+                canEdit={canEdit}
+                onManage={onOpenCategories}
+              />
+            ))}
             <InlineAssigneePicker
               card={card}
               pageId={pageId}
               spaceId={spaceId}
               canEdit={canEdit}
             />
-          </div>
+          </Group>
         </Group>
         {(() => {
           if (!card.milestone?.dueDate) return null;
@@ -1881,7 +1895,7 @@ function KanbanColumnItem({
             </Popover.Target>
             <Popover.Dropdown>
               <Group gap={6} justify="center">
-                {COLORS.map(({ name, css }) => (
+                {COLUMN_COLORS.map(({ name, css }) => (
                   <Box
                     key={name}
                     className={clsx(

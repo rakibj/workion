@@ -1,5 +1,16 @@
 export type KanbanColor = 'gray' | 'blue' | 'green' | 'yellow' | 'red' | 'purple';
 
+// Category options get a wider palette than columns — kept in sync with
+// KANBAN_OPTION_COLORS on the server (kanban.dto.ts).
+export type KanbanCategoryOptionColor =
+  | KanbanColor
+  | 'orange'
+  | 'teal'
+  | 'pink'
+  | 'cyan'
+  | 'indigo'
+  | 'lime';
+
 export interface KanbanAssignee {
   userId: string;
   name: string;
@@ -21,7 +32,7 @@ export interface IKanbanCategoryOption {
   id: string;
   categoryId: string;
   label: string;
-  color: KanbanColor;
+  color: KanbanCategoryOptionColor;
   position: number;
 }
 

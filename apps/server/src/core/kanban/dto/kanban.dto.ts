@@ -47,7 +47,20 @@ export const CATEGORY_ICONS = [
   'IconDeviceLaptop',
 ] as const;
 
-const KANBAN_OPTION_COLORS = ['gray', 'blue', 'green', 'yellow', 'red', 'purple'];
+const KANBAN_OPTION_COLORS = [
+  'gray',
+  'blue',
+  'green',
+  'yellow',
+  'red',
+  'purple',
+  'orange',
+  'teal',
+  'pink',
+  'cyan',
+  'indigo',
+  'lime',
+];
 
 export class GetBoardDto {
   @IsUUID()
